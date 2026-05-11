@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>專案管理系統</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="系統導覽">
+        <div class="brand">
+          <span class="brand-mark">PM</span>
+          <div>
+            <strong>Project Desk</strong>
+            <span>系統・專案・任務</span>
+          </div>
+        </div>
+        <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-expanded="true" aria-label="收合側邊欄">‹</button>
+
+        <section class="sidebar-section" aria-labelledby="system-title">
+          <div class="section-title-row">
+            <h2 id="system-title">系統</h2>
+            <button class="small-button" id="quickSystemButton" type="button">新增</button>
+          </div>
+          <div class="system-list" id="systemList"></div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">最高階級：系統</p>
+            <h1 id="pageTitle">專案管理系統</h1>
+            <p class="page-subtitle" id="pageSubtitle">依系統管理專案，再由專案掌握任務與實際時程。</p>
+          </div>
+          <div class="topbar-actions">
+            <button class="secondary-button" id="addSystemButton" type="button">新增系統</button>
+            <button class="secondary-button" id="addProjectButton" type="button">新增專案</button>
+            <button class="primary-button" id="addTaskButton" type="button">新增任務</button>
+          </div>
+        </header>
+
+        <section class="metrics" aria-label="管理摘要">
+          <article>
+            <span>系統</span>
+            <strong id="systemCount">0</strong>
+          </article>
+          <article>
+            <span>專案</span>
+            <strong id="projectCount">0</strong>
+          </article>
+          <article>
+            <span>進行任務</span>
+            <strong id="activeTaskCount">0</strong>
+          </article>
+          <article>
+            <span>本週最後期限</span>
+            <strong id="deadlineCount">0</strong>
+          </article>
+        </section>
+
+        <section class="todo-section" aria-labelledby="todo-section-title">
+          <div class="section-header">
+            <div>
+              <h2 id="todo-section-title">待辦事項</h2>
+              <p>依執行日期自動整理每日工作，完成後勾選即可標示為已完成。</p>
+            </div>
+            <button class="secondary-button" id="openTodoPageButton" type="button">開啟整頁模式</button>
+          </div>
+          <div class="todo-dashboard" id="todoDashboard"></div>
+        </section>
+
+        <section class="control-strip" aria-label="篩選">
+          <label class="field">
+            搜尋
+            <input id="searchInput" type="search" placeholder="系統、專案、任務、負責人、標籤" />
+          </label>
+          <label class="field">
+            專案階段
+            <select id="phaseFilter">
+              <option value="all">全部階段</option>
+              <option value="deal">商談</option>
+              <option value="planning">規劃</option>
+              <option value="development">開發</option>
+              <option value="testing">測試</option>
+              <option value="launch">上線</option>
+              <option value="closed">結案</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="project-section" aria-labelledby="project-section-title">
+          <div class="section-header">
+            <div>
+              <h2 id="project-section-title">專案</h2>
+              <p>設定專案階段與預計起訖，實際起訖會由任務日期自動推算。</p>
+            </div>
+          </div>
+          <div class="project-grid" id="projectList"></div>
+        </section>
+
+        <section class="task-section" aria-labelledby="task-section-title">
+          <div class="section-header">
+            <div>
+              <h2 id="task-section-title">任務</h2>
+              <p id="taskScopeLabel">顯示目前篩選範圍內的任務。</p>
+            </div>
+          </div>
+          <div class="project-tabs" id="projectTabs" aria-label="專案任務篩選"></div>
+          <div class="board" id="board" aria-label="任務看板"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="systemDialog">
+      <form class="entity-form" id="systemForm">
+        <header>
+          <h2>新增系統</h2>
+          <button class="icon-button" type="button" data-close-dialog="systemDialog" aria-label="關閉">×</button>
+        </header>
+
+        <input id="systemId" type="hidden" />
+
+        <label class="field">
+          系統名稱
+          <input id="systemName" required maxlength="50" placeholder="例如：CRM 客戶管理系統" />
+        </label>
+
+        <label class="field">
+          說明
+          <textarea id="systemDescription" rows="3" maxlength="180" placeholder="簡短描述此系統的用途"></textarea>
+        </label>
+
+        <footer>
+          <button class="secondary-button" type="button" data-close-dialog="systemDialog">取消</button>
+          <button class="primary-button" type="submit">儲存系統</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="projectDialog">
+      <form class="entity-form" id="projectForm">
+        <header>
+          <h2 id="projectDialogTitle">新增專案</h2>
+          <button class="icon-button" type="button" data-close-dialog="projectDialog" aria-label="關閉">×</button>
+        </header>
+
+        <input id="projectId" type="hidden" />
+
+        <label class="field">
+          所屬系統
+          <select id="projectSystem" required></select>
+        </label>
+
+        <label class="field">
+          專案名稱
+          <input id="projectName" required maxlength="70" placeholder="例如：會員登入改版" />
+        </label>
+
+        <label class="field">
+          描述
+          <textarea id="projectDescription" rows="3" maxlength="220" placeholder="補充專案背景、目標或注意事項"></textarea>
+        </label>
+
+        <label class="field">
+          目前階段
+          <select id="projectPhase" required>
+            <option value="deal">商談</option>
+            <option value="planning">規劃</option>
+            <option value="development">開發</option>
+            <option value="testing">測試</option>
+            <option value="launch">上線</option>
+            <option value="closed">結案</option>
+          </select>
+        </label>
+
+        <section class="phase-schedule-editor project-schedule-editor" aria-labelledby="project-schedule-title">
+          <div>
+            <h3 id="project-schedule-title">專案時程</h3>
+            <p>可先留空；填寫階段時程後，專案時程會自動擴大涵蓋所有階段。</p>
+          </div>
+          <div class="form-grid">
+            <label class="field">
+              專案開始
+              <input id="projectPlannedStart" type="date" />
+            </label>
+            <label class="field">
+              專案結束
+              <input id="projectPlannedEnd" type="date" />
+            </label>
+          </div>
+        </section>
+
+        <section class="phase-schedule-editor" aria-labelledby="phase-schedule-title">
+          <div>
+            <h3 id="phase-schedule-title">各階段時程</h3>
+            <p>各階段時程可留空；若日期超出專案時程，專案時程會自動更新。</p>
+          </div>
+          <div class="phase-schedule-fields" id="phaseScheduleFields"></div>
+        </section>
+
+        <section class="related-section" aria-label="專案關聯信件">
+          <div class="related-section-header">
+            <strong>關聯信件</strong>
+            <button class="chip-button" id="addProjectEmailButton" type="button">新增信件</button>
+          </div>
+          <div class="related-list" id="projectRelatedEmails"></div>
+        </section>
+
+        <section class="related-section" aria-label="專案關聯連結">
+          <div class="related-section-header">
+            <strong>關聯連結</strong>
+            <button class="chip-button" id="addProjectLinkButton" type="button">新增連結</button>
+          </div>
+          <div class="related-list" id="projectRelatedLinks"></div>
+        </section>
+
+        <footer>
+          <button class="secondary-button" type="button" data-close-dialog="projectDialog">取消</button>
+          <button class="primary-button" type="submit">儲存專案</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="taskDialog">
+      <form class="entity-form" id="taskForm">
+        <header>
+          <h2 id="taskDialogTitle">新增任務</h2>
+          <button class="icon-button" type="button" data-close-dialog="taskDialog" aria-label="關閉">×</button>
+        </header>
+
+        <input id="taskId" type="hidden" />
+
+        <div class="form-grid">
+          <label class="field">
+            系統
+            <select id="taskSystem" required></select>
+          </label>
+
+          <label class="field">
+            專案
+            <select id="taskProject" required></select>
+          </label>
+        </div>
+
+        <label class="field">
+          任務名稱
+          <input id="taskTitle" required maxlength="80" />
+        </label>
+
+        <label class="field">
+          描述
+          <textarea id="taskDescription" rows="3" maxlength="220"></textarea>
+        </label>
+
+        <div class="form-grid">
+          <label class="field">
+            狀態
+            <select id="taskStatus">
+              <option value="not_started">未開始</option>
+              <option value="doing">進行中</option>
+              <option value="done">已完成</option>
+            </select>
+          </label>
+
+          <label class="field">
+            優先級
+            <select id="taskPriority">
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            執行區間開始
+            <input id="taskRangeStart" type="date" required />
+          </label>
+
+          <label class="field">
+            執行區間結束
+            <input id="taskRangeEnd" type="date" required />
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            執行日期
+            <input id="taskExecutionDate" type="date" required />
+          </label>
+
+          <label class="field">
+            最後期限
+            <input id="taskDeadline" type="date" required />
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            負責人
+            <input id="taskOwner" required maxlength="30" />
+          </label>
+
+          <label class="field">
+            標籤
+            <input id="taskTags" placeholder="用逗號分隔，例如 UI, API" maxlength="80" />
+          </label>
+        </div>
+
+        <section class="related-section" aria-label="關聯信件">
+          <div class="related-section-header">
+            <strong>關聯信件</strong>
+            <button class="chip-button" id="addTaskEmailButton" type="button">新增信件</button>
+          </div>
+          <div class="related-list" id="taskRelatedEmails"></div>
+        </section>
+
+        <section class="related-section" aria-label="關聯連結">
+          <div class="related-section-header">
+            <strong>關聯連結</strong>
+            <button class="chip-button" id="addTaskLinkButton" type="button">新增連結</button>
+          </div>
+          <div class="related-list" id="taskRelatedLinks"></div>
+        </section>
+
+        <footer>
+          <button class="ghost-button" id="deleteTaskButton" type="button">刪除任務</button>
+          <div>
+            <button class="secondary-button" type="button" data-close-dialog="taskDialog">取消</button>
+            <button class="primary-button" type="submit">儲存任務</button>
+          </div>
+        </footer>
+      </form>
+    </dialog>
+
+    <section class="todo-page hidden" id="todoPage" aria-hidden="true">
+      <header class="todo-page-topbar">
+        <div class="todo-page-brand">
+          <span class="app-launcher">PM</span>
+          <strong>待辦工作台</strong>
+        </div>
+        <label class="todo-page-search">
+          <span>搜尋</span>
+          <input id="todoPageSearch" type="search" placeholder="搜尋待辦工作" />
+        </label>
+        <button class="todo-page-close" id="closeTodoPageButton" type="button">返回專案管理</button>
+      </header>
+
+      <div class="todo-page-body">
+        <aside class="todo-page-sidebar" id="todoPageSidebar" aria-label="待辦分類"></aside>
+        <main class="todo-page-main">
+          <div class="todo-page-heading">
+            <div>
+              <p id="todoPageDate">今天</p>
+              <h1 id="todoPageTitle">今日待辦事項</h1>
+            </div>
+            <div class="todo-page-tools">
+              <label class="todo-sort-control">
+                <span>排序</span>
+                <select id="todoSortSelect">
+                  <option value="title">任務名稱</option>
+                  <option value="executionDate" selected>執行日期</option>
+                  <option value="systemProject">系統專案</option>
+                  <option value="deadline">最後期限</option>
+                  <option value="priority">優先級</option>
+                  <option value="important">重要性</option>
+                </select>
+              </label>
+              <label class="todo-sort-control">
+                <span>方向</span>
+                <select id="todoSortDirectionSelect">
+                  <option value="asc" selected>由低到高</option>
+                  <option value="desc">由高到低</option>
+                </select>
+              </label>
+              <button id="todoGroupSystemButton" type="button">系統</button>
+              <button type="button">建議</button>
+            </div>
+          </div>
+
+          <div class="todo-system-tabs" id="todoSystemTabs" aria-label="切換待辦系統"></div>
+
+          <div class="todo-group-indicator hidden" id="todoGroupIndicator">
+            <span>按系統分組</span>
+            <button id="todoClearGroupButton" type="button" aria-label="取消系統分組">×</button>
+          </div>
+
+          <form class="todo-add-panel" id="todoQuickForm">
+            <button class="todo-add-trigger" id="todoAddTrigger" type="button">
+              <span></span>
+              <strong>新增工作</strong>
+            </button>
+
+            <div class="todo-add-details hidden" id="todoAddDetails">
+
+            <div class="todo-add-grid">
+              <label>
+                新增方式
+                <select id="todoAddMode">
+                  <option value="new">建立新任務</option>
+                  <option value="existing">套用既有未完成任務</option>
+                </select>
+              </label>
+
+              <label>
+                系統
+                <select id="todoAddSystem" required></select>
+              </label>
+
+              <label>
+                專案
+                <select id="todoAddProject" required></select>
+              </label>
+            </div>
+
+            <label class="todo-existing-field hidden" id="todoExistingTaskField">
+              尚未完成的任務
+              <select id="todoExistingTask"></select>
+            </label>
+
+            <label>
+              任務名稱
+              <input id="todoAddTitle" maxlength="80" required />
+            </label>
+
+            <label>
+              描述
+              <textarea id="todoAddDescription" rows="2" maxlength="220"></textarea>
+            </label>
+
+            <div class="todo-add-grid">
+              <label>
+                狀態
+                <select id="todoAddStatus">
+                  <option value="not_started">未開始</option>
+                  <option value="doing">進行中</option>
+                  <option value="done">已完成</option>
+                </select>
+              </label>
+
+              <label>
+                優先級
+                <select id="todoAddPriority">
+                  <option value="high">高</option>
+                  <option value="medium">中</option>
+                  <option value="low">低</option>
+                </select>
+              </label>
+
+              <label>
+                負責人
+                <input id="todoAddOwner" maxlength="30" required />
+              </label>
+            </div>
+
+            <div class="todo-add-grid">
+              <label>
+                執行區間開始
+                <input id="todoAddRangeStart" type="date" required />
+              </label>
+
+              <label>
+                執行區間結束
+                <input id="todoAddRangeEnd" type="date" required />
+              </label>
+
+              <label>
+                執行日期
+                <input id="todoAddExecutionDate" type="date" required />
+              </label>
+
+              <label>
+                最後期限
+                <input id="todoAddDeadline" type="date" required />
+              </label>
+            </div>
+
+            <label>
+              標籤
+              <input id="todoAddTags" placeholder="用逗號分隔，例如 UI, API" maxlength="80" />
+            </label>
+
+            <section class="related-section" aria-label="待辦關聯信件">
+              <div class="related-section-header">
+                <strong>關聯信件</strong>
+                <button class="chip-button" id="addTodoEmailButton" type="button">新增信件</button>
+              </div>
+              <div class="related-list" id="todoRelatedEmails"></div>
+            </section>
+
+            <section class="related-section" aria-label="待辦關聯連結">
+              <div class="related-section-header">
+                <strong>關聯連結</strong>
+                <button class="chip-button" id="addTodoLinkButton" type="button">新增連結</button>
+              </div>
+              <div class="related-list" id="todoRelatedLinks"></div>
+            </section>
+
+            <div class="todo-add-actions">
+              <button class="secondary-button" id="todoAddCancel" type="button">取消</button>
+              <button class="secondary-button" id="todoAddReset" type="button">清空</button>
+              <button type="submit">儲存工作</button>
+            </div>
+            </div>
+          </form>
+
+          <div class="todo-full-list" id="todoPageList"></div>
+        </main>
+        <aside class="todo-task-drawer hidden" id="todoTaskDrawer" aria-hidden="true"></aside>
+      </div>
+    </section>
+
+    <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
