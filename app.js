@@ -73,6 +73,7 @@ const els = {
   addTodoLinkButton: document.querySelector("#addTodoLinkButton"),
   todoPageList: document.querySelector("#todoPageList"),
   todoTaskDrawer: document.querySelector("#todoTaskDrawer"),
+  mainTaskDrawer: document.querySelector("#mainTaskDrawer"),
   toast: document.querySelector("#toast"),
   projectList: document.querySelector("#projectList"),
   projectTabs: document.querySelector("#projectTabs"),
@@ -269,6 +270,7 @@ function buildStarterState() {
     steps = [],
     files = [],
     notes = "",
+    history = [],
     completedDate,
   }) => ({
     id: createId(),
@@ -295,6 +297,7 @@ function buildStarterState() {
     })),
     files,
     notes,
+    history: normalizeTaskHistory(history),
   });
 
   return {
@@ -1039,6 +1042,7 @@ function normalizeTask(task) {
     steps: normalizeTaskSteps(task.steps),
     files: normalizeTaskFiles(task.files),
     notes: task.notes || "",
+    history: normalizeTaskHistory(task.history),
   };
 }
 
@@ -1087,6 +1091,29 @@ function normalizeTaskFiles(value) {
     .filter((item) => item.name);
 }
 
+function normalizeTaskHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => ({
+      id: item?.id || createId(),
+      date: item?.date || todayString(),
+      description: (typeof item === "string" ? item : item?.description || "").trim(),
+      note: (item?.note || "").trim(),
+      links: normalizeHistoryLinks(item?.links || item?.relatedLinks || []),
+    }))
+    .filter((item) => item.description || item.note || item.links.length);
+}
+
+function normalizeHistoryLinks(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => ({
+      name: (item?.name || item?.title || "").trim(),
+      url: (item?.url || "").trim(),
+    }))
+    .filter((item) => item.name || item.url);
+}
+
 function normalizeProject(project) {
   const phaseSchedules = project.phaseSchedules || createPhaseSchedules({
     [project.phase || "planning"]: {
@@ -1125,7 +1152,11 @@ function render() {
   renderProjects();
   renderProjectTabs();
   renderBoard();
-  if (!els.todoPage.classList.contains("hidden")) renderTodoPage();
+  if (!els.todoPage.classList.contains("hidden")) {
+    renderTodoPage();
+  } else {
+    renderTodoDrawer();
+  }
 }
 
 function syncSidebarCollapsed() {
@@ -1250,9 +1281,14 @@ function renderTodoDashboard() {
     }).join("");
 
   els.todoDashboard.querySelectorAll("[data-complete-task]").forEach((checkbox) => {
+    checkbox.addEventListener("click", (event) => event.stopPropagation());
     checkbox.addEventListener("change", () => {
       markTaskDone(checkbox.dataset.completeTask);
     });
+  });
+
+  els.todoDashboard.querySelectorAll("[data-dashboard-task-open]").forEach((button) => {
+    button.addEventListener("click", () => openTodoDrawer(button.dataset.dashboardTaskOpen, "view"));
   });
 
   els.todoDashboard.querySelectorAll("[data-open-todo-view]").forEach((button) => {
@@ -1380,17 +1416,17 @@ function renderTodoItem(task, section = {}) {
   const deadlineUrgent = section.variant === "urgent";
 
   return `
-    <label class="todo-item ${section.variant ? `todo-item-${section.variant}` : ""}">
+    <article class="todo-item ${section.variant ? `todo-item-${section.variant}` : ""}">
       <input type="checkbox" data-complete-task="${task.id}" aria-label="完成 ${escapeHtml(task.title)}" />
-      <span>
+      <button class="todo-item-content" type="button" data-dashboard-task-open="${task.id}" aria-label="查看 ${escapeHtml(task.title)}">
         <strong>${escapeHtml(task.title)}</strong>
         <span>${escapeHtml(system?.name || "未指定系統")} / ${escapeHtml(project?.name || "未指定專案")}</span>
         <span class="todo-item-dates">
           <span class="${executionOverdue ? "date-alert" : ""}">執行日期：${formatDate(task.executionDate)}</span>
           <span class="${deadlineOverdue || deadlineUrgent ? "date-alert" : ""}">最後期限：${formatDate(task.deadline)}</span>
         </span>
-      </span>
-    </label>
+      </button>
+    </article>
   `;
 }
 
@@ -1449,6 +1485,7 @@ function playCompletionSound() {
 }
 
 function openTodoPage(viewId = "today", focusSection = "") {
+  closeTodoDrawer();
   activeTodoView = viewId;
   todoFocusSection = focusSection;
   els.todoPage.classList.remove("hidden");
@@ -1801,6 +1838,7 @@ function taskMatchesTodoQuery(task, query) {
     task.notes,
     (task.steps || []).map((step) => step.title).join(" "),
     (task.files || []).map((file) => file.name).join(" "),
+    (task.history || []).map((item) => `${item.date} ${item.description} ${item.note} ${(item.links || []).map((link) => `${link.name} ${link.url}`).join(" ")}`).join(" "),
     (task.relatedEmails || []).join(" "),
     (task.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
     system?.name,
@@ -1923,27 +1961,64 @@ function toggleTaskImportant(taskId) {
   updateInlineTask(taskId, { important: !task.important });
 }
 
+function todoPageIsOpen() {
+  return !els.todoPage.classList.contains("hidden");
+}
+
+function getActiveTaskDrawer() {
+  return todoPageIsOpen() ? els.todoTaskDrawer : els.mainTaskDrawer;
+}
+
+function getInactiveTaskDrawer() {
+  return todoPageIsOpen() ? els.mainTaskDrawer : els.todoTaskDrawer;
+}
+
+function hideTaskDrawer(drawer) {
+  if (!drawer) return;
+  drawer.innerHTML = "";
+  drawer.classList.add("hidden");
+  drawer.setAttribute("aria-hidden", "true");
+}
+
+function syncTaskDrawerShell(open) {
+  els.todoPage.classList.toggle("drawer-open", open && todoPageIsOpen());
+  els.appShell.classList.toggle("main-drawer-open", open && !todoPageIsOpen());
+}
+
 function openTodoDrawer(taskId, mode = "view") {
+  const drawer = getActiveTaskDrawer();
+  const isSameTaskOpen = selectedTodoTaskId === taskId
+    && drawerMode === mode
+    && drawer
+    && !drawer.classList.contains("hidden");
+
+  if (isSameTaskOpen && mode === "view") {
+    closeTodoDrawer();
+    return;
+  }
+
   selectedTodoTaskId = taskId;
   drawerMode = mode;
-  els.todoTaskDrawer.classList.remove("hidden");
-  els.todoTaskDrawer.setAttribute("aria-hidden", "false");
-  els.todoPage.classList.add("drawer-open");
+  hideTaskDrawer(getInactiveTaskDrawer());
+  drawer.classList.remove("hidden");
+  drawer.setAttribute("aria-hidden", "false");
+  syncTaskDrawerShell(true);
   renderTodoDrawer();
 }
 
 function closeTodoDrawer() {
   selectedTodoTaskId = null;
   drawerMode = "view";
-  els.todoTaskDrawer.innerHTML = "";
-  els.todoTaskDrawer.classList.add("hidden");
-  els.todoTaskDrawer.setAttribute("aria-hidden", "true");
-  els.todoPage.classList.remove("drawer-open");
+  hideTaskDrawer(els.todoTaskDrawer);
+  hideTaskDrawer(els.mainTaskDrawer);
+  syncTaskDrawerShell(false);
 }
 
 function renderTodoDrawer() {
+  const drawer = getActiveTaskDrawer();
+
   if (!selectedTodoTaskId) {
-    els.todoPage.classList.toggle("drawer-open", !els.todoTaskDrawer.classList.contains("hidden"));
+    syncTaskDrawerShell(drawer && !drawer.classList.contains("hidden"));
     return;
   }
 
@@ -1953,54 +2028,61 @@ function renderTodoDrawer() {
     return;
   }
 
-  els.todoTaskDrawer.innerHTML = drawerMode === "edit" ? renderTodoDrawerEdit(task) : renderTodoDrawerView(task);
-  els.todoPage.classList.add("drawer-open");
+  hideTaskDrawer(getInactiveTaskDrawer());
+  drawer.classList.remove("hidden");
+  drawer.setAttribute("aria-hidden", "false");
+  drawer.innerHTML = drawerMode === "edit" ? renderTodoDrawerEdit(task) : renderTodoDrawerView(task);
+  syncTaskDrawerShell(true);
 
-  els.todoTaskDrawer.querySelector("[data-close-drawer]")?.addEventListener("click", closeTodoDrawer);
-  els.todoTaskDrawer.querySelector("[data-drawer-edit]")?.addEventListener("click", () => {
+  drawer.querySelector("[data-close-drawer]")?.addEventListener("click", closeTodoDrawer);
+  drawer.querySelector("[data-drawer-edit]")?.addEventListener("click", () => {
     drawerMode = "edit";
     renderTodoDrawer();
   });
-  els.todoTaskDrawer.querySelector("[data-drawer-view]")?.addEventListener("click", () => {
+  drawer.querySelector("[data-drawer-view]")?.addEventListener("click", () => {
     drawerMode = "view";
     renderTodoDrawer();
   });
-  els.todoTaskDrawer.querySelector("[data-drawer-complete]")?.addEventListener("click", () => {
+  drawer.querySelector("[data-drawer-complete]")?.addEventListener("click", () => {
     markTaskDone(task.id, task.status !== "done");
   });
-  els.todoTaskDrawer.querySelector("[data-drawer-important]")?.addEventListener("click", () => toggleTaskImportant(task.id));
-  els.todoTaskDrawer.querySelector("[data-add-step]")?.addEventListener("click", () => {
-    const input = els.todoTaskDrawer.querySelector("[data-new-step-title]");
+  drawer.querySelector("[data-drawer-important]")?.addEventListener("click", () => toggleTaskImportant(task.id));
+  drawer.querySelector("[data-add-step]")?.addEventListener("click", () => {
+    const input = drawer.querySelector("[data-new-step-title]");
     addTaskStep(task.id, input?.value || "");
   });
-  els.todoTaskDrawer.querySelector("[data-new-step-title]")?.addEventListener("keydown", (event) => {
+  drawer.querySelector("[data-new-step-title]")?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
     addTaskStep(task.id, event.currentTarget.value);
   });
-  els.todoTaskDrawer.querySelectorAll("[data-toggle-step]").forEach((button) => {
+  drawer.querySelectorAll("[data-toggle-step]").forEach((button) => {
     button.addEventListener("click", () => toggleTaskStep(task.id, button.dataset.toggleStep));
   });
-  els.todoTaskDrawer.querySelectorAll("[data-remove-step]").forEach((button) => {
+  drawer.querySelectorAll("[data-remove-step]").forEach((button) => {
     button.addEventListener("click", () => removeTaskStep(task.id, button.dataset.removeStep));
   });
-  els.todoTaskDrawer.querySelector("[data-add-file]")?.addEventListener("click", () => {
-    const input = els.todoTaskDrawer.querySelector("[data-new-file-name]");
-    addTaskFile(task.id, input?.value || "");
+  const historyLinkInputs = drawer.querySelector("[data-history-link-inputs]");
+  drawer.querySelector("[data-add-history-link]")?.addEventListener("click", () => {
+    historyLinkInputs?.insertAdjacentHTML("beforeend", renderHistoryLinkInputRow());
   });
-  els.todoTaskDrawer.querySelector("[data-new-file-name]")?.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter") return;
+  historyLinkInputs?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove-history-link-input]");
+    if (!button) return;
+    button.closest(".history-link-input-row")?.remove();
+  });
+  drawer.querySelector("[data-history-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    addTaskFile(task.id, event.currentTarget.value);
+    addTaskHistory(task.id, collectHistoryForm(event.currentTarget));
   });
-  els.todoTaskDrawer.querySelectorAll("[data-remove-file]").forEach((button) => {
-    button.addEventListener("click", () => removeTaskFile(task.id, button.dataset.removeFile));
+  drawer.querySelectorAll("[data-remove-history]").forEach((button) => {
+    button.addEventListener("click", () => removeTaskHistory(task.id, button.dataset.removeHistory));
   });
-  els.todoTaskDrawer.querySelector("[data-task-notes]")?.addEventListener("change", (event) => {
+  drawer.querySelector("[data-task-notes]")?.addEventListener("change", (event) => {
     updateTaskNotes(task.id, event.currentTarget.value);
   });
 
-  const form = els.todoTaskDrawer.querySelector("[data-drawer-form]");
+  const form = drawer.querySelector("[data-drawer-form]");
   if (!form) return;
 
   const drawerFields = getDrawerDateFields(form);
@@ -2085,18 +2167,38 @@ function renderTodoDrawerView(task) {
       ${linkList}
     </section>
     <section class="drawer-section">
-      <span>檔案</span>
-      <div class="task-file-list">
-        ${renderTaskFiles(task)}
-      </div>
-      <div class="task-inline-add">
-        <input data-new-file-name maxlength="120" placeholder="檔案名稱或連結" />
-        <button type="button" data-add-file>新增檔案</button>
-      </div>
-    </section>
-    <section class="drawer-section">
       <span>記事</span>
       <textarea class="task-notes-field" data-task-notes rows="5" placeholder="新增記事">${escapeHtml(task.notes || "")}</textarea>
+    </section>
+    <section class="drawer-section">
+      <div class="drawer-section-heading">
+        <span>歷程紀錄</span>
+        <strong>${(task.history || []).length} 筆</strong>
+      </div>
+      <div class="task-history-list">
+        ${renderTaskHistory(task)}
+      </div>
+      <form class="task-history-form" data-history-form>
+        <label>
+          日期
+          <input name="date" type="date" value="${todayString()}" required />
+        </label>
+        <label>
+          歷程描述
+          <textarea name="description" rows="3" maxlength="500" placeholder="記錄這次處理內容" required></textarea>
+        </label>
+        <label>
+          補充說明
+          <textarea name="note" rows="2" maxlength="300" placeholder="可填信件主旨、背景或提醒"></textarea>
+        </label>
+        <div class="history-link-inputs" data-history-link-inputs>
+          ${renderHistoryLinkInputRow()}
+        </div>
+        <div class="drawer-actions">
+          <button class="secondary-button" type="button" data-add-history-link>新增連結</button>
+          <button class="primary-button" type="submit">新增歷程</button>
+        </div>
+      </form>
     </section>
   `;
 }
@@ -2204,19 +2306,41 @@ function renderTaskSteps(task) {
     .join("");
 }
 
-function renderTaskFiles(task) {
-  const files = task.files || [];
-  if (!files.length) return `<p class="drawer-empty">尚未新增檔案。</p>`;
+function renderTaskHistory(task) {
+  const history = task.history || [];
+  if (!history.length) return `<p class="drawer-empty">尚未新增歷程紀錄。</p>`;
 
-  return files
-    .map((file) => `
-      <div class="task-file-row">
-        <span>檔</span>
-        <strong>${escapeHtml(file.name)}</strong>
-        <button class="drawer-remove-button" type="button" data-remove-file="${file.id}" aria-label="移除檔案">×</button>
-      </div>
-    `)
+  return history
+    .slice()
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    .map((item) => {
+      const links = item.links?.length
+        ? `<ul>${item.links.map((link) => `<li><a href="${escapeHtml(link.url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(link.name || link.url)}</a></li>`).join("")}</ul>`
+        : "";
+
+      return `
+        <article class="task-history-card">
+          <div class="task-history-card-header">
+            <strong>${formatDate(item.date)}</strong>
+            <button class="drawer-remove-button" type="button" data-remove-history="${item.id}" aria-label="刪除歷程">×</button>
+          </div>
+          <p>${escapeHtml(item.description)}</p>
+          ${item.note ? `<small>${escapeHtml(item.note)}</small>` : ""}
+          ${links}
+        </article>
+      `;
+    })
     .join("");
+}
+
+function renderHistoryLinkInputRow(link = {}) {
+  return `
+    <div class="history-link-input-row">
+      <input name="linkName" maxlength="100" placeholder="連結名稱" value="${escapeHtml(link.name || "")}" />
+      <input name="linkUrl" type="url" placeholder="https://example.com" value="${escapeHtml(link.url || "")}" />
+      <button class="drawer-remove-button" type="button" data-remove-history-link-input aria-label="移除歷程連結">×</button>
+    </div>
+  `;
 }
 
 function getTaskStepProgress(task) {
@@ -2283,36 +2407,50 @@ function removeTaskStep(taskId, stepId) {
   render();
 }
 
-function addTaskFile(taskId, name) {
-  const trimmedName = name.trim();
-  if (!trimmedName) return;
-
-  state.tasks = state.tasks.map((task) => {
-    if (task.id !== taskId) return task;
-    return {
-      ...task,
-      files: [...(task.files || []), { id: createId(), name: trimmedName }],
-    };
-  });
-  saveState();
-  render();
-}
-
-function removeTaskFile(taskId, fileId) {
-  state.tasks = state.tasks.map((task) => {
-    if (task.id !== taskId) return task;
-    return {
-      ...task,
-      files: (task.files || []).filter((file) => file.id !== fileId),
-    };
-  });
-  saveState();
-  render();
-}
-
 function updateTaskNotes(taskId, notes) {
   state.tasks = state.tasks.map((task) => {
     return task.id === taskId ? { ...task, notes: notes.trim() } : task;
+  });
+  saveState();
+  render();
+}
+
+function collectHistoryForm(form) {
+  return {
+    date: form.elements.date.value || todayString(),
+    description: form.elements.description.value.trim(),
+    note: form.elements.note.value.trim(),
+    links: [...form.querySelectorAll(".history-link-input-row")]
+      .map((row) => ({
+        name: row.querySelector('[name="linkName"]')?.value.trim() || "",
+        url: row.querySelector('[name="linkUrl"]')?.value.trim() || "",
+      }))
+      .filter((link) => link.name || link.url),
+  };
+}
+
+function addTaskHistory(taskId, entry) {
+  const normalizedEntry = normalizeTaskHistory([{ ...entry, id: createId() }])[0];
+  if (!normalizedEntry?.description) return;
+
+  state.tasks = state.tasks.map((task) => {
+    if (task.id !== taskId) return task;
+    return {
+      ...task,
+      history: [normalizedEntry, ...(task.history || [])],
+    };
+  });
+  saveState();
+  render();
+}
+
+function removeTaskHistory(taskId, historyId) {
+  state.tasks = state.tasks.map((task) => {
+    if (task.id !== taskId) return task;
+    return {
+      ...task,
+      history: (task.history || []).filter((item) => item.id !== historyId),
+    };
   });
   saveState();
   render();
@@ -2494,6 +2632,7 @@ function handleTodoQuickSubmit(event) {
     steps: existingTask?.steps || [],
     files: existingTask?.files || [],
     notes: existingTask?.notes || "",
+    history: existingTask?.history || [],
   };
 
   if (todoAddFields.mode.value === "existing" && existingTask) {
@@ -2806,7 +2945,7 @@ function renderBoard() {
 
   els.board.querySelectorAll(".task-card").forEach((card) => {
     card.addEventListener("click", () => {
-      openTaskDialog(state.tasks.find((task) => task.id === card.dataset.taskId));
+      openTodoDrawer(card.dataset.taskId, "view");
     });
   });
 }
@@ -2903,6 +3042,7 @@ function getVisibleTasks() {
       task.notes,
       (task.steps || []).map((step) => step.title).join(" "),
       (task.files || []).map((file) => file.name).join(" "),
+      (task.history || []).map((item) => `${item.date} ${item.description} ${item.note} ${(item.links || []).map((link) => `${link.name} ${link.url}`).join(" ")}`).join(" "),
       (task.relatedEmails || []).join(" "),
       (task.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
       system?.name,
@@ -3152,6 +3292,7 @@ function handleTaskSubmit(event) {
     steps: existingTask?.steps || [],
     files: existingTask?.files || [],
     notes: existingTask?.notes || "",
+    history: existingTask?.history || [],
   };
 
   state.tasks = taskFields.id.value
