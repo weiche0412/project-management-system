@@ -37,6 +37,7 @@
           <div class="topbar-actions">
             <button class="secondary-button" id="addSystemButton" type="button">新增系統</button>
             <button class="secondary-button" id="addProjectButton" type="button">新增專案</button>
+            <button class="secondary-button" id="openGanttPageButton" type="button">甘特圖</button>
             <button class="primary-button" id="addTaskButton" type="button">新增任務</button>
           </div>
         </header>
@@ -235,11 +236,20 @@
 
         <div class="form-grid">
           <label class="field">
+            任務歸屬
+            <select id="taskScope" required>
+              <option value="project">專案任務</option>
+              <option value="system">系統任務</option>
+              <option value="general">一般任務</option>
+            </select>
+          </label>
+
+          <label class="field" id="taskSystemField">
             系統
             <select id="taskSystem" required></select>
           </label>
 
-          <label class="field">
+          <label class="field" id="taskProjectField">
             專案
             <select id="taskProject" required></select>
           </label>
@@ -407,11 +417,20 @@
               </label>
 
               <label>
+                任務歸屬
+                <select id="todoAddScope">
+                  <option value="project">專案任務</option>
+                  <option value="system">系統任務</option>
+                  <option value="general">一般任務</option>
+                </select>
+              </label>
+
+              <label id="todoAddSystemField">
                 系統
                 <select id="todoAddSystem" required></select>
               </label>
 
-              <label>
+              <label id="todoAddProjectField">
                 專案
                 <select id="todoAddProject" required></select>
               </label>
@@ -511,6 +530,49 @@
           <div class="todo-full-list" id="todoPageList"></div>
         </main>
         <aside class="todo-task-drawer hidden" id="todoTaskDrawer" aria-hidden="true"></aside>
+      </div>
+    </section>
+
+    <section class="gantt-page hidden" id="ganttPage" aria-hidden="true">
+      <header class="todo-page-topbar gantt-page-topbar">
+        <div class="todo-page-brand">
+          <span class="app-launcher">PM</span>
+          <strong>甘特圖</strong>
+        </div>
+        <label class="todo-page-search">
+          <span>搜尋</span>
+          <input id="ganttSearchInput" type="search" placeholder="搜尋系統、專案、任務" />
+        </label>
+        <div class="gantt-topbar-actions">
+          <label class="todo-sort-control">
+            <span>尺度</span>
+            <select id="ganttScaleSelect">
+              <option value="week" selected>週</option>
+              <option value="month">月</option>
+            </select>
+          </label>
+          <button class="todo-page-close" id="closeGanttPageButton" type="button">返回專案管理</button>
+        </div>
+      </header>
+
+      <div class="gantt-page-body">
+        <main class="gantt-page-main">
+          <div class="todo-page-heading gantt-page-heading">
+            <div>
+              <p id="ganttRangeLabel">時間軸</p>
+              <h1>系統排程總覽</h1>
+            </div>
+            <div class="gantt-legend" aria-label="甘特圖圖例">
+              <span><i class="gantt-legend-swatch project"></i>專案</span>
+              <span><i class="gantt-legend-swatch phase"></i>階段</span>
+              <span><i class="gantt-legend-swatch task"></i>任務</span>
+              <span><i class="gantt-legend-marker"></i>截止日</span>
+            </div>
+          </div>
+
+          <div class="gantt-chart" id="ganttChart"></div>
+        </main>
+        <aside class="todo-task-drawer hidden" id="ganttTaskDrawer" aria-hidden="true"></aside>
       </div>
     </section>
 

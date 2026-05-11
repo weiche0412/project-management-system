@@ -21,6 +21,13 @@ const todoViews = [
   { id: "nextWeek", title: "下週待辦事項", icon: "▤" },
 ];
 
+const generalWorkScopeId = "__general_work__";
+const taskScopeOptions = [
+  { id: "project", label: "專案任務" },
+  { id: "system", label: "系統任務" },
+  { id: "general", label: "一般任務" },
+];
+
 const storageKey = "project-desk-v2";
 let state = loadState();
 let selectedSystemId = null;
@@ -37,6 +44,12 @@ let todoSectionCollapsed = {
   range: true,
   completed: false,
 };
+let ganttScale = "week";
+let ganttCollapsed = {
+  systems: {},
+  projects: {},
+  taskGroups: {},
+};
 let selectedTodoTaskId = null;
 let drawerMode = "view";
 let toastTimer = null;
@@ -52,6 +65,7 @@ const els = {
   phaseFilter: document.querySelector("#phaseFilter"),
   todoDashboard: document.querySelector("#todoDashboard"),
   openTodoPageButton: document.querySelector("#openTodoPageButton"),
+  openGanttPageButton: document.querySelector("#openGanttPageButton"),
   todoPage: document.querySelector("#todoPage"),
   closeTodoPageButton: document.querySelector("#closeTodoPageButton"),
   todoPageSidebar: document.querySelector("#todoPageSidebar"),
@@ -69,6 +83,13 @@ const els = {
   todoAddDetails: document.querySelector("#todoAddDetails"),
   todoAddReset: document.querySelector("#todoAddReset"),
   todoAddCancel: document.querySelector("#todoAddCancel"),
+  ganttPage: document.querySelector("#ganttPage"),
+  closeGanttPageButton: document.querySelector("#closeGanttPageButton"),
+  ganttSearchInput: document.querySelector("#ganttSearchInput"),
+  ganttScaleSelect: document.querySelector("#ganttScaleSelect"),
+  ganttRangeLabel: document.querySelector("#ganttRangeLabel"),
+  ganttChart: document.querySelector("#ganttChart"),
+  ganttTaskDrawer: document.querySelector("#ganttTaskDrawer"),
   addTodoEmailButton: document.querySelector("#addTodoEmailButton"),
   addTodoLinkButton: document.querySelector("#addTodoLinkButton"),
   todoPageList: document.querySelector("#todoPageList"),
@@ -121,7 +142,10 @@ const projectFields = {
 
 const taskFields = {
   id: document.querySelector("#taskId"),
+  scope: document.querySelector("#taskScope"),
+  systemField: document.querySelector("#taskSystemField"),
   systemId: document.querySelector("#taskSystem"),
+  projectField: document.querySelector("#taskProjectField"),
   projectId: document.querySelector("#taskProject"),
   title: document.querySelector("#taskTitle"),
   description: document.querySelector("#taskDescription"),
@@ -139,7 +163,10 @@ const taskFields = {
 
 const todoAddFields = {
   mode: document.querySelector("#todoAddMode"),
+  scope: document.querySelector("#todoAddScope"),
+  systemField: document.querySelector("#todoAddSystemField"),
   systemId: document.querySelector("#todoAddSystem"),
+  projectField: document.querySelector("#todoAddProjectField"),
   projectId: document.querySelector("#todoAddProject"),
   existingTaskField: document.querySelector("#todoExistingTaskField"),
   existingTaskId: document.querySelector("#todoExistingTask"),
@@ -166,8 +193,18 @@ els.sidebarToggle.addEventListener("click", () => {
   syncSidebarCollapsed();
 });
 els.openTodoPageButton.addEventListener("click", () => openTodoPage("today"));
+els.openGanttPageButton.addEventListener("click", openGanttPage);
 els.closeTodoPageButton.addEventListener("click", closeTodoPage);
+els.closeGanttPageButton.addEventListener("click", closeGanttPage);
 els.todoPageSearch.addEventListener("input", renderTodoPage);
+els.ganttSearchInput.addEventListener("input", () => {
+  els.searchInput.value = els.ganttSearchInput.value;
+  render();
+});
+els.ganttScaleSelect.addEventListener("change", () => {
+  ganttScale = els.ganttScaleSelect.value;
+  renderGanttPage();
+});
 els.todoSortSelect.addEventListener("change", () => {
   todoSortKey = els.todoSortSelect.value;
   renderTodoPage();
@@ -203,16 +240,24 @@ els.addTaskEmailButton.addEventListener("click", () => addEmailRow(taskFields.re
 els.addTaskLinkButton.addEventListener("click", () => addLinkRow(taskFields.relatedLinks));
 els.addTodoEmailButton.addEventListener("click", () => addEmailRow(todoAddFields.relatedEmails));
 els.addTodoLinkButton.addEventListener("click", () => addLinkRow(todoAddFields.relatedLinks));
+taskFields.scope.addEventListener("change", () => syncTaskScopeFields(taskFields));
 taskFields.systemId.addEventListener("change", () => {
   populateTaskProjectSelect(taskFields.systemId.value);
+  syncTaskScopeFields(taskFields, false);
 });
 taskFields.rangeStart.addEventListener("change", () => updateTaskDateConstraints(taskFields));
 taskFields.rangeEnd.addEventListener("change", () => updateTaskDateConstraints(taskFields));
 taskFields.executionDate.addEventListener("change", () => updateTaskDateConstraints(taskFields, false));
 taskFields.deadline.addEventListener("change", () => updateTaskDateConstraints(taskFields, false));
 todoAddFields.mode.addEventListener("change", updateTodoAddMode);
+todoAddFields.scope.addEventListener("change", () => {
+  syncTaskScopeFields(todoAddFields);
+  populateTodoExistingTaskSelect();
+  if (todoAddFields.mode.value === "existing") fillTodoAddFromExistingTask();
+});
 todoAddFields.systemId.addEventListener("change", () => {
   populateTodoProjectSelect(todoAddFields.systemId.value);
+  syncTaskScopeFields(todoAddFields, false);
   populateTodoExistingTaskSelect();
   if (todoAddFields.mode.value === "existing") fillTodoAddFromExistingTask();
 });
@@ -252,6 +297,7 @@ function buildStarterState() {
   const projectH = createId();
 
   const makeTask = ({
+    scope = "project",
     systemId,
     projectId,
     title,
@@ -274,6 +320,7 @@ function buildStarterState() {
     completedDate,
   }) => ({
     id: createId(),
+    scope,
     systemId,
     projectId,
     title,
@@ -1026,9 +1073,13 @@ function normalizeTask(task) {
   const rangeEnd = task.rangeEnd || task.endDate || task.startDate || task.dueDate || rangeStart;
   const executionDate = clampDate(task.executionDate || task.startDate || rangeStart, rangeStart, rangeEnd);
   const deadline = task.deadline && task.deadline >= rangeEnd ? task.deadline : rangeEnd;
+  const scope = normalizeTaskScope(task);
 
   return {
     ...task,
+    scope,
+    systemId: scope === "general" ? "" : task.systemId || "",
+    projectId: scope === "project" ? task.projectId || "" : "",
     status: normalizeTaskStatus(task.status),
     tags: Array.isArray(task.tags) ? task.tags : [],
     rangeStart,
@@ -1044,6 +1095,78 @@ function normalizeTask(task) {
     notes: task.notes || "",
     history: normalizeTaskHistory(task.history),
   };
+}
+
+function normalizeTaskScope(task = {}) {
+  if (task.scope === "general") return "general";
+  if (task.scope === "system") return "system";
+  if (task.scope === "project") return "project";
+  if (task.projectId) return "project";
+  if (task.systemId) return "system";
+  return "general";
+}
+
+function getTaskScope(task = {}) {
+  return normalizeTaskScope(task);
+}
+
+function getTaskScopeLabel(scope) {
+  return taskScopeOptions.find((option) => option.id === scope)?.label || "專案任務";
+}
+
+function getTaskContextLabel(task) {
+  const scope = getTaskScope(task);
+  if (scope === "general") return "一般工作";
+
+  const system = getSystem(task.systemId);
+  if (scope === "system") return `${system?.name || "未指定系統"} / 系統層級任務`;
+
+  const project = getProject(task.projectId);
+  return `${system?.name || "未指定系統"} / ${project?.name || "未指定專案"}`;
+}
+
+function selectedScopeIsGeneral(systemId = selectedSystemId) {
+  return systemId === generalWorkScopeId;
+}
+
+function taskMatchesSystemScope(task, systemId = selectedSystemId) {
+  if (!systemId) return true;
+  const scope = getTaskScope(task);
+  if (selectedScopeIsGeneral(systemId)) return scope === "general";
+  return scope !== "general" && task.systemId === systemId;
+}
+
+function taskMatchesProjectScope(task, projectId = selectedProjectId) {
+  if (projectId === "all") return true;
+  return getTaskScope(task) === "project" && task.projectId === projectId;
+}
+
+function taskMatchesPhaseScope(task, phaseProjectIds, phase = els.phaseFilter.value) {
+  if (phase === "all") return true;
+  return getTaskScope(task) === "project" && phaseProjectIds.includes(task.projectId);
+}
+
+function getTaskScopeFormValues(fields) {
+  const scope = fields.scope?.value || "project";
+  return {
+    scope,
+    systemId: scope === "general" ? "" : fields.systemId.value,
+    projectId: scope === "project" ? fields.projectId.value : "",
+  };
+}
+
+function validateTaskScopeValues(scopeValues) {
+  if (scopeValues.scope !== "general" && !scopeValues.systemId) {
+    alert("請先選擇系統。");
+    return false;
+  }
+
+  if (scopeValues.scope === "project" && !scopeValues.projectId) {
+    alert("請先選擇專案。");
+    return false;
+  }
+
+  return true;
 }
 
 function normalizeTaskStatus(status) {
@@ -1154,6 +1277,8 @@ function render() {
   renderBoard();
   if (!els.todoPage.classList.contains("hidden")) {
     renderTodoPage();
+  } else if (!els.ganttPage.classList.contains("hidden")) {
+    renderGanttPage();
   } else {
     renderTodoDrawer();
   }
@@ -1167,8 +1292,12 @@ function syncSidebarCollapsed() {
 }
 
 function ensureSelection() {
-  if (selectedSystemId && !state.systems.some((system) => system.id === selectedSystemId)) {
+  if (selectedSystemId && !selectedScopeIsGeneral() && !state.systems.some((system) => system.id === selectedSystemId)) {
     selectedSystemId = null;
+  }
+
+  if (selectedScopeIsGeneral()) {
+    selectedProjectId = "all";
   }
 
   if (selectedProjectId !== "all" && !state.projects.some((project) => project.id === selectedProjectId)) {
@@ -1178,8 +1307,10 @@ function ensureSelection() {
 
 function renderSystems() {
   const allActive = selectedSystemId === null;
+  const generalActive = selectedScopeIsGeneral();
   const allProjects = state.projects.length;
   const allTasks = state.tasks.length;
+  const generalTasks = state.tasks.filter((task) => getTaskScope(task) === "general").length;
 
   const buttons = [
     `<button class="system-item ${allActive ? "active" : ""}" type="button" data-system-id="" title="全部系統">
@@ -1189,7 +1320,7 @@ function renderSystems() {
     </button>`,
     ...state.systems.map((system) => {
       const projectCount = state.projects.filter((project) => project.systemId === system.id).length;
-      const taskCount = state.tasks.filter((task) => task.systemId === system.id).length;
+      const taskCount = state.tasks.filter((task) => taskMatchesSystemScope(task, system.id)).length;
       const shortLabel = getSystemShortLabel(system.name);
 
       return `
@@ -1200,6 +1331,11 @@ function renderSystems() {
         </button>
       `;
     }),
+    `<button class="system-item ${generalActive ? "active" : ""}" type="button" data-system-id="${generalWorkScopeId}" title="一般工作">
+      <strong class="system-name-full">一般工作</strong>
+      <strong class="system-name-short">一般</strong>
+      <span>非系統別・${generalTasks} 個任務</span>
+    </button>`,
   ].join("");
 
   els.systemList.innerHTML = buttons;
@@ -1230,6 +1366,12 @@ function getSystemShortLabel(name = "") {
 }
 
 function renderHeader() {
+  if (selectedScopeIsGeneral()) {
+    els.pageTitle.textContent = "一般工作";
+    els.pageSubtitle.textContent = "管理不屬於特定系統或專案的任務與待辦事項。";
+    return;
+  }
+
   const system = getSystem(selectedSystemId);
   els.pageTitle.textContent = system ? system.name : "全部系統";
   els.pageSubtitle.textContent = system?.description || "依系統管理專案，再由專案掌握任務與實際時程。";
@@ -1238,9 +1380,7 @@ function renderHeader() {
 function renderMetrics() {
   const projects = getScopedProjects();
   const projectIds = projects.map((project) => project.id);
-  const tasks = state.tasks.filter((task) => {
-    return selectedSystemId ? task.systemId === selectedSystemId : true;
-  });
+  const tasks = state.tasks.filter((task) => taskMatchesSystemScope(task));
   const activeTasks = tasks.filter((task) => task.status !== "done").length;
   const dueSoon = tasks.filter((task) => {
     if (!task.deadline || task.status === "done") return false;
@@ -1248,7 +1388,7 @@ function renderMetrics() {
     return diff >= 0 && diff <= 7;
   }).length;
 
-  els.systemCount.textContent = selectedSystemId ? 1 : state.systems.length;
+  els.systemCount.textContent = selectedScopeIsGeneral() ? 0 : selectedSystemId ? 1 : state.systems.length;
   els.projectCount.textContent = projectIds.length;
   els.activeTaskCount.textContent = activeTasks;
   els.deadlineCount.textContent = dueSoon;
@@ -1301,7 +1441,7 @@ function getDashboardTodoSections() {
   const tomorrow = getDateOffset(1);
   const week = getWeekRange(0);
   const tasks = state.tasks
-    .filter((task) => task.status !== "done" && (selectedSystemId ? task.systemId === selectedSystemId : true))
+    .filter((task) => task.status !== "done" && taskMatchesSystemScope(task))
     .sort(compareTasksByUrgency);
   const assigned = new Set();
   const take = (predicate) => {
@@ -1370,7 +1510,7 @@ function dateInRange(date, start, end) {
 function getTodoBuckets() {
   const tasks = state.tasks
     .filter((task) => {
-      return task.status !== "done" && (selectedSystemId ? task.systemId === selectedSystemId : true);
+      return task.status !== "done" && taskMatchesSystemScope(task);
     })
     .sort(compareTasksByUrgency);
   const today = todayString();
@@ -1420,7 +1560,7 @@ function renderTodoItem(task, section = {}) {
       <input type="checkbox" data-complete-task="${task.id}" aria-label="完成 ${escapeHtml(task.title)}" />
       <button class="todo-item-content" type="button" data-dashboard-task-open="${task.id}" aria-label="查看 ${escapeHtml(task.title)}">
         <strong>${escapeHtml(task.title)}</strong>
-        <span>${escapeHtml(system?.name || "未指定系統")} / ${escapeHtml(project?.name || "未指定專案")}</span>
+        <span>${escapeHtml(getTaskContextLabel(task))}</span>
         <span class="todo-item-dates">
           <span class="${executionOverdue ? "date-alert" : ""}">執行日期：${formatDate(task.executionDate)}</span>
           <span class="${deadlineOverdue || deadlineUrgent ? "date-alert" : ""}">最後期限：${formatDate(task.deadline)}</span>
@@ -1486,6 +1626,8 @@ function playCompletionSound() {
 
 function openTodoPage(viewId = "today", focusSection = "") {
   closeTodoDrawer();
+  els.ganttPage.classList.add("hidden");
+  els.ganttPage.setAttribute("aria-hidden", "true");
   activeTodoView = viewId;
   todoFocusSection = focusSection;
   els.todoPage.classList.remove("hidden");
@@ -1498,6 +1640,26 @@ function closeTodoPage() {
   closeTodoDrawer();
   els.todoPage.classList.add("hidden");
   els.todoPage.setAttribute("aria-hidden", "true");
+}
+
+function openGanttPage() {
+  if (!els.todoPage.classList.contains("hidden")) {
+    closeTodoPage();
+  } else {
+    closeTodoDrawer();
+  }
+
+  els.ganttSearchInput.value = els.searchInput.value;
+  els.ganttScaleSelect.value = ganttScale;
+  els.ganttPage.classList.remove("hidden");
+  els.ganttPage.setAttribute("aria-hidden", "false");
+  renderGanttPage();
+}
+
+function closeGanttPage() {
+  closeTodoDrawer();
+  els.ganttPage.classList.add("hidden");
+  els.ganttPage.setAttribute("aria-hidden", "true");
 }
 
 function renderTodoPage() {
@@ -1548,12 +1710,613 @@ function renderTodoPage() {
   focusTodoSection();
 }
 
+function renderGanttPage() {
+  els.ganttSearchInput.value = els.searchInput.value;
+  els.ganttScaleSelect.value = ganttScale;
+
+  const groups = getGanttGroups();
+  const timeline = buildGanttTimeline(groups);
+  els.ganttRangeLabel.textContent = `${formatRange(timeline.startString, timeline.endString)}・${ganttScale === "week" ? "以日檢視" : "以週檢視"}`;
+
+  if (!groups.length) {
+    els.ganttChart.innerHTML = `<p class="empty-state">目前沒有符合條件的系統、專案或任務。</p>`;
+    renderTodoDrawer();
+    return;
+  }
+
+  els.ganttChart.innerHTML = `
+    <div class="gantt-chart-inner" style="--gantt-unit-width: ${timeline.unitWidth}px; --gantt-grid-width: ${timeline.units.length * timeline.unitWidth}px; --gantt-columns: repeat(${timeline.units.length}, ${timeline.unitWidth}px);">
+      ${renderGanttTimeHeader(timeline)}
+      ${groups.map((group) => renderGanttGroup(group, timeline)).join("")}
+    </div>
+  `;
+
+  attachGanttHandlers();
+  renderTodoDrawer();
+}
+
+function getGanttGroups() {
+  const visibleTasks = getVisibleTasks();
+  const projects = getGanttScopedProjects(visibleTasks);
+  const groups = [];
+
+  if (selectedScopeIsGeneral()) {
+    const generalTasks = visibleTasks.filter((task) => getTaskScope(task) === "general");
+    groups.push({
+      id: "general",
+      name: "一般工作",
+      description: "非系統別任務",
+      projects: [],
+      tasks: generalTasks,
+      kind: "general",
+    });
+    return groups;
+  }
+
+  const systems = selectedSystemId
+    ? state.systems.filter((system) => system.id === selectedSystemId)
+    : state.systems;
+
+  systems.forEach((system) => {
+    const systemProjects = projects
+      .filter((project) => project.systemId === system.id)
+      .map((project) => ({
+        project,
+        tasks: visibleTasks.filter((task) => getTaskScope(task) === "project" && task.projectId === project.id),
+      }));
+    const systemTasks = visibleTasks.filter((task) => getTaskScope(task) === "system" && task.systemId === system.id);
+
+    if (systemProjects.length || systemTasks.length || selectedSystemId === system.id) {
+      groups.push({
+        id: `system-${system.id}`,
+        systemId: system.id,
+        name: system.name,
+        description: system.description || "未設定描述",
+        projects: systemProjects,
+        tasks: systemTasks,
+        kind: "system",
+      });
+    }
+  });
+
+  if (!selectedSystemId) {
+    const generalTasks = visibleTasks.filter((task) => getTaskScope(task) === "general");
+    if (generalTasks.length) {
+      groups.push({
+        id: "general",
+        name: "一般工作",
+        description: "非系統別任務",
+        projects: [],
+        tasks: generalTasks,
+        kind: "general",
+      });
+    }
+  }
+
+  return groups;
+}
+
+function getGanttScopedProjects(visibleTasks) {
+  const query = els.searchInput.value.trim().toLowerCase();
+  const phase = els.phaseFilter.value;
+  const visibleTaskProjectIds = new Set(
+    visibleTasks
+      .filter((task) => getTaskScope(task) === "project" && task.projectId)
+      .map((task) => task.projectId),
+  );
+
+  return state.projects.filter((project) => {
+    const system = getSystem(project.systemId);
+    const matchSystem = selectedSystemId ? project.systemId === selectedSystemId : true;
+    const matchProject = selectedProjectId === "all" || project.id === selectedProjectId;
+    const matchPhase = phase === "all" || project.phase === phase;
+    const matchQuery = !query || projectMatchesSearch(project, system, query) || visibleTaskProjectIds.has(project.id);
+    return matchSystem && matchProject && matchPhase && matchQuery;
+  });
+}
+
+function renderGanttTimeHeader(timeline) {
+  return `
+    <div class="gantt-row gantt-time-header">
+      <div class="gantt-label-cell gantt-header-label">層級 / 項目</div>
+      <div class="gantt-grid gantt-header-grid" aria-hidden="true">
+        ${timeline.units.map((unit) => {
+          return `
+            <div class="gantt-time-cell ${unit.isToday ? "today" : ""}">
+              <strong>${escapeHtml(unit.label)}</strong>
+              <span>${escapeHtml(unit.subLabel)}</span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderGanttGroup(group, timeline) {
+  const collapsed = Boolean(ganttCollapsed.systems[group.id]);
+  const range = getGanttGroupRange(group);
+  const projectCount = group.projects.length;
+  const taskCount = group.tasks.length + group.projects.reduce((count, item) => count + item.tasks.length, 0);
+  const summary = [
+    projectCount ? `${projectCount} 個專案` : "",
+    taskCount ? `${taskCount} 筆任務` : "",
+    range ? formatRange(range.start, range.end) : "",
+  ].filter(Boolean).join("・") || "沒有符合條件的時程";
+
+  return `
+    <section class="gantt-section">
+      ${renderGanttRow({
+        className: `gantt-system-row gantt-level-0 ${group.kind === "general" ? "general" : ""}`,
+        label: renderGanttTreeLabel({
+          level: 0,
+          type: group.kind === "general" ? "一般" : "系統",
+          typeClass: group.kind === "general" ? "general" : "system",
+          name: group.name,
+          meta: `${group.description}・${summary}`,
+          toggle: {
+            id: group.id,
+            target: "system",
+            collapsed,
+          },
+        }),
+        grid: renderGanttBar(range?.start, range?.end, timeline, {
+          className: "system",
+          title: `${group.name} ${summary}`,
+          content: summary,
+        }),
+        timeline,
+      })}
+      ${collapsed ? "" : renderGanttGroupChildren(group, timeline)}
+    </section>
+  `;
+}
+
+function renderGanttGroupChildren(group, timeline) {
+  const projectRows = group.projects.map((item) => renderGanttProject(item, timeline)).join("");
+  const taskRows = renderGanttTaskBlock(
+    group.kind === "general" ? "一般任務" : "系統層級任務",
+    group.tasks,
+    timeline,
+    "system-task",
+    `${group.id}-tasks`,
+  );
+
+  if (!projectRows && !taskRows) {
+    return renderGanttRow({
+      className: "gantt-note-row gantt-level-1",
+      label: renderGanttTreeLabel({
+        level: 1,
+        type: "提示",
+        typeClass: "note",
+        name: "沒有符合目前篩選的專案或任務",
+        meta: "請調整搜尋、系統或階段篩選",
+      }),
+      grid: "",
+      timeline,
+    });
+  }
+
+  return `${taskRows}${projectRows}`;
+}
+
+function renderGanttProject(item, timeline) {
+  const { project, tasks } = item;
+  const collapsed = Boolean(ganttCollapsed.projects[project.id]);
+  const progress = getProjectCompletion(project.id);
+  const range = getGanttProjectRange(project, tasks);
+  const phaseRows = getGanttProjectPhases(project).map((phaseItem) => renderGanttPhaseRow(project, phaseItem, timeline)).join("");
+  const taskRows = renderGanttTaskBlock("專案任務", tasks, timeline, "project-task", `project-${project.id}-tasks`);
+  const closed = project.closed || project.phase === "closed";
+  const rangeLabel = range ? formatRange(range.start, range.end) : "尚未設定時程";
+
+  return `
+    ${renderGanttRow({
+      className: `gantt-project-row gantt-level-1 ${closed ? "closed" : ""}`,
+      label: renderGanttTreeLabel({
+        level: 1,
+        type: "專案",
+        typeClass: "project",
+        name: project.name,
+        meta: `${getPhaseLabel(project.phase)}・${progress.label}・${rangeLabel}`,
+        actionAttributes: `data-gantt-project="${project.id}"`,
+        toggle: {
+          id: project.id,
+          target: "project",
+          collapsed,
+        },
+      }),
+      grid: renderGanttBar(range?.start, range?.end, timeline, {
+        className: `project ${closed ? "closed" : ""}`,
+        title: `${project.name} ${rangeLabel}`,
+        content: `${progress.label}`,
+        data: `data-gantt-project="${project.id}"`,
+      }),
+      timeline,
+    })}
+    ${collapsed ? "" : `${phaseRows}${taskRows}`}
+  `;
+}
+
+function renderGanttPhaseRow(project, phaseItem, timeline) {
+  const active = project.phase === phaseItem.id;
+  return renderGanttRow({
+    className: `gantt-phase-row gantt-level-2 ${active ? "active" : ""}`,
+    label: renderGanttTreeLabel({
+      level: 2,
+      type: "階段",
+      typeClass: active ? "phase active" : "phase",
+      name: phaseItem.label,
+      meta: `${formatRange(phaseItem.start, phaseItem.end)}${active ? "・目前階段" : ""}`,
+    }),
+    grid: renderGanttBar(phaseItem.start, phaseItem.end, timeline, {
+      className: `phase ${active ? "active" : ""}`,
+      title: `${project.name} / ${phaseItem.label}`,
+      content: active ? "目前階段" : phaseItem.label,
+    }),
+    timeline,
+  });
+}
+
+function renderGanttTaskBlock(title, tasks, timeline, className = "", groupId = title) {
+  if (!tasks.length) return "";
+  const range = getGanttTasksRange(tasks);
+  const collapsed = Boolean(ganttCollapsed.taskGroups[groupId]);
+  return `
+    ${renderGanttRow({
+      className: `gantt-task-group-row gantt-level-2 ${className}`,
+      label: renderGanttTreeLabel({
+        level: 2,
+        type: "群組",
+        typeClass: "group",
+        name: title,
+        meta: `${tasks.length} 筆・${range ? formatRange(range.start, range.end) : "尚未設定"}`,
+        toggle: {
+          id: groupId,
+          target: "task-group",
+          collapsed,
+        },
+      }),
+      grid: "",
+      timeline,
+    })}
+    ${collapsed ? "" : tasks.map((task) => renderGanttTaskRow(task, timeline)).join("")}
+  `;
+}
+
+function renderGanttTaskRow(task, timeline) {
+  const priority = getPriorityLabel(task.priority);
+  const status = getStatusLabel(task.status);
+  const owner = task.owner || "未指定";
+  const grid = [
+    renderGanttBar(task.rangeStart, task.rangeEnd, timeline, {
+      className: `task status-${task.status} priority-${task.priority}`,
+      title: `${task.title} ${formatRange(task.rangeStart, task.rangeEnd)}`,
+      content: task.title,
+      data: `data-gantt-task="${task.id}"`,
+    }),
+    renderGanttMarker(task.executionDate, timeline, "execution", `執行日：${formatDate(task.executionDate)}`),
+    renderGanttMarker(task.deadline, timeline, "deadline", `截止日：${formatDate(task.deadline)}`),
+  ].join("");
+
+  return renderGanttRow({
+    className: `gantt-task-row gantt-level-3 priority-${task.priority}`,
+    label: renderGanttTreeLabel({
+      level: 3,
+      type: "任務",
+      typeClass: `task priority-${task.priority}`,
+      name: task.title,
+      meta: `${owner}・${status}・優先級 ${priority}`,
+      actionAttributes: `data-gantt-task="${task.id}"`,
+    }),
+    grid,
+    timeline,
+  });
+}
+
+function renderGanttTreeLabel({ level, type, typeClass = "", name, meta = "", actionAttributes = "", toggle = null }) {
+  const toggleControl = toggle
+    ? `<button class="gantt-disclosure" type="button" data-gantt-toggle-${toggle.target}="${toggle.id}" aria-expanded="${!toggle.collapsed}" aria-label="${toggle.collapsed ? "展開" : "收合"}${escapeHtml(name)}">${toggle.collapsed ? "+" : "-"}</button>`
+    : `<span class="gantt-disclosure-placeholder" aria-hidden="true"></span>`;
+  const nameControl = actionAttributes
+    ? `<button class="gantt-name-button" type="button" ${actionAttributes}>${escapeHtml(name)}</button>`
+    : `<strong>${escapeHtml(name)}</strong>`;
+
+  return `
+    <div class="gantt-tree-node level-${level}">
+      ${toggleControl}
+      <span class="gantt-level-badge ${typeClass}">${escapeHtml(type)}</span>
+      <div class="gantt-label-text">
+        ${nameControl}
+        <span>${escapeHtml(meta)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderGanttRow({ className, label, grid, timeline }) {
+  return `
+    <div class="gantt-row ${className}">
+      <div class="gantt-label-cell">${label}</div>
+      <div class="gantt-grid">
+        ${renderGanttTodayLine(timeline)}
+        ${grid || ""}
+      </div>
+    </div>
+  `;
+}
+
+function renderGanttBar(start, end, timeline, options = {}) {
+  const placement = getGanttPlacement(start, end, timeline);
+  if (!placement) return "";
+
+  const tag = options.data ? "button" : "span";
+  const type = options.data ? ` type="button"` : "";
+  const title = options.title ? ` title="${escapeHtml(options.title)}"` : "";
+  const content = options.content ? escapeHtml(options.content) : "";
+
+  return `
+    <${tag} class="gantt-bar ${options.className || ""}"${type} ${options.data || ""}${title} style="grid-column: ${placement.start} / ${placement.end};">
+      ${content}
+    </${tag}>
+  `;
+}
+
+function renderGanttMarker(date, timeline, className, title) {
+  const index = getGanttUnitIndex(date, timeline);
+  if (index < 0) return "";
+  return `<span class="gantt-marker ${className}" title="${escapeHtml(title)}" style="grid-column: ${index + 1};"></span>`;
+}
+
+function renderGanttTodayLine(timeline) {
+  const index = getGanttUnitIndex(todayString(), timeline);
+  if (index < 0) return "";
+  return `<span class="gantt-today-line" style="grid-column: ${index + 1};"></span>`;
+}
+
+function attachGanttHandlers() {
+  els.ganttChart.querySelectorAll("[data-gantt-toggle-system]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.ganttToggleSystem;
+      ganttCollapsed.systems[id] = !ganttCollapsed.systems[id];
+      renderGanttPage();
+    });
+  });
+
+  els.ganttChart.querySelectorAll("[data-gantt-toggle-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.ganttToggleProject;
+      ganttCollapsed.projects[id] = !ganttCollapsed.projects[id];
+      renderGanttPage();
+    });
+  });
+
+  els.ganttChart.querySelectorAll("[data-gantt-toggle-task-group]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.ganttToggleTaskGroup;
+      ganttCollapsed.taskGroups[id] = !ganttCollapsed.taskGroups[id];
+      renderGanttPage();
+    });
+  });
+
+  els.ganttChart.querySelectorAll("[data-gantt-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const project = getProject(button.dataset.ganttProject);
+      if (project) openProjectDialog(project);
+    });
+  });
+
+  els.ganttChart.querySelectorAll("[data-gantt-task]").forEach((button) => {
+    button.addEventListener("click", () => openTodoDrawer(button.dataset.ganttTask, "view"));
+  });
+}
+
+function buildGanttTimeline(groups) {
+  const dates = collectGanttDates(groups).sort();
+  const today = todayString();
+  const firstDate = dates[0] || today;
+  const lastDate = dates[dates.length - 1] || getDateOffset(30);
+  const paddedStart = addDaysToDateString(firstDate, ganttScale === "week" ? -3 : -14);
+  const paddedEnd = addDaysToDateString(lastDate, ganttScale === "week" ? 5 : 21);
+  const startDate = ganttScale === "week"
+    ? getStartOfWeek(parseDateString(paddedStart))
+    : getStartOfMonth(parseDateString(paddedStart));
+  const endDate = ganttScale === "week"
+    ? getEndOfWeek(parseDateString(paddedEnd))
+    : getEndOfMonth(parseDateString(paddedEnd));
+  const units = buildGanttUnits(startDate, endDate, ganttScale);
+
+  return {
+    startString: toDateInputValue(startDate),
+    endString: toDateInputValue(endDate),
+    unitWidth: ganttScale === "week" ? 48 : 86,
+    units,
+  };
+}
+
+function buildGanttUnits(startDate, endDate, scale) {
+  const units = [];
+  let cursor = new Date(startDate);
+  const today = todayString();
+
+  while (cursor <= endDate) {
+    const unitStart = new Date(cursor);
+    const unitEnd = scale === "week" ? new Date(cursor) : addDaysToDate(cursor, 6);
+    if (unitEnd > endDate) unitEnd.setTime(endDate.getTime());
+    const startString = toDateInputValue(unitStart);
+    const endString = toDateInputValue(unitEnd);
+
+    units.push({
+      startString,
+      endString,
+      label: scale === "week" ? formatGanttShortDate(startString) : formatGanttShortDate(startString),
+      subLabel: scale === "week" ? formatGanttWeekday(startString) : `至 ${formatGanttShortDate(endString)}`,
+      isToday: today >= startString && today <= endString,
+    });
+
+    cursor = scale === "week" ? addDaysToDate(cursor, 1) : addDaysToDate(cursor, 7);
+  }
+
+  return units;
+}
+
+function collectGanttDates(groups) {
+  const dates = [];
+  groups.forEach((group) => {
+    collectGanttTaskDates(group.tasks, dates);
+    group.projects.forEach((item) => {
+      const projectRange = getGanttProjectRange(item.project, item.tasks);
+      pushGanttRangeDates(projectRange, dates);
+      getGanttProjectPhases(item.project).forEach((phaseItem) => pushGanttRangeDates(phaseItem, dates));
+      collectGanttTaskDates(item.tasks, dates);
+    });
+  });
+  return dates.filter(Boolean);
+}
+
+function collectGanttTaskDates(tasks, dates) {
+  tasks.forEach((task) => {
+    dates.push(task.rangeStart, task.rangeEnd, task.executionDate, task.deadline);
+  });
+}
+
+function pushGanttRangeDates(range, dates) {
+  if (!range) return;
+  dates.push(range.start, range.end);
+}
+
+function getGanttGroupRange(group) {
+  const dates = [];
+  collectGanttTaskDates(group.tasks, dates);
+  group.projects.forEach((item) => {
+    pushGanttRangeDates(getGanttProjectRange(item.project, item.tasks), dates);
+    getGanttProjectPhases(item.project).forEach((phaseItem) => pushGanttRangeDates(phaseItem, dates));
+    collectGanttTaskDates(item.tasks, dates);
+  });
+  return getGanttRangeFromDates(dates);
+}
+
+function getGanttProjectRange(project, tasks = []) {
+  const plannedRange = getProjectScheduleRange(project.plannedStart, project.plannedEnd, project.phaseSchedules || {});
+  if (plannedRange.start || plannedRange.end) return normalizeGanttRange(plannedRange.start, plannedRange.end);
+  return getGanttTasksRange(tasks);
+}
+
+function getGanttProjectPhases(project) {
+  const schedules = project.phaseSchedules || createPhaseSchedules();
+  return phases
+    .map((phase) => {
+      const schedule = schedules[phase.id] || {};
+      const range = normalizeGanttRange(schedule.start, schedule.end);
+      return range ? { id: phase.id, label: phase.label, start: range.start, end: range.end } : null;
+    })
+    .filter(Boolean);
+}
+
+function getGanttTasksRange(tasks) {
+  const dates = [];
+  collectGanttTaskDates(tasks, dates);
+  return getGanttRangeFromDates(dates);
+}
+
+function getGanttRangeFromDates(dates) {
+  const cleanDates = dates.filter(Boolean).sort();
+  if (!cleanDates.length) return null;
+  return { start: cleanDates[0], end: cleanDates[cleanDates.length - 1] };
+}
+
+function normalizeGanttRange(start, end) {
+  if (!start && !end) return null;
+  const rangeStart = start || end;
+  const rangeEnd = end || start;
+  return rangeStart <= rangeEnd
+    ? { start: rangeStart, end: rangeEnd }
+    : { start: rangeEnd, end: rangeStart };
+}
+
+function getGanttPlacement(start, end, timeline) {
+  const range = normalizeGanttRange(start, end);
+  if (!range) return null;
+  const startIndex = getGanttUnitIndex(range.start, timeline);
+  const endIndex = getGanttUnitIndex(range.end, timeline);
+  if (startIndex < 0 || endIndex < 0) return null;
+  return {
+    start: startIndex + 1,
+    end: endIndex + 2,
+  };
+}
+
+function getGanttUnitIndex(dateString, timeline) {
+  if (!dateString) return -1;
+  return timeline.units.findIndex((unit) => dateString >= unit.startString && dateString <= unit.endString);
+}
+
+function getProjectCompletion(projectId) {
+  const tasks = state.tasks.filter((task) => getTaskScope(task) === "project" && task.projectId === projectId);
+  if (!tasks.length) return { done: 0, total: 0, ratio: 0, label: "0 / 0 完成" };
+  const done = tasks.filter((task) => task.status === "done").length;
+  return {
+    done,
+    total: tasks.length,
+    ratio: Math.round((done / tasks.length) * 100),
+    label: `${done} / ${tasks.length} 完成`,
+  };
+}
+
+function parseDateString(dateString) {
+  return new Date(`${dateString}T00:00:00`);
+}
+
+function addDaysToDate(date, days) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function addDaysToDateString(dateString, days) {
+  return toDateInputValue(addDaysToDate(parseDateString(dateString), days));
+}
+
+function getStartOfWeek(date) {
+  const start = new Date(date);
+  const day = start.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + mondayOffset);
+  return start;
+}
+
+function getEndOfWeek(date) {
+  return addDaysToDate(getStartOfWeek(date), 6);
+}
+
+function getStartOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function getEndOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function formatGanttShortDate(dateString) {
+  const date = parseDateString(dateString);
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function formatGanttWeekday(dateString) {
+  return new Intl.DateTimeFormat("zh-TW", { weekday: "short" }).format(parseDateString(dateString));
+}
+
 function renderTodoSystemTabs(activeBucketId, query) {
   const tabs = [
     {
       id: "",
       name: "全部系統",
-      description: `${state.systems.length} 個系統`,
+      description: `${state.systems.length} 個系統 + 一般工作`,
+    },
+    {
+      id: generalWorkScopeId,
+      name: "一般工作",
+      description: "非系統別任務",
     },
     ...state.systems.map((system) => ({
       id: system.id,
@@ -1713,7 +2476,7 @@ function renderTodoTaskRow(task) {
           <input class="todo-title-input" data-inline-title="${task.id}" value="${escapeHtml(task.title)}" aria-label="任務名稱" />
           <button class="todo-open-edit" type="button" data-open-edit-drawer="${task.id}" title="編輯任務">✎</button>
         </div>
-        <span class="todo-subtitle">${escapeHtml(system?.name || "未指定系統")} / ${escapeHtml(project?.name || "未指定專案")}</span>
+        <span class="todo-subtitle">${escapeHtml(getTaskContextLabel(task))}</span>
       </div>
       <input class="todo-inline-date ${executionOverdueClass}" data-inline-execution="${task.id}" type="date" min="${task.rangeStart}" max="${task.rangeEnd}" value="${task.executionDate}" aria-label="執行日期" />
       <input class="todo-inline-date ${deadlineOverdueClass}" data-inline-deadline="${task.id}" type="date" min="${task.rangeEnd}" value="${task.deadline}" aria-label="最後期限" />
@@ -1786,7 +2549,7 @@ function attachTodoPageHandlers() {
 }
 
 function getTasksForTodoView(viewId, systemId = selectedSystemId) {
-  const scopedTasks = state.tasks.filter((task) => (systemId ? task.systemId === systemId : true));
+  const scopedTasks = state.tasks.filter((task) => taskMatchesSystemScope(task, systemId));
   const today = todayString();
   const tomorrow = getDateOffset(1);
   const thisWeek = getWeekRange(0);
@@ -1834,6 +2597,8 @@ function taskMatchesTodoQuery(task, query) {
     task.owner,
     getStatusLabel(task.status),
     getPriorityLabel(task.priority),
+    getTaskScopeLabel(getTaskScope(task)),
+    getTaskContextLabel(task),
     task.tags.join(" "),
     task.notes,
     (task.steps || []).map((step) => step.title).join(" "),
@@ -1856,13 +2621,10 @@ function taskMatchesTodoQuery(task, query) {
 function sortTodoTasks(tasks) {
   const priorityRank = { low: 0, medium: 1, high: 2 };
   const getSortValue = (task) => {
-    const system = getSystem(task.systemId);
-    const project = getProject(task.projectId);
-
     if (todoSortKey === "title") return { value: task.title.toLowerCase(), missing: false };
     if (todoSortKey === "systemProject") {
       return {
-        value: `${system?.name || ""} ${project?.name || ""} ${task.title}`.toLowerCase(),
+        value: `${getTaskContextLabel(task)} ${task.title}`.toLowerCase(),
         missing: false,
       };
     }
@@ -1894,7 +2656,9 @@ function groupTasksBySystem(tasks) {
   const groups = new Map();
 
   tasks.forEach((task) => {
-    const systemName = getSystem(task.systemId)?.name || "未指定系統";
+    const systemName = getTaskScope(task) === "general"
+      ? "一般工作"
+      : getSystem(task.systemId)?.name || "未指定系統";
     if (!groups.has(systemName)) groups.set(systemName, []);
     groups.get(systemName).push(task);
   });
@@ -1965,12 +2729,18 @@ function todoPageIsOpen() {
   return !els.todoPage.classList.contains("hidden");
 }
 
-function getActiveTaskDrawer() {
-  return todoPageIsOpen() ? els.todoTaskDrawer : els.mainTaskDrawer;
+function ganttPageIsOpen() {
+  return !els.ganttPage.classList.contains("hidden");
 }
 
-function getInactiveTaskDrawer() {
-  return todoPageIsOpen() ? els.mainTaskDrawer : els.todoTaskDrawer;
+function getActiveTaskDrawer() {
+  if (todoPageIsOpen()) return els.todoTaskDrawer;
+  if (ganttPageIsOpen()) return els.ganttTaskDrawer;
+  return els.mainTaskDrawer;
+}
+
+function getInactiveTaskDrawers() {
+  return [els.todoTaskDrawer, els.ganttTaskDrawer, els.mainTaskDrawer].filter((drawer) => drawer !== getActiveTaskDrawer());
 }
 
 function hideTaskDrawer(drawer) {
@@ -1982,7 +2752,8 @@ function hideTaskDrawer(drawer) {
 
 function syncTaskDrawerShell(open) {
   els.todoPage.classList.toggle("drawer-open", open && todoPageIsOpen());
-  els.appShell.classList.toggle("main-drawer-open", open && !todoPageIsOpen());
+  els.ganttPage.classList.toggle("drawer-open", open && ganttPageIsOpen());
+  els.appShell.classList.toggle("main-drawer-open", open && !todoPageIsOpen() && !ganttPageIsOpen());
 }
 
 function openTodoDrawer(taskId, mode = "view") {
@@ -1999,7 +2770,7 @@ function openTodoDrawer(taskId, mode = "view") {
 
   selectedTodoTaskId = taskId;
   drawerMode = mode;
-  hideTaskDrawer(getInactiveTaskDrawer());
+  getInactiveTaskDrawers().forEach(hideTaskDrawer);
   drawer.classList.remove("hidden");
   drawer.setAttribute("aria-hidden", "false");
   syncTaskDrawerShell(true);
@@ -2010,6 +2781,7 @@ function closeTodoDrawer() {
   selectedTodoTaskId = null;
   drawerMode = "view";
   hideTaskDrawer(els.todoTaskDrawer);
+  hideTaskDrawer(els.ganttTaskDrawer);
   hideTaskDrawer(els.mainTaskDrawer);
   syncTaskDrawerShell(false);
 }
@@ -2028,7 +2800,7 @@ function renderTodoDrawer() {
     return;
   }
 
-  hideTaskDrawer(getInactiveTaskDrawer());
+  getInactiveTaskDrawers().forEach(hideTaskDrawer);
   drawer.classList.remove("hidden");
   drawer.setAttribute("aria-hidden", "false");
   drawer.innerHTML = drawerMode === "edit" ? renderTodoDrawerEdit(task) : renderTodoDrawerView(task);
@@ -2088,14 +2860,17 @@ function renderTodoDrawer() {
   const drawerFields = getDrawerDateFields(form);
   const updateDrawerDates = (autoCorrect = true) => updateTaskDateConstraints(drawerFields, autoCorrect);
 
+  form.elements.scope.addEventListener("change", () => syncDrawerScopeFields(form));
   form.elements.systemId.addEventListener("change", () => {
     form.elements.projectId.innerHTML = renderProjectOptionsForSystem(form.elements.systemId.value, "");
+    syncDrawerScopeFields(form, false);
   });
   drawerFields.rangeStart.addEventListener("change", () => updateDrawerDates(true));
   drawerFields.rangeEnd.addEventListener("change", () => updateDrawerDates(true));
   drawerFields.executionDate.addEventListener("change", () => updateDrawerDates(false));
   drawerFields.deadline.addEventListener("change", () => updateDrawerDates(false));
   form.addEventListener("submit", handleDrawerTaskSubmit);
+  syncDrawerScopeFields(form, false);
   updateDrawerDates(false);
 }
 
@@ -2113,7 +2888,7 @@ function renderTodoDrawerView(task) {
   return `
     <div class="drawer-header">
       <div>
-        <p class="eyebrow">${escapeHtml(system?.name || "未指定系統")} / ${escapeHtml(project?.name || "未指定專案")}</p>
+        <p class="eyebrow">${escapeHtml(getTaskContextLabel(task))}</p>
         <h2>${escapeHtml(task.title)}</h2>
       </div>
       <button class="drawer-close" type="button" data-close-drawer aria-label="關閉">×</button>
@@ -2215,10 +2990,14 @@ function renderTodoDrawerEdit(task) {
     <form class="drawer-edit-form" data-drawer-form>
       <div class="drawer-edit-grid">
         <label>
+          任務歸屬
+          <select name="scope" required>${renderTaskScopeOptions(getTaskScope(task))}</select>
+        </label>
+        <label data-drawer-system-field>
           系統
           <select name="systemId" required>${renderSystemOptions(task.systemId)}</select>
         </label>
-        <label>
+        <label data-drawer-project-field>
           專案
           <select name="projectId" required>${renderProjectOptionsForSystem(task.systemId, task.projectId)}</select>
         </label>
@@ -2481,6 +3260,12 @@ function handleDrawerTaskSubmit(event) {
 
   const existingTask = getProjectTask(selectedTodoTaskId);
   if (!existingTask) return;
+  const scopeValues = {
+    scope: form.elements.scope.value,
+    systemId: form.elements.scope.value === "general" ? "" : form.elements.systemId.value,
+    projectId: form.elements.scope.value === "project" ? form.elements.projectId.value : "",
+  };
+  if (!validateTaskScopeValues(scopeValues)) return;
 
   const status = normalizeTaskStatus(form.elements.status.value);
   if (status === "done" && !canCompleteTask(existingTask)) {
@@ -2494,8 +3279,9 @@ function handleDrawerTaskSubmit(event) {
 
   const updatedTask = {
     ...existingTask,
-    systemId: form.elements.systemId.value,
-    projectId: form.elements.projectId.value,
+    scope: scopeValues.scope,
+    systemId: scopeValues.systemId,
+    projectId: scopeValues.projectId,
     title: form.elements.title.value.trim() || "未命名任務",
     description: form.elements.description.value.trim(),
     status,
@@ -2515,13 +3301,93 @@ function handleDrawerTaskSubmit(event) {
   };
 
   state.tasks = state.tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task));
-  selectedSystemId = updatedTask.systemId;
-  selectedProjectId = updatedTask.projectId;
+  selectedSystemId = updatedTask.scope === "general" ? generalWorkScopeId : updatedTask.systemId;
+  selectedProjectId = updatedTask.projectId || "all";
   drawerMode = "view";
   saveState();
   render();
 }
 
+function getDefaultTaskScope(defaults = {}) {
+  if (defaults.scope) return defaults.scope;
+  if (defaults.projectId || selectedProjectId !== "all") return "project";
+  if (selectedScopeIsGeneral()) return "general";
+  if (defaults.systemId || selectedSystemId) return "system";
+  return state.projects.length ? "project" : "general";
+}
+function renderTaskScopeOptions(selectedScope = "project") {
+  return taskScopeOptions
+    .map((option) => `<option value="${option.id}" ${option.id === selectedScope ? "selected" : ""}>${option.label}</option>`)
+    .join("");
+}
+
+function syncTaskScopeFields(fields, clearProject = true) {
+  const scope = fields.scope?.value || "project";
+  const isGeneral = scope === "general";
+  const isProject = scope === "project";
+
+  fields.systemField?.classList.toggle("hidden", isGeneral);
+  fields.projectField?.classList.toggle("hidden", !isProject);
+  fields.systemId.required = !isGeneral;
+  fields.projectId.required = isProject;
+
+  if (isGeneral) {
+    fields.systemId.value = "";
+    fields.projectId.value = "";
+    return;
+  }
+
+  if (!fields.systemId.value && state.systems.length) {
+    fields.systemId.value = selectedScopeIsGeneral() ? state.systems[0].id : selectedSystemId || state.systems[0].id;
+  }
+
+  if (isProject) {
+    populateProjectSelectForField(fields.projectId, fields.systemId.value, clearProject ? "" : fields.projectId.value);
+  } else {
+    fields.projectId.value = "";
+  }
+}
+
+function syncDrawerScopeFields(form, clearProject = true) {
+  const scope = form.elements.scope.value;
+  const isGeneral = scope === "general";
+  const isProject = scope === "project";
+  const systemField = form.querySelector("[data-drawer-system-field]");
+  const projectField = form.querySelector("[data-drawer-project-field]");
+
+  systemField?.classList.toggle("hidden", isGeneral);
+  projectField?.classList.toggle("hidden", !isProject);
+  form.elements.systemId.required = !isGeneral;
+  form.elements.projectId.required = isProject;
+
+  if (isGeneral) {
+    form.elements.systemId.value = "";
+    form.elements.projectId.value = "";
+    return;
+  }
+
+  if (!form.elements.systemId.value && state.systems.length) {
+    form.elements.systemId.value = state.systems[0].id;
+  }
+
+  if (isProject) {
+    form.elements.projectId.innerHTML = renderProjectOptionsForSystem(form.elements.systemId.value, clearProject ? "" : form.elements.projectId.value);
+  } else {
+    form.elements.projectId.value = "";
+  }
+}
+
+function populateProjectSelectForField(select, systemId, preferredProjectId = "") {
+  const projects = state.projects.filter((project) => project.systemId === systemId);
+  select.innerHTML = projects.length
+    ? projects
+        .map((project) => {
+          const selected = project.id === preferredProjectId || (!preferredProjectId && project.id === projects[0].id);
+          return `<option value="${project.id}" ${selected ? "selected" : ""}>${escapeHtml(project.name)}</option>`;
+        })
+        .join("")
+    : `<option value="">請先新增此系統的專案</option>`;
+}
 function renderProjectOptionsForSystem(systemId, selectedProjectId = "") {
   const projects = state.projects.filter((project) => project.systemId === systemId);
   return projects.length
@@ -2577,10 +3443,9 @@ function showToast(message) {
 function handleTodoQuickSubmit(event) {
   event.preventDefault();
 
-  if (!todoAddFields.projectId.value) {
-    alert("請先新增系統與專案，再建立待辦工作。");
-    return;
-  }
+  const scopeValues = getTaskScopeFormValues(todoAddFields);
+  if (!validateTaskScopeValues(scopeValues)) return;
+  const { scope, systemId, projectId } = scopeValues;
 
   if (todoAddFields.mode.value === "existing" && !todoAddFields.existingTaskId.value) {
     alert("請選擇一筆尚未完成的任務。");
@@ -2610,8 +3475,9 @@ function handleTodoQuickSubmit(event) {
 
   const task = {
     id: todoAddFields.mode.value === "existing" ? todoAddFields.existingTaskId.value : createId(),
-    systemId: todoAddFields.systemId.value,
-    projectId: todoAddFields.projectId.value,
+    scope,
+    systemId,
+    projectId,
     title: todoAddFields.title.value.trim(),
     description: todoAddFields.description.value.trim(),
     status,
@@ -2641,8 +3507,8 @@ function handleTodoQuickSubmit(event) {
     state.tasks = [task, ...state.tasks];
   }
 
-  selectedSystemId = task.systemId;
-  selectedProjectId = task.projectId;
+  selectedSystemId = task.scope === "general" ? generalWorkScopeId : task.systemId;
+  selectedProjectId = task.projectId || "all";
   saveState();
   resetTodoAddForm();
   render();
@@ -2656,8 +3522,11 @@ function openTodoAddDetails() {
 function resetTodoAddForm(collapse = true) {
   els.todoQuickForm.reset();
   todoAddFields.mode.value = "new";
-  todoAddFields.systemId.innerHTML = renderSystemOptions(selectedSystemId || state.systems[0]?.id || "");
-  populateTodoProjectSelect(todoAddFields.systemId.value, selectedProjectId);
+  const defaultScope = getDefaultTaskScope();
+  const defaultSystemId = defaultScope === "general" ? "" : selectedSystemId || state.systems[0]?.id || "";
+  todoAddFields.scope.value = defaultScope;
+  todoAddFields.systemId.innerHTML = renderSystemOptions(defaultSystemId);
+  populateTodoProjectSelect(todoAddFields.systemId.value, defaultScope === "project" ? selectedProjectId : "");
   todoAddFields.status.value = "not_started";
   todoAddFields.priority.value = "medium";
   const date = getDefaultTodoDateForView(activeTodoView);
@@ -2667,6 +3536,7 @@ function resetTodoAddForm(collapse = true) {
   todoAddFields.deadline.value = date;
   renderEmailRows(todoAddFields.relatedEmails, []);
   renderLinkRows(todoAddFields.relatedLinks, []);
+  syncTaskScopeFields(todoAddFields, false);
   updateTaskDateConstraints(todoAddFields);
   updateTodoAddMode();
 
@@ -2703,8 +3573,12 @@ function populateTodoProjectSelect(systemId, preferredProjectId = "") {
 }
 
 function populateTodoExistingTaskSelect(preferredTaskId = "") {
+  const scopeValues = getTaskScopeFormValues(todoAddFields);
   const tasks = state.tasks.filter((task) => {
-    return task.status !== "done" && task.systemId === todoAddFields.systemId.value && task.projectId === todoAddFields.projectId.value;
+    if (task.status === "done") return false;
+    if (scopeValues.scope === "general") return getTaskScope(task) === "general";
+    if (scopeValues.scope === "system") return getTaskScope(task) === "system" && task.systemId === scopeValues.systemId;
+    return getTaskScope(task) === "project" && task.systemId === scopeValues.systemId && task.projectId === scopeValues.projectId;
   });
 
   todoAddFields.existingTaskId.innerHTML = tasks.length
@@ -2714,13 +3588,17 @@ function populateTodoExistingTaskSelect(preferredTaskId = "") {
           return `<option value="${task.id}" ${selected ? "selected" : ""}>${escapeHtml(task.title)}</option>`;
         })
         .join("")
-    : `<option value="">此專案目前沒有未完成任務</option>`;
+    : `<option value="">此範圍目前沒有未完成任務</option>`;
 }
 
 function fillTodoAddFromExistingTask() {
   const task = getProjectTask(todoAddFields.existingTaskId.value);
   if (!task) return;
 
+  todoAddFields.scope.value = getTaskScope(task);
+  todoAddFields.systemId.innerHTML = renderSystemOptions(task.systemId || state.systems[0]?.id || "");
+  populateTodoProjectSelect(todoAddFields.systemId.value, task.projectId || "");
+  syncTaskScopeFields(todoAddFields, false);
   todoAddFields.title.value = task.title || "";
   todoAddFields.description.value = task.description || "";
   todoAddFields.status.value = normalizeTaskStatus(task.status);
@@ -2768,11 +3646,18 @@ function getDefaultTodoDateForView(viewId) {
 
 function renderProjects() {
   const projects = getScopedProjects(true);
-  const systems = selectedSystemId
-    ? state.systems.filter((system) => system.id === selectedSystemId)
-    : state.systems;
+  const systems = selectedScopeIsGeneral()
+    ? []
+    : selectedSystemId
+      ? state.systems.filter((system) => system.id === selectedSystemId)
+      : state.systems;
 
   els.projectList.classList.add("project-group-list");
+
+  if (selectedScopeIsGeneral()) {
+    els.projectList.innerHTML = `<p class="empty-state">一般工作不需要專案。可直接在上方新增一般任務，或在待辦工作台切到一般工作新增待辦。</p>`;
+    return;
+  }
 
   if (!systems.length) {
     els.projectList.innerHTML = `<p class="empty-state">目前沒有符合條件的專案，請新增專案或調整篩選。</p>`;
@@ -2906,6 +3791,12 @@ function renderProjectCard(project) {
 }
 
 function renderProjectTabs() {
+  if (selectedScopeIsGeneral()) {
+    selectedProjectId = "all";
+    els.projectTabs.innerHTML = "";
+    return;
+  }
+
   const projects = getScopedProjects(true);
   const allActive = selectedProjectId === "all";
 
@@ -2933,11 +3824,13 @@ function renderBoard() {
   const scopeProject = getProject(selectedProjectId);
   const scopeSystem = getSystem(selectedSystemId);
 
-  els.taskScopeLabel.textContent = scopeProject
-    ? `目前顯示「${scopeProject.name}」的任務。`
-    : scopeSystem
-      ? `目前顯示「${scopeSystem.name}」所有專案的任務。`
-      : "目前顯示全部系統的任務。";
+  els.taskScopeLabel.textContent = selectedScopeIsGeneral()
+    ? "目前顯示一般工作任務。"
+    : scopeProject
+      ? `目前顯示「${scopeProject.name}」的任務。`
+      : scopeSystem
+        ? `目前顯示「${scopeSystem.name}」的系統與專案任務。`
+        : "目前顯示全部系統與一般工作的任務。";
 
   els.board.innerHTML = taskColumns
     .map((column) => renderTaskColumn(column, tasks))
@@ -2976,7 +3869,7 @@ function renderTaskCard(task) {
 
   return `
     <button class="task-card priority-${task.priority}" type="button" data-task-id="${task.id}">
-      <div class="task-path">${escapeHtml(system?.name || "未指定系統")} / ${escapeHtml(project?.name || "未指定專案")}</div>
+      <div class="task-path">${escapeHtml(getTaskContextLabel(task))}</div>
       <h3>${escapeHtml(task.title)}</h3>
       <p>${escapeHtml(task.description || "沒有描述")}</p>
       <div class="task-date-line">${getTaskDateLine(task)}</div>
@@ -2995,7 +3888,7 @@ function getScopedProjects(applyPhaseFilter = false) {
   const query = els.searchInput.value.trim().toLowerCase();
   return state.projects.filter((project) => {
     const system = getSystem(project.systemId);
-    const matchSystem = selectedSystemId ? project.systemId === selectedSystemId : true;
+    const matchSystem = selectedScopeIsGeneral() ? false : selectedSystemId ? project.systemId === selectedSystemId : true;
     const matchPhase = !applyPhaseFilter || phase === "all" || project.phase === phase;
     const matchQuery = projectMatchesSearch(project, system, query);
     return matchSystem && matchPhase && matchQuery;
@@ -3029,15 +3922,17 @@ function getVisibleTasks() {
   return state.tasks.filter((task) => {
     const system = getSystem(task.systemId);
     const project = getProject(task.projectId);
-    const matchSystem = selectedSystemId ? task.systemId === selectedSystemId : true;
-    const matchProject = selectedProjectId === "all" ? true : task.projectId === selectedProjectId;
-    const matchPhase = phaseProjectIds.includes(task.projectId);
+    const matchSystem = taskMatchesSystemScope(task);
+    const matchProject = taskMatchesProjectScope(task);
+    const matchPhase = taskMatchesPhaseScope(task, phaseProjectIds, phase);
     const haystack = [
       task.title,
       task.description,
       task.owner,
       task.priority,
       task.status,
+      getTaskScopeLabel(getTaskScope(task)),
+      getTaskContextLabel(task),
       task.tags.join(" "),
       task.notes,
       (task.steps || []).map((step) => step.title).join(" "),
@@ -3088,7 +3983,7 @@ function openProjectDialog(project = null, defaults = {}) {
     return;
   }
 
-  const defaultSystemId = project?.systemId || defaults.systemId || selectedSystemId || state.systems[0].id;
+  const defaultSystemId = project?.systemId || defaults.systemId || (selectedScopeIsGeneral() ? "" : selectedSystemId) || state.systems[0].id;
   document.querySelector("#projectDialogTitle").textContent = project ? "設定專案" : "新增專案";
   els.projectForm.reset();
   projectFields.id.value = project?.id || "";
@@ -3206,18 +4101,15 @@ function updateProjectScheduleConstraints() {
 }
 
 function openTaskDialog(task = null, defaults = {}) {
-  if (!state.projects.length) {
-    openProjectDialog();
-    return;
-  }
-
   document.querySelector("#taskDialogTitle").textContent = task ? "編輯任務" : "新增任務";
   els.taskForm.reset();
   els.deleteTaskButton.hidden = !task;
 
-  const defaultSystemId = task?.systemId || defaults.systemId || selectedSystemId || state.systems[0].id;
-  const defaultProjectId = task?.projectId || defaults.projectId || (selectedProjectId === "all" ? "" : selectedProjectId);
+  const defaultScope = task ? getTaskScope(task) : getDefaultTaskScope(defaults);
+  const defaultSystemId = defaultScope === "general" ? "" : task?.systemId || defaults.systemId || (selectedScopeIsGeneral() ? "" : selectedSystemId) || state.systems[0]?.id || "";
+  const defaultProjectId = defaultScope === "project" ? task?.projectId || defaults.projectId || (selectedProjectId === "all" ? "" : selectedProjectId) : "";
   taskFields.id.value = task?.id || "";
+  taskFields.scope.value = defaultScope;
   taskFields.systemId.innerHTML = renderSystemOptions(defaultSystemId);
   populateTaskProjectSelect(defaultSystemId, defaultProjectId);
   taskFields.title.value = task?.title || "";
@@ -3233,6 +4125,7 @@ function openTaskDialog(task = null, defaults = {}) {
   renderEmailRows(taskFields.relatedEmails, task?.relatedEmails || []);
   renderLinkRows(taskFields.relatedLinks, task?.relatedLinks || []);
 
+  syncTaskScopeFields(taskFields, false);
   updateTaskDateConstraints(taskFields);
   els.taskDialog.showModal();
 }
@@ -3240,18 +4133,15 @@ function openTaskDialog(task = null, defaults = {}) {
 function handleTaskSubmit(event) {
   event.preventDefault();
 
-  const systemId = taskFields.systemId.value;
-  const projectId = taskFields.projectId.value;
+  const scopeValues = getTaskScopeFormValues(taskFields);
+  if (!validateTaskScopeValues(scopeValues)) return;
+  const { scope, systemId, projectId } = scopeValues;
   updateTaskDateConstraints(taskFields);
   const rangeStart = taskFields.rangeStart.value;
   const rangeEnd = taskFields.rangeEnd.value;
   const executionDate = taskFields.executionDate.value;
   const deadline = taskFields.deadline.value;
 
-  if (!projectId) {
-    alert("請先選擇專案。");
-    return;
-  }
 
   if (!validateTaskDates(rangeStart, rangeEnd, executionDate, deadline)) {
     return;
@@ -3270,6 +4160,7 @@ function handleTaskSubmit(event) {
 
   const task = {
     id: taskFields.id.value || createId(),
+    scope,
     systemId,
     projectId,
     title: taskFields.title.value.trim(),
@@ -3299,8 +4190,8 @@ function handleTaskSubmit(event) {
     ? state.tasks.map((item) => (item.id === task.id ? task : item))
     : [task, ...state.tasks];
 
-  selectedSystemId = systemId;
-  selectedProjectId = projectId;
+  selectedSystemId = scope === "general" ? generalWorkScopeId : systemId;
+  selectedProjectId = projectId || "all";
   saveState();
   els.taskDialog.close();
   render();
