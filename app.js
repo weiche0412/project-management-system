@@ -1517,7 +1517,7 @@ function configureFirebase() {
 
     auth = firebase.auth();
     db = firebase.firestore();
-    cloudFunctions = firebase.functions();
+    cloudFunctions = firebase.app().functions("asia-east1");
     return true;
   } catch (error) {
     console.error(error);
@@ -1582,6 +1582,8 @@ function startProfileListener(uid) {
   cleanupProfileListener();
   profileUnsubscribe = db.collection("users").doc(uid).onSnapshot((snapshot) => {
     if (!snapshot.exists) return;
+    const previousRole = currentProfile?.role;
+    const previousStatus = currentProfile?.status;
     const nextProfile = normalizeProfile({ uid: snapshot.id, ...snapshot.data() });
     currentProfile = nextProfile;
     updateAccountUi();
@@ -1589,6 +1591,8 @@ function startProfileListener(uid) {
     if (nextProfile.status === "disabled") {
       showToast("帳號已停用，系統將登出。");
       signOutCurrentUser();
+    } else if (previousRole && (previousRole !== nextProfile.role || previousStatus !== nextProfile.status)) {
+      currentFirebaseUser?.getIdToken(true).catch(() => {});
     }
   });
 }
