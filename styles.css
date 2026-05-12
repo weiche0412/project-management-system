@@ -37,6 +37,48 @@ body {
   font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
 }
 
+.auth-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(238, 247, 251, 0.96), rgba(255, 255, 255, 0.94)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cg fill='none' stroke='%232f80ed' stroke-opacity='.12' stroke-width='2'%3E%3Cpath d='M20 60h200M20 120h200M20 180h200M60 20v200M120 20v200M180 20v200'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.auth-card {
+  width: min(440px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 34px;
+  box-shadow: 0 24px 60px rgba(46, 95, 125, 0.18);
+}
+
+.auth-card .brand-mark {
+  margin-bottom: 22px;
+}
+
+.auth-card h1 {
+  margin-bottom: 12px;
+}
+
+.auth-card p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.auth-card .primary-button {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.auth-help {
+  margin: 16px 0 0;
+  font-size: 13px;
+}
+
 button,
 input,
 select,
@@ -306,6 +348,65 @@ h1 {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.account-panel {
+  position: relative;
+}
+
+.account-button {
+  display: grid;
+  min-height: 40px;
+  min-width: 126px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 5px 12px;
+  text-align: left;
+  box-shadow: 0 8px 18px rgba(46, 95, 125, 0.06);
+}
+
+.account-button span,
+.account-button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-button span {
+  font-weight: 800;
+}
+
+.account-button small {
+  color: var(--muted);
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 90;
+  display: grid;
+  width: 150px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 36px rgba(46, 95, 125, 0.16);
+  padding: 6px;
+}
+
+.account-menu button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  padding: 10px;
+  text-align: left;
+}
+
+.account-menu button:hover {
+  background: #eef8fb;
 }
 
 .primary-button,
@@ -612,6 +713,17 @@ h1 {
   color: #475569;
 }
 
+.delay-alert {
+  margin-top: 12px;
+  border: 1px solid rgba(212, 91, 91, 0.28);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff4f2;
+  color: #a33e3e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .phase-select {
   width: 100%;
 }
@@ -780,6 +892,21 @@ h1 {
 .todo-item .todo-item-dates .date-alert {
   color: #b42318;
   font-weight: 900;
+}
+
+.tag-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -6px 0 22px;
+  border: 1px solid rgba(47, 128, 237, 0.24);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #eef6ff;
+  color: var(--accent-dark);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .hidden {
@@ -1101,6 +1228,129 @@ h1 {
 
 .gantt-page.drawer-open .gantt-page-body {
   grid-template-columns: minmax(0, 1fr) 380px;
+}
+
+.admin-page {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, #eef7fb 0%, #fbfdff 48%, #edf9f4 100%);
+  color: var(--ink);
+}
+
+.admin-page-topbar {
+  grid-template-columns: 280px minmax(280px, 1fr);
+}
+
+.admin-page-actions {
+  justify-self: end;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.admin-page-main {
+  overflow-y: auto;
+  padding: 30px 32px;
+}
+
+.admin-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.admin-metric,
+.admin-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-soft);
+}
+
+.admin-metric {
+  padding: 16px;
+}
+
+.admin-metric span,
+.admin-table small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-metric strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 28px;
+}
+
+.admin-panel {
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.admin-user-form,
+.audit-filters {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 180px auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-table th {
+  color: #486174;
+  font-size: 12px;
+}
+
+.admin-table select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 0 8px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: var(--fresh-soft);
+  color: var(--good);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status-pill.disabled {
+  background: #fff0f0;
+  color: var(--danger);
 }
 
 .gantt-page-main {
@@ -2384,7 +2634,7 @@ button.gantt-bar:hover {
 
 .board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -2418,6 +2668,15 @@ button.gantt-bar:hover {
 .task-list {
   display: grid;
   gap: 10px;
+  min-height: 240px;
+  align-content: start;
+  border-radius: 8px;
+}
+
+.task-list.drag-over {
+  outline: 2px dashed rgba(47, 128, 237, 0.5);
+  outline-offset: 4px;
+  background: rgba(238, 246, 255, 0.66);
 }
 
 .task-card {
@@ -2430,12 +2689,20 @@ button.gantt-bar:hover {
   width: 100%;
   box-shadow: var(--shadow-soft);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  cursor: grab;
 }
 
-.task-card:hover {
+.task-card:hover,
+.task-card:focus-visible {
   border-color: rgba(47, 128, 237, 0.35);
   box-shadow: var(--shadow);
   transform: translateY(-1px);
+  outline: none;
+}
+
+.task-card.dragging {
+  opacity: 0.62;
+  cursor: grabbing;
 }
 
 .task-card.priority-high {
@@ -2463,7 +2730,9 @@ button.gantt-bar:hover {
 }
 
 .task-path,
-.task-date-line {
+.task-date-line,
+.task-completed-date,
+.task-stakeholders {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
@@ -2487,10 +2756,23 @@ button.gantt-bar:hover {
 
 .tag {
   border-radius: 999px;
+  border: 0;
   background: #eef6ff;
   color: var(--accent-dark);
   padding: 4px 8px;
   font-size: 12px;
+}
+
+.tag-button {
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.tag-button:hover,
+.tag-button:focus-visible {
+  background: var(--accent);
+  color: #ffffff;
+  outline: none;
 }
 
 .field {
@@ -2711,8 +2993,14 @@ dialog::backdrop {
   .todo-dashboard,
   .project-grid,
   .project-system-projects,
-  .board {
+  .board,
+  .admin-metrics {
     grid-template-columns: repeat(2, minmax(240px, 1fr));
+  }
+
+  .admin-user-form,
+  .audit-filters {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2760,12 +3048,16 @@ dialog::backdrop {
   .gantt-page-body,
   .gantt-page.drawer-open .gantt-page-body,
   .todo-page-topbar,
+  .admin-page-topbar,
   .gantt-page-topbar,
   .todo-add-grid,
   .todo-list-header,
   .todo-task-row,
   .drawer-edit-grid,
-  .phase-schedule-row {
+  .phase-schedule-row,
+  .admin-metrics,
+  .admin-user-form,
+  .audit-filters {
     grid-template-columns: 1fr;
   }
 
@@ -2780,6 +3072,12 @@ dialog::backdrop {
   }
 
   .gantt-topbar-actions {
+    display: grid;
+    justify-self: stretch;
+    gap: 10px;
+  }
+
+  .admin-page-actions {
     display: grid;
     justify-self: stretch;
     gap: 10px;

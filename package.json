@@ -1,0 +1,12 @@
+{
+  "name": "project-management-system",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "firebase deploy",
+    "emulators": "firebase emulators:start --only auth,functions,firestore,hosting"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.13.1"
+  }
+}

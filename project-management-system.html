@@ -619,6 +619,17 @@ h1 {
   color: #475569;
 }
 
+.delay-alert {
+  margin-top: 12px;
+  border: 1px solid rgba(212, 91, 91, 0.28);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff4f2;
+  color: #a33e3e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .phase-select {
   width: 100%;
 }
@@ -787,6 +798,21 @@ h1 {
 .todo-item .todo-item-dates .date-alert {
   color: #b42318;
   font-weight: 900;
+}
+
+.tag-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -6px 0 22px;
+  border: 1px solid rgba(47, 128, 237, 0.24);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #eef6ff;
+  color: var(--accent-dark);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .hidden {
@@ -2391,7 +2417,7 @@ button.gantt-bar:hover {
 
 .board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -2425,6 +2451,15 @@ button.gantt-bar:hover {
 .task-list {
   display: grid;
   gap: 10px;
+  min-height: 240px;
+  align-content: start;
+  border-radius: 8px;
+}
+
+.task-list.drag-over {
+  outline: 2px dashed rgba(47, 128, 237, 0.5);
+  outline-offset: 4px;
+  background: rgba(238, 246, 255, 0.66);
 }
 
 .task-card {
@@ -2437,12 +2472,20 @@ button.gantt-bar:hover {
   width: 100%;
   box-shadow: var(--shadow-soft);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  cursor: grab;
 }
 
-.task-card:hover {
+.task-card:hover,
+.task-card:focus-visible {
   border-color: rgba(47, 128, 237, 0.35);
   box-shadow: var(--shadow);
   transform: translateY(-1px);
+  outline: none;
+}
+
+.task-card.dragging {
+  opacity: 0.62;
+  cursor: grabbing;
 }
 
 .task-card.priority-high {
@@ -2470,7 +2513,9 @@ button.gantt-bar:hover {
 }
 
 .task-path,
-.task-date-line {
+.task-date-line,
+.task-completed-date,
+.task-stakeholders {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
@@ -2494,10 +2539,23 @@ button.gantt-bar:hover {
 
 .tag {
   border-radius: 999px;
+  border: 0;
   background: #eef6ff;
   color: var(--accent-dark);
   padding: 4px 8px;
   font-size: 12px;
+}
+
+.tag-button {
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.tag-button:hover,
+.tag-button:focus-visible {
+  background: var(--accent);
+  color: #ffffff;
+  outline: none;
 }
 
 .field {
@@ -2918,7 +2976,7 @@ dialog::backdrop {
   }
 }
 
-    </style>
+</style>
   </head>
   <body>
     <div class="app-shell">
@@ -2989,7 +3047,7 @@ dialog::backdrop {
         <section class="control-strip" aria-label="篩選">
           <label class="field">
             搜尋
-            <input id="searchInput" type="search" placeholder="系統、專案、任務、負責人、標籤" />
+            <input id="searchInput" type="search" placeholder="系統、專案、任務、負責人、關係人、標籤" />
           </label>
           <label class="field">
             專案階段
@@ -2999,11 +3057,12 @@ dialog::backdrop {
               <option value="planning">規劃</option>
               <option value="development">開發</option>
               <option value="testing">測試</option>
-              <option value="launch">上線</option>
+              <option value="launch">版更</option>
               <option value="closed">結案</option>
             </select>
           </label>
         </section>
+        <div class="tag-filter-bar hidden" id="tagFilterBar"></div>
 
         <section class="project-section" aria-labelledby="project-section-title">
           <div class="section-header">
@@ -3070,6 +3129,14 @@ dialog::backdrop {
         </label>
 
         <label class="field">
+          專案分類
+          <select id="projectCategory" required>
+            <option value="development">開發</option>
+            <option value="general">一般</option>
+          </select>
+        </label>
+
+        <label class="field">
           專案名稱
           <input id="projectName" required maxlength="70" placeholder="例如：會員登入改版" />
         </label>
@@ -3079,6 +3146,7 @@ dialog::backdrop {
           <textarea id="projectDescription" rows="3" maxlength="220" placeholder="補充專案背景、目標或注意事項"></textarea>
         </label>
 
+        <div class="form-grid" id="projectPhaseFields">
         <label class="field">
           目前階段
           <select id="projectPhase" required>
@@ -3086,12 +3154,22 @@ dialog::backdrop {
             <option value="planning">規劃</option>
             <option value="development">開發</option>
             <option value="testing">測試</option>
-            <option value="launch">上線</option>
+            <option value="launch">版更</option>
             <option value="closed">結案</option>
           </select>
         </label>
+        <label class="field">
+          狀態日期
+          <input id="projectPhaseChangedAt" type="date" />
+        </label>
+        </div>
 
-        <section class="phase-schedule-editor project-schedule-editor" aria-labelledby="project-schedule-title">
+        <label class="field" id="projectRequirementField">
+          資訊需求單
+          <input id="projectRequirementRequest" maxlength="160" placeholder="需求單號、標題或網址" />
+        </label>
+
+        <section class="phase-schedule-editor project-schedule-editor" id="projectScheduleSection" aria-labelledby="project-schedule-title">
           <div>
             <h3 id="project-schedule-title">專案時程</h3>
             <p>可先留空；填寫階段時程後，專案時程會自動擴大涵蓋所有階段。</p>
@@ -3108,7 +3186,7 @@ dialog::backdrop {
           </div>
         </section>
 
-        <section class="phase-schedule-editor" aria-labelledby="phase-schedule-title">
+        <section class="phase-schedule-editor" id="phaseScheduleSection" aria-labelledby="phase-schedule-title">
           <div>
             <h3 id="phase-schedule-title">各階段時程</h3>
             <p>各階段時程可留空；若日期超出專案時程，專案時程會自動更新。</p>
@@ -3223,6 +3301,11 @@ dialog::backdrop {
           </label>
         </div>
 
+        <label class="field hidden" id="taskCompletedDateField">
+          已完成日期
+          <input id="taskCompletedDate" type="date" />
+        </label>
+
         <div class="form-grid">
           <label class="field">
             負責人
@@ -3234,6 +3317,11 @@ dialog::backdrop {
             <input id="taskTags" placeholder="用逗號分隔，例如 UI, API" maxlength="80" />
           </label>
         </div>
+
+        <label class="field">
+          關係人
+          <input id="taskStakeholders" placeholder="用逗號分隔，例如 王小明, 李小華" maxlength="120" />
+        </label>
 
         <section class="related-section" aria-label="關聯信件">
           <div class="related-section-header">
@@ -3412,9 +3500,19 @@ dialog::backdrop {
               </label>
             </div>
 
+            <label class="hidden" id="todoAddCompletedDateField">
+              已完成日期
+              <input id="todoAddCompletedDate" type="date" />
+            </label>
+
             <label>
               標籤
               <input id="todoAddTags" placeholder="用逗號分隔，例如 UI, API" maxlength="80" />
+            </label>
+
+            <label>
+              關係人
+              <input id="todoAddStakeholders" placeholder="用逗號分隔，例如 王小明, 李小華" maxlength="120" />
             </label>
 
             <section class="related-section" aria-label="待辦關聯信件">
@@ -3455,7 +3553,7 @@ dialog::backdrop {
         </div>
         <label class="todo-page-search">
           <span>搜尋</span>
-          <input id="ganttSearchInput" type="search" placeholder="搜尋系統、專案、任務" />
+          <input id="ganttSearchInput" type="search" placeholder="搜尋系統、專案、任務、關係人" />
         </label>
         <div class="gantt-topbar-actions">
           <label class="todo-sort-control">
@@ -3463,7 +3561,12 @@ dialog::backdrop {
             <select id="ganttScaleSelect">
               <option value="week" selected>週</option>
               <option value="month">月</option>
+              <option value="year">年</option>
             </select>
+          </label>
+          <label class="todo-sort-control">
+            <span>專案</span>
+            <select id="ganttProjectFilter"></select>
           </label>
           <button class="todo-page-close" id="closeGanttPageButton" type="button">返回專案管理</button>
         </div>
@@ -3491,14 +3594,20 @@ dialog::backdrop {
     </section>
 
     <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
     <script>
 const phases = [
   { id: "deal", label: "商談" },
   { id: "planning", label: "規劃" },
   { id: "development", label: "開發" },
   { id: "testing", label: "測試" },
-  { id: "launch", label: "上線" },
+  { id: "launch", label: "版更" },
   { id: "closed", label: "結案" },
+];
+
+const projectCategories = [
+  { id: "development", label: "開發" },
+  { id: "general", label: "一般" },
 ];
 
 const taskColumns = [
@@ -3539,6 +3648,8 @@ let todoSectionCollapsed = {
   completed: false,
 };
 let ganttScale = "week";
+let ganttProjectFilter = "all";
+let selectedTagFilter = "";
 let ganttCollapsed = {
   systems: {},
   projects: {},
@@ -3557,6 +3668,7 @@ const els = {
   pageSubtitle: document.querySelector("#pageSubtitle"),
   searchInput: document.querySelector("#searchInput"),
   phaseFilter: document.querySelector("#phaseFilter"),
+  tagFilterBar: document.querySelector("#tagFilterBar"),
   todoDashboard: document.querySelector("#todoDashboard"),
   openTodoPageButton: document.querySelector("#openTodoPageButton"),
   openGanttPageButton: document.querySelector("#openGanttPageButton"),
@@ -3581,6 +3693,7 @@ const els = {
   closeGanttPageButton: document.querySelector("#closeGanttPageButton"),
   ganttSearchInput: document.querySelector("#ganttSearchInput"),
   ganttScaleSelect: document.querySelector("#ganttScaleSelect"),
+  ganttProjectFilter: document.querySelector("#ganttProjectFilter"),
   ganttRangeLabel: document.querySelector("#ganttRangeLabel"),
   ganttChart: document.querySelector("#ganttChart"),
   ganttTaskDrawer: document.querySelector("#ganttTaskDrawer"),
@@ -3624,11 +3737,18 @@ const systemFields = {
 const projectFields = {
   id: document.querySelector("#projectId"),
   systemId: document.querySelector("#projectSystem"),
+  category: document.querySelector("#projectCategory"),
   name: document.querySelector("#projectName"),
   description: document.querySelector("#projectDescription"),
+  phaseFields: document.querySelector("#projectPhaseFields"),
   phase: document.querySelector("#projectPhase"),
+  phaseChangedAt: document.querySelector("#projectPhaseChangedAt"),
+  requirementField: document.querySelector("#projectRequirementField"),
+  requirementRequest: document.querySelector("#projectRequirementRequest"),
+  scheduleSection: document.querySelector("#projectScheduleSection"),
   plannedStart: document.querySelector("#projectPlannedStart"),
   plannedEnd: document.querySelector("#projectPlannedEnd"),
+  phaseScheduleSection: document.querySelector("#phaseScheduleSection"),
   phaseSchedules: document.querySelector("#phaseScheduleFields"),
   relatedEmails: document.querySelector("#projectRelatedEmails"),
   relatedLinks: document.querySelector("#projectRelatedLinks"),
@@ -3649,8 +3769,11 @@ const taskFields = {
   rangeEnd: document.querySelector("#taskRangeEnd"),
   executionDate: document.querySelector("#taskExecutionDate"),
   deadline: document.querySelector("#taskDeadline"),
+  completedDateField: document.querySelector("#taskCompletedDateField"),
+  completedDate: document.querySelector("#taskCompletedDate"),
   owner: document.querySelector("#taskOwner"),
   tags: document.querySelector("#taskTags"),
+  stakeholders: document.querySelector("#taskStakeholders"),
   relatedEmails: document.querySelector("#taskRelatedEmails"),
   relatedLinks: document.querySelector("#taskRelatedLinks"),
 };
@@ -3673,7 +3796,10 @@ const todoAddFields = {
   rangeEnd: document.querySelector("#todoAddRangeEnd"),
   executionDate: document.querySelector("#todoAddExecutionDate"),
   deadline: document.querySelector("#todoAddDeadline"),
+  completedDateField: document.querySelector("#todoAddCompletedDateField"),
+  completedDate: document.querySelector("#todoAddCompletedDate"),
   tags: document.querySelector("#todoAddTags"),
+  stakeholders: document.querySelector("#todoAddStakeholders"),
   relatedEmails: document.querySelector("#todoRelatedEmails"),
   relatedLinks: document.querySelector("#todoRelatedLinks"),
 };
@@ -3699,6 +3825,10 @@ els.ganttScaleSelect.addEventListener("change", () => {
   ganttScale = els.ganttScaleSelect.value;
   renderGanttPage();
 });
+els.ganttProjectFilter.addEventListener("change", () => {
+  ganttProjectFilter = els.ganttProjectFilter.value;
+  renderGanttPage();
+});
 els.todoSortSelect.addEventListener("change", () => {
   todoSortKey = els.todoSortSelect.value;
   renderTodoPage();
@@ -3721,6 +3851,7 @@ els.todoAddReset.addEventListener("click", () => resetTodoAddForm(false));
 els.todoAddCancel.addEventListener("click", () => resetTodoAddForm(true));
 els.searchInput.addEventListener("input", render);
 els.phaseFilter.addEventListener("change", () => {
+  selectedTagFilter = "";
   selectedProjectId = "all";
   render();
 });
@@ -3734,11 +3865,16 @@ els.addTaskEmailButton.addEventListener("click", () => addEmailRow(taskFields.re
 els.addTaskLinkButton.addEventListener("click", () => addLinkRow(taskFields.relatedLinks));
 els.addTodoEmailButton.addEventListener("click", () => addEmailRow(todoAddFields.relatedEmails));
 els.addTodoLinkButton.addEventListener("click", () => addLinkRow(todoAddFields.relatedLinks));
+projectFields.category.addEventListener("change", () => syncProjectCategoryFields());
+projectFields.phase.addEventListener("change", () => {
+  projectFields.phaseChangedAt.value = todayString();
+});
 taskFields.scope.addEventListener("change", () => syncTaskScopeFields(taskFields));
 taskFields.systemId.addEventListener("change", () => {
   populateTaskProjectSelect(taskFields.systemId.value);
   syncTaskScopeFields(taskFields, false);
 });
+taskFields.status.addEventListener("change", () => syncTaskCompletedField(taskFields));
 taskFields.rangeStart.addEventListener("change", () => updateTaskDateConstraints(taskFields));
 taskFields.rangeEnd.addEventListener("change", () => updateTaskDateConstraints(taskFields));
 taskFields.executionDate.addEventListener("change", () => updateTaskDateConstraints(taskFields, false));
@@ -3760,6 +3896,7 @@ todoAddFields.projectId.addEventListener("change", () => {
   if (todoAddFields.mode.value === "existing") fillTodoAddFromExistingTask();
 });
 todoAddFields.existingTaskId.addEventListener("change", fillTodoAddFromExistingTask);
+todoAddFields.status.addEventListener("change", () => syncTaskCompletedField(todoAddFields));
 todoAddFields.rangeStart.addEventListener("change", () => updateTaskDateConstraints(todoAddFields));
 todoAddFields.rangeEnd.addEventListener("change", () => updateTaskDateConstraints(todoAddFields));
 todoAddFields.executionDate.addEventListener("change", () => updateTaskDateConstraints(todoAddFields, false));
@@ -3767,6 +3904,7 @@ todoAddFields.deadline.addEventListener("change", () => updateTaskDateConstraint
 projectFields.plannedStart.addEventListener("change", () => updateProjectScheduleConstraints());
 projectFields.plannedEnd.addEventListener("change", () => updateProjectScheduleConstraints());
 document.addEventListener("click", handleRelatedRowClick);
+document.addEventListener("click", handleTagFilterClick);
 
 document.querySelectorAll("[data-close-dialog]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -4541,16 +4679,16 @@ function buildStarterState() {
 
 function loadState() {
   const saved = localStorage.getItem(storageKey);
-  if (!saved) return buildStarterState();
+  if (!saved) return normalizeState(buildStarterState());
 
   try {
     const parsed = JSON.parse(saved);
     if (!Array.isArray(parsed.systems) || !Array.isArray(parsed.projects) || !Array.isArray(parsed.tasks)) {
-      return buildStarterState();
+      return normalizeState(buildStarterState());
     }
     return normalizeState(parsed);
   } catch {
-    return buildStarterState();
+    return normalizeState(buildStarterState());
   }
 }
 
@@ -4576,6 +4714,7 @@ function normalizeTask(task) {
     projectId: scope === "project" ? task.projectId || "" : "",
     status: normalizeTaskStatus(task.status),
     tags: Array.isArray(task.tags) ? task.tags : [],
+    stakeholders: normalizeTextList(task.stakeholders),
     rangeStart,
     rangeEnd,
     executionDate,
@@ -4669,6 +4808,24 @@ function normalizeTaskStatus(status) {
   return "not_started";
 }
 
+function normalizeProjectCategory(category) {
+  return category === "general" ? "general" : "development";
+}
+
+function normalizeTextList(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function splitCommaList(value = "") {
+  return String(value)
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function normalizeEmailList(value) {
   if (!Array.isArray(value)) return [];
   return value
@@ -4743,8 +4900,11 @@ function normalizeProject(project) {
 
   return {
     ...project,
+    category: normalizeProjectCategory(project.category),
     description: project.description || "",
     phase: project.phase || "deal",
+    phaseChangedAt: project.phaseChangedAt || todayString(),
+    requirementRequest: project.requirementRequest || "",
     phaseSchedules: normalizedSchedules,
     plannedStart: plannedRange.start,
     plannedEnd: plannedRange.end,
@@ -4768,6 +4928,7 @@ function render() {
   renderTodoDashboard();
   renderProjects();
   renderProjectTabs();
+  renderTagFilterBar();
   renderBoard();
   if (!els.todoPage.classList.contains("hidden")) {
     renderTodoPage();
@@ -4835,6 +4996,7 @@ function renderSystems() {
   els.systemList.innerHTML = buttons;
   els.systemList.querySelectorAll(".system-item").forEach((button) => {
     button.addEventListener("click", () => {
+      selectedTagFilter = "";
       selectedSystemId = button.dataset.systemId || null;
       selectedProjectId = "all";
       render();
@@ -5073,11 +5235,10 @@ function markTaskDone(taskId, completed = true) {
 
   state.tasks = state.tasks.map((item) => {
     if (item.id !== taskId) return item;
-    return {
+    return applyTaskStatusSideEffects({
       ...item,
       status: completed ? "done" : "not_started",
-      completedDate: completed ? todayString() : "",
-    };
+    }, item, completed ? todayString() : "");
   });
   saveState();
   if (completed && task) {
@@ -5145,6 +5306,7 @@ function openGanttPage() {
 
   els.ganttSearchInput.value = els.searchInput.value;
   els.ganttScaleSelect.value = ganttScale;
+  ganttProjectFilter = selectedProjectId !== "all" ? selectedProjectId : "all";
   els.ganttPage.classList.remove("hidden");
   els.ganttPage.setAttribute("aria-hidden", "false");
   renderGanttPage();
@@ -5207,10 +5369,12 @@ function renderTodoPage() {
 function renderGanttPage() {
   els.ganttSearchInput.value = els.searchInput.value;
   els.ganttScaleSelect.value = ganttScale;
+  syncGanttProjectFilterOptions();
 
   const groups = getGanttGroups();
   const timeline = buildGanttTimeline(groups);
-  els.ganttRangeLabel.textContent = `${formatRange(timeline.startString, timeline.endString)}・${ganttScale === "week" ? "以日檢視" : "以週檢視"}`;
+  const scaleLabel = ganttScale === "week" ? "以日檢視" : ganttScale === "month" ? "以週檢視" : "以月檢視";
+  els.ganttRangeLabel.textContent = `${formatRange(timeline.startString, timeline.endString)}・${scaleLabel}`;
 
   if (!groups.length) {
     els.ganttChart.innerHTML = `<p class="empty-state">目前沒有符合條件的系統、專案或任務。</p>`;
@@ -5229,8 +5393,31 @@ function renderGanttPage() {
   renderTodoDrawer();
 }
 
+function syncGanttProjectFilterOptions() {
+  const projects = getGanttFilterProjects();
+  if (ganttProjectFilter !== "all" && !projects.some((project) => project.id === ganttProjectFilter)) {
+    ganttProjectFilter = "all";
+  }
+
+  els.ganttProjectFilter.innerHTML = [
+    `<option value="all">全部專案</option>`,
+    ...projects.map((project) => `<option value="${project.id}">${escapeHtml(project.name)}</option>`),
+  ].join("");
+  els.ganttProjectFilter.value = ganttProjectFilter;
+}
+
+function getGanttFilterProjects() {
+  if (selectedScopeIsGeneral()) return [];
+  const phase = els.phaseFilter.value;
+  return state.projects.filter((project) => {
+    const matchSystem = selectedSystemId ? project.systemId === selectedSystemId : true;
+    const matchPhase = project.category === "general" || phase === "all" || project.phase === phase;
+    return matchSystem && matchPhase;
+  });
+}
+
 function getGanttGroups() {
-  const visibleTasks = getVisibleTasks();
+  const visibleTasks = getVisibleTasks({ projectId: ganttProjectFilter });
   const projects = getGanttScopedProjects(visibleTasks);
   const groups = [];
 
@@ -5302,8 +5489,8 @@ function getGanttScopedProjects(visibleTasks) {
   return state.projects.filter((project) => {
     const system = getSystem(project.systemId);
     const matchSystem = selectedSystemId ? project.systemId === selectedSystemId : true;
-    const matchProject = selectedProjectId === "all" || project.id === selectedProjectId;
-    const matchPhase = phase === "all" || project.phase === phase;
+    const matchProject = ganttProjectFilter === "all" || project.id === ganttProjectFilter;
+    const matchPhase = project.category === "general" || phase === "all" || project.phase === phase;
     const matchQuery = !query || projectMatchesSearch(project, system, query) || visibleTaskProjectIds.has(project.id);
     return matchSystem && matchProject && matchPhase && matchQuery;
   });
@@ -5401,8 +5588,11 @@ function renderGanttProject(item, timeline) {
   const range = getGanttProjectRange(project, tasks);
   const phaseRows = getGanttProjectPhases(project).map((phaseItem) => renderGanttPhaseRow(project, phaseItem, timeline)).join("");
   const taskRows = renderGanttTaskBlock("專案任務", tasks, timeline, "project-task", `project-${project.id}-tasks`);
-  const closed = project.closed || project.phase === "closed";
+  const closed = project.category !== "general" && (project.closed || project.phase === "closed");
   const rangeLabel = range ? formatRange(range.start, range.end) : "尚未設定時程";
+  const meta = project.category === "general"
+    ? `${getProjectCategoryLabel(project.category)}・${progress.label}・${rangeLabel}`
+    : `${getPhaseLabel(project.phase)}・${progress.label}・${rangeLabel}`;
 
   return `
     ${renderGanttRow({
@@ -5412,7 +5602,7 @@ function renderGanttProject(item, timeline) {
         type: "專案",
         typeClass: "project",
         name: project.name,
-        meta: `${getPhaseLabel(project.phase)}・${progress.label}・${rangeLabel}`,
+        meta,
         actionAttributes: `data-gantt-project="${project.id}"`,
         toggle: {
           id: project.id,
@@ -5610,20 +5800,26 @@ function buildGanttTimeline(groups) {
   const today = todayString();
   const firstDate = dates[0] || today;
   const lastDate = dates[dates.length - 1] || getDateOffset(30);
-  const paddedStart = addDaysToDateString(firstDate, ganttScale === "week" ? -3 : -14);
-  const paddedEnd = addDaysToDateString(lastDate, ganttScale === "week" ? 5 : 21);
+  const paddedStart = addDaysToDateString(firstDate, ganttScale === "week" ? -3 : ganttScale === "month" ? -14 : -45);
+  const paddedEnd = addDaysToDateString(lastDate, ganttScale === "week" ? 5 : ganttScale === "month" ? 21 : 90);
+  const parsedStart = parseDateString(paddedStart);
+  const parsedEnd = parseDateString(paddedEnd);
   const startDate = ganttScale === "week"
-    ? getStartOfWeek(parseDateString(paddedStart))
-    : getStartOfMonth(parseDateString(paddedStart));
+    ? getStartOfWeek(parsedStart)
+    : ganttScale === "month"
+      ? getStartOfMonth(parsedStart)
+      : getStartOfYear(parsedStart);
   const endDate = ganttScale === "week"
-    ? getEndOfWeek(parseDateString(paddedEnd))
-    : getEndOfMonth(parseDateString(paddedEnd));
+    ? getEndOfWeek(parsedEnd)
+    : ganttScale === "month"
+      ? getEndOfMonth(parsedEnd)
+      : getEndOfYear(parsedEnd);
   const units = buildGanttUnits(startDate, endDate, ganttScale);
 
   return {
     startString: toDateInputValue(startDate),
     endString: toDateInputValue(endDate),
-    unitWidth: ganttScale === "week" ? 48 : 86,
+    unitWidth: ganttScale === "week" ? 48 : ganttScale === "month" ? 86 : 112,
     units,
   };
 }
@@ -5635,7 +5831,11 @@ function buildGanttUnits(startDate, endDate, scale) {
 
   while (cursor <= endDate) {
     const unitStart = new Date(cursor);
-    const unitEnd = scale === "week" ? new Date(cursor) : addDaysToDate(cursor, 6);
+    const unitEnd = scale === "week"
+      ? new Date(cursor)
+      : scale === "month"
+        ? addDaysToDate(cursor, 6)
+        : getEndOfMonth(cursor);
     if (unitEnd > endDate) unitEnd.setTime(endDate.getTime());
     const startString = toDateInputValue(unitStart);
     const endString = toDateInputValue(unitEnd);
@@ -5643,12 +5843,20 @@ function buildGanttUnits(startDate, endDate, scale) {
     units.push({
       startString,
       endString,
-      label: scale === "week" ? formatGanttShortDate(startString) : formatGanttShortDate(startString),
-      subLabel: scale === "week" ? formatGanttWeekday(startString) : `至 ${formatGanttShortDate(endString)}`,
+      label: scale === "year" ? formatGanttMonthLabel(startString) : formatGanttShortDate(startString),
+      subLabel: scale === "week"
+        ? formatGanttWeekday(startString)
+        : scale === "month"
+          ? `至 ${formatGanttShortDate(endString)}`
+          : "月",
       isToday: today >= startString && today <= endString,
     });
 
-    cursor = scale === "week" ? addDaysToDate(cursor, 1) : addDaysToDate(cursor, 7);
+    cursor = scale === "week"
+      ? addDaysToDate(cursor, 1)
+      : scale === "month"
+        ? addDaysToDate(cursor, 7)
+        : addMonthsToDate(cursor, 1);
   }
 
   return units;
@@ -5691,12 +5899,14 @@ function getGanttGroupRange(group) {
 }
 
 function getGanttProjectRange(project, tasks = []) {
+  if (project.category === "general") return getGanttTasksRange(tasks);
   const plannedRange = getProjectScheduleRange(project.plannedStart, project.plannedEnd, project.phaseSchedules || {});
   if (plannedRange.start || plannedRange.end) return normalizeGanttRange(plannedRange.start, plannedRange.end);
   return getGanttTasksRange(tasks);
 }
 
 function getGanttProjectPhases(project) {
+  if (project.category === "general") return [];
   const schedules = project.phaseSchedules || createPhaseSchedules();
   return phases
     .map((phase) => {
@@ -5771,6 +5981,10 @@ function addDaysToDateString(dateString, days) {
   return toDateInputValue(addDaysToDate(parseDateString(dateString), days));
 }
 
+function addMonthsToDate(date, months) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
 function getStartOfWeek(date) {
   const start = new Date(date);
   const day = start.getDay();
@@ -5791,6 +6005,14 @@ function getEndOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
+function getStartOfYear(date) {
+  return new Date(date.getFullYear(), 0, 1);
+}
+
+function getEndOfYear(date) {
+  return new Date(date.getFullYear(), 11, 31);
+}
+
 function formatGanttShortDate(dateString) {
   const date = parseDateString(dateString);
   return `${date.getMonth() + 1}/${date.getDate()}`;
@@ -5798,6 +6020,11 @@ function formatGanttShortDate(dateString) {
 
 function formatGanttWeekday(dateString) {
   return new Intl.DateTimeFormat("zh-TW", { weekday: "short" }).format(parseDateString(dateString));
+}
+
+function formatGanttMonthLabel(dateString) {
+  const date = parseDateString(dateString);
+  return `${date.getFullYear()}/${date.getMonth() + 1}`;
 }
 
 function renderTodoSystemTabs(activeBucketId, query) {
@@ -5841,6 +6068,7 @@ function renderTodoSystemTabs(activeBucketId, query) {
     button.addEventListener("click", () => {
       const nextSystemId = button.dataset.todoSystemId || null;
       if (selectedSystemId === nextSystemId) return;
+      selectedTagFilter = "";
       selectedSystemId = nextSystemId;
       selectedProjectId = "all";
       closeTodoDrawer();
@@ -5961,6 +6189,7 @@ function renderTodoTaskRow(task) {
   const shouldMarkOverdue = activeTodoView === "incomplete" && !completed;
   const executionOverdueClass = shouldMarkOverdue && task.executionDate && task.executionDate < today ? "todo-overdue-date" : "";
   const deadlineOverdueClass = shouldMarkOverdue && task.deadline && task.deadline < today ? "todo-overdue-date" : "";
+  const completedMeta = completed ? `・已完成 ${formatDate(task.completedDate)}` : "";
 
   return `
     <article class="todo-task-row ${completed ? "completed" : ""}" data-task-row="${task.id}">
@@ -5970,7 +6199,7 @@ function renderTodoTaskRow(task) {
           <input class="todo-title-input" data-inline-title="${task.id}" value="${escapeHtml(task.title)}" aria-label="任務名稱" />
           <button class="todo-open-edit" type="button" data-open-edit-drawer="${task.id}" title="編輯任務">✎</button>
         </div>
-        <span class="todo-subtitle">${escapeHtml(getTaskContextLabel(task))}</span>
+        <span class="todo-subtitle">${escapeHtml(getTaskContextLabel(task))}${completedMeta}</span>
       </div>
       <input class="todo-inline-date ${executionOverdueClass}" data-inline-execution="${task.id}" type="date" min="${task.rangeStart}" max="${task.rangeEnd}" value="${task.executionDate}" aria-label="執行日期" />
       <input class="todo-inline-date ${deadlineOverdueClass}" data-inline-deadline="${task.id}" type="date" min="${task.rangeEnd}" value="${task.deadline}" aria-label="最後期限" />
@@ -6043,7 +6272,11 @@ function attachTodoPageHandlers() {
 }
 
 function getTasksForTodoView(viewId, systemId = selectedSystemId) {
-  const scopedTasks = state.tasks.filter((task) => taskMatchesSystemScope(task, systemId));
+  const normalizedTagFilter = selectedTagFilter.trim().toLowerCase();
+  const scopedTasks = state.tasks.filter((task) => {
+    const matchTag = !normalizedTagFilter || (task.tags || []).some((tag) => tag.toLowerCase() === normalizedTagFilter);
+    return taskMatchesSystemScope(task, systemId) && matchTag;
+  });
   const today = todayString();
   const tomorrow = getDateOffset(1);
   const thisWeek = getWeekRange(0);
@@ -6089,6 +6322,8 @@ function taskMatchesTodoQuery(task, query) {
     task.title,
     task.description,
     task.owner,
+    (task.stakeholders || []).join(" "),
+    task.completedDate,
     getStatusLabel(task.status),
     getPriorityLabel(task.priority),
     getTaskScopeLabel(getTaskScope(task)),
@@ -6103,6 +6338,9 @@ function taskMatchesTodoQuery(task, query) {
     system?.name,
     project?.name,
     project?.description,
+    getProjectCategoryLabel(project?.category),
+    project?.requirementRequest,
+    project?.phaseChangedAt,
     (project?.relatedEmails || []).join(" "),
     (project?.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
   ]
@@ -6168,20 +6406,59 @@ function renderPriorityOptions(selectedPriority = "medium") {
     .join("");
 }
 
+function applyTaskStatusSideEffects(nextTask, previousTask = null, requestedCompletedDate = "") {
+  const today = todayString();
+  const previous = previousTask || nextTask;
+  const nextStatus = normalizeTaskStatus(nextTask.status);
+  const updatedTask = {
+    ...nextTask,
+    status: nextStatus,
+  };
+
+  updatedTask.completedDate = nextStatus === "done"
+    ? requestedCompletedDate || (previous.status === "done" ? previous.completedDate || today : today)
+    : "";
+
+  if (previousTask && nextStatus === "doing" && previous.status !== "doing" && previous.rangeStart && previous.rangeStart > today) {
+    const rangeDays = Math.max(0, getDateDiffFromStrings(previous.rangeStart, previous.rangeEnd || previous.rangeStart));
+    const deadlineDays = previous.deadline
+      ? Math.max(0, getDateDiffFromStrings(previous.rangeEnd || previous.rangeStart, previous.deadline))
+      : 0;
+    updatedTask.rangeStart = today;
+    updatedTask.rangeEnd = addDaysToDateString(today, rangeDays);
+    updatedTask.executionDate = today;
+    updatedTask.deadline = addDaysToDateString(updatedTask.rangeEnd, deadlineDays);
+  }
+
+  return updatedTask;
+}
+
+function getDateDiffFromStrings(start, end) {
+  return getDayDiff(parseDateString(start), parseDateString(end));
+}
+
+function syncTaskCompletedField(fields) {
+  const isDone = normalizeTaskStatus(fields.status.value) === "done";
+  fields.completedDateField?.classList.toggle("hidden", !isDone);
+  if (fields.completedDate) {
+    fields.completedDate.required = isDone;
+    if (isDone && !fields.completedDate.value) fields.completedDate.value = todayString();
+    if (!isDone) fields.completedDate.value = "";
+  }
+}
+
 function updateInlineTask(taskId, patch) {
   state.tasks = state.tasks.map((task) => {
     if (task.id !== taskId) return task;
 
     const nextStatus = patch.status ? normalizeTaskStatus(patch.status) : task.status;
-    const wasDone = task.status === "done";
-    const completedDate = nextStatus === "done" ? (wasDone ? task.completedDate || todayString() : todayString()) : "";
-
-    return {
+    const nextTask = {
       ...task,
       ...patch,
       status: nextStatus,
-      completedDate,
     };
+
+    return applyTaskStatusSideEffects(nextTask, task, patch.completedDate);
   });
 
   saveState();
@@ -6353,18 +6630,28 @@ function renderTodoDrawer() {
 
   const drawerFields = getDrawerDateFields(form);
   const updateDrawerDates = (autoCorrect = true) => updateTaskDateConstraints(drawerFields, autoCorrect);
+  const syncDrawerCompletedDate = () => {
+    const isDone = normalizeTaskStatus(form.elements.status.value) === "done";
+    const field = form.querySelector("[data-drawer-completed-date-field]");
+    field?.classList.toggle("hidden", !isDone);
+    form.elements.completedDate.required = isDone;
+    if (isDone && !form.elements.completedDate.value) form.elements.completedDate.value = todayString();
+    if (!isDone) form.elements.completedDate.value = "";
+  };
 
   form.elements.scope.addEventListener("change", () => syncDrawerScopeFields(form));
   form.elements.systemId.addEventListener("change", () => {
     form.elements.projectId.innerHTML = renderProjectOptionsForSystem(form.elements.systemId.value, "");
     syncDrawerScopeFields(form, false);
   });
+  form.elements.status.addEventListener("change", syncDrawerCompletedDate);
   drawerFields.rangeStart.addEventListener("change", () => updateDrawerDates(true));
   drawerFields.rangeEnd.addEventListener("change", () => updateDrawerDates(true));
   drawerFields.executionDate.addEventListener("change", () => updateDrawerDates(false));
   drawerFields.deadline.addEventListener("change", () => updateDrawerDates(false));
   form.addEventListener("submit", handleDrawerTaskSubmit);
   syncDrawerScopeFields(form, false);
+  syncDrawerCompletedDate();
   updateDrawerDates(false);
 }
 
@@ -6378,6 +6665,8 @@ function renderTodoDrawerView(task) {
     ? `<ul>${task.relatedLinks.map((link) => `<li><a href="${escapeHtml(link.url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(link.title || link.url)}</a></li>`).join("")}</ul>`
     : `<strong>無</strong>`;
   const stepProgress = getTaskStepProgress(task);
+  const tagList = task.tags?.length ? `<div class="tags">${renderTagButtons(task.tags)}</div>` : `<strong>無</strong>`;
+  const stakeholders = task.stakeholders?.length ? task.stakeholders.join(", ") : "無";
 
   return `
     <div class="drawer-header">
@@ -6424,8 +6713,12 @@ function renderTodoDrawerView(task) {
       <strong>${task.completedDate ? formatDate(task.completedDate) : "未完成"}</strong>
     </section>
     <section class="drawer-section">
-      <span>負責人 / 標籤</span>
-      <strong>${escapeHtml(task.owner || "未指定")} / ${escapeHtml(task.tags?.join(", ") || "無")}</strong>
+      <span>負責人</span>
+      <strong>${escapeHtml(task.owner || "未指定")}</strong>
+      <span>關係人</span>
+      <strong>${escapeHtml(stakeholders)}</strong>
+      <span>標籤</span>
+      ${tagList}
     </section>
     <section class="drawer-section">
       <span>關聯信件</span>
@@ -6538,6 +6831,10 @@ function renderTodoDrawerEdit(task) {
           <input name="rangeEnd" type="date" required value="${task.rangeEnd}" />
         </label>
       </div>
+      <label data-drawer-completed-date-field class="${task.status === "done" ? "" : "hidden"}">
+        已完成日期
+        <input name="completedDate" type="date" value="${task.completedDate || ""}" />
+      </label>
       <div class="drawer-edit-grid">
         <label>
           負責人
@@ -6548,6 +6845,10 @@ function renderTodoDrawerEdit(task) {
           <input name="tags" value="${escapeHtml(task.tags?.join(", ") || "")}" placeholder="以逗號分隔" />
         </label>
       </div>
+      <label>
+        關係人
+        <input name="stakeholders" maxlength="120" value="${escapeHtml(task.stakeholders?.join(", ") || "")}" placeholder="以逗號分隔" />
+      </label>
       <label>
         關聯信件
         <textarea name="relatedEmails" rows="3" placeholder="一行一個信件標題">${escapeHtml((task.relatedEmails || []).join("\n"))}</textarea>
@@ -6767,11 +7068,9 @@ function handleDrawerTaskSubmit(event) {
     return;
   }
 
-  const completedDate = status === "done"
-    ? (existingTask.status === "done" ? existingTask.completedDate || todayString() : todayString())
-    : "";
+  const requestedCompletedDate = status === "done" ? form.elements.completedDate.value || todayString() : "";
 
-  const updatedTask = {
+  const updatedTask = applyTaskStatusSideEffects({
     ...existingTask,
     scope: scopeValues.scope,
     systemId: scopeValues.systemId,
@@ -6785,14 +7084,11 @@ function handleDrawerTaskSubmit(event) {
     rangeEnd,
     executionDate,
     deadline,
-    tags: form.elements.tags.value
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean),
+    tags: splitCommaList(form.elements.tags.value),
+    stakeholders: splitCommaList(form.elements.stakeholders.value),
     relatedEmails: parseEmailTextarea(form.elements.relatedEmails.value),
     relatedLinks: parseLinkTextarea(form.elements.relatedLinks.value),
-    completedDate,
-  };
+  }, existingTask, requestedCompletedDate);
 
   state.tasks = state.tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task));
   selectedSystemId = updatedTask.scope === "general" ? generalWorkScopeId : updatedTask.systemId;
@@ -6963,11 +7259,9 @@ function handleTodoQuickSubmit(event) {
     return;
   }
 
-  const completedDate = status === "done"
-    ? (existingTask?.status === "done" ? existingTask.completedDate || todayString() : todayString())
-    : "";
+  const requestedCompletedDate = status === "done" ? todoAddFields.completedDate.value || todayString() : "";
 
-  const task = {
+  const task = applyTaskStatusSideEffects({
     id: todoAddFields.mode.value === "existing" ? todoAddFields.existingTaskId.value : createId(),
     scope,
     systemId,
@@ -6981,19 +7275,16 @@ function handleTodoQuickSubmit(event) {
     rangeEnd,
     executionDate,
     deadline,
-    tags: todoAddFields.tags.value
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean),
+    tags: splitCommaList(todoAddFields.tags.value),
+    stakeholders: splitCommaList(todoAddFields.stakeholders.value),
     relatedEmails: collectEmailRows(todoAddFields.relatedEmails),
     relatedLinks: collectLinkRows(todoAddFields.relatedLinks),
-    completedDate,
     important: existingTask?.important || false,
     steps: existingTask?.steps || [],
     files: existingTask?.files || [],
     notes: existingTask?.notes || "",
     history: existingTask?.history || [],
-  };
+  }, existingTask, requestedCompletedDate);
 
   if (todoAddFields.mode.value === "existing" && existingTask) {
     state.tasks = state.tasks.map((item) => (item.id === existingTask.id ? task : item));
@@ -7028,9 +7319,12 @@ function resetTodoAddForm(collapse = true) {
   todoAddFields.rangeEnd.value = date;
   todoAddFields.executionDate.value = date;
   todoAddFields.deadline.value = date;
+  todoAddFields.completedDate.value = "";
+  todoAddFields.stakeholders.value = "";
   renderEmailRows(todoAddFields.relatedEmails, []);
   renderLinkRows(todoAddFields.relatedLinks, []);
   syncTaskScopeFields(todoAddFields, false);
+  syncTaskCompletedField(todoAddFields);
   updateTaskDateConstraints(todoAddFields);
   updateTodoAddMode();
 
@@ -7102,9 +7396,12 @@ function fillTodoAddFromExistingTask() {
   todoAddFields.rangeEnd.value = task.rangeEnd || task.endDate || todoAddFields.rangeStart.value;
   todoAddFields.executionDate.value = task.executionDate || task.startDate || todoAddFields.rangeStart.value;
   todoAddFields.deadline.value = task.deadline || todoAddFields.rangeEnd.value;
+  todoAddFields.completedDate.value = task.completedDate || "";
   todoAddFields.tags.value = Array.isArray(task.tags) ? task.tags.join(", ") : "";
+  todoAddFields.stakeholders.value = Array.isArray(task.stakeholders) ? task.stakeholders.join(", ") : "";
   renderEmailRows(todoAddFields.relatedEmails, task.relatedEmails || []);
   renderLinkRows(todoAddFields.relatedLinks, task.relatedLinks || []);
+  syncTaskCompletedField(todoAddFields);
   updateTaskDateConstraints(todoAddFields);
 }
 
@@ -7195,6 +7492,7 @@ function renderProjects() {
   els.projectList.querySelectorAll("[data-project-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       const project = getProject(button.dataset.projectFilter);
+      selectedTagFilter = "";
       selectedSystemId = project.systemId;
       selectedProjectId = project.id;
       render();
@@ -7217,6 +7515,7 @@ function renderProjects() {
     select.addEventListener("change", () => {
       const project = getProject(select.dataset.projectPhase);
       project.phase = select.value;
+      project.phaseChangedAt = todayString();
       project.closed = select.value === "closed";
       project.closedAt = project.closed ? todayString() : "";
       project.phaseSchedules = createPhaseSchedules(project.phaseSchedules);
@@ -7235,50 +7534,77 @@ function renderProjects() {
 
 function renderProjectCard(project) {
   const system = getSystem(project.systemId);
+  const isDevelopmentProject = project.category !== "general";
   const actualRange = getProjectActualRange(project.id);
-  const plannedRange = getProjectPlannedRange(project);
+  const plannedRange = isDevelopmentProject ? getProjectPlannedRange(project) : "";
   const currentPhaseSchedule = project.phaseSchedules?.[project.phase] || {};
   const taskCount = state.tasks.filter((task) => task.projectId === project.id).length;
   const relatedSummary = getProjectRelatedSummary(project);
-  const closed = project.closed || project.phase === "closed";
-
-  return `
-    <article class="project-card ${closed ? "closed" : ""}">
-      <div class="project-card-header">
-        <div>
-          <h3>${escapeHtml(project.name)}</h3>
-          <div class="project-system">${escapeHtml(system?.name || "未指定系統")}</div>
-        </div>
-        <span class="status-badge ${closed ? "closed" : ""}">${closed ? "已結案" : "進行中"}</span>
-      </div>
-
-      <p class="project-description">${escapeHtml(project.description || "沒有描述")}</p>
-
+  const closed = isDevelopmentProject && (project.closed || project.phase === "closed");
+  const delayed = isProjectDelayed(project);
+  const requirement = isDevelopmentProject && project.requirementRequest
+    ? `<div><strong>資訊需求單</strong> ${escapeHtml(project.requirementRequest)}</div>`
+    : "";
+  const phaseControl = isDevelopmentProject
+    ? `
       <select class="phase-select" data-project-phase="${project.id}" aria-label="專案階段">
         ${renderPhaseOptions(project.phase)}
       </select>
-
-      <div class="project-dates">
-        <div><strong>目前階段</strong> ${getPhaseLabel(project.phase)}・${formatRange(currentPhaseSchedule.start, currentPhaseSchedule.end)}</div>
-        <div><strong>專案時程</strong> ${plannedRange || "尚未設定"}</div>
-        <div><strong>實際</strong> ${actualRange || "尚無任務日期"}</div>
-        <div><strong>任務</strong> ${taskCount} 筆</div>
-      </div>
-
-      ${relatedSummary ? `<div class="related-summary">${relatedSummary}</div>` : ""}
-
+    `
+    : "";
+  const scheduleDetails = isDevelopmentProject
+    ? `
       <details class="phase-timeline-details">
         <summary>查看全部階段時程</summary>
         <div class="phase-timeline">
           ${renderProjectPhaseTimeline(project)}
         </div>
       </details>
+    `
+    : "";
+  const dateRows = isDevelopmentProject
+    ? `
+        <div><strong>目前階段</strong> ${getPhaseLabel(project.phase)}・${formatRange(currentPhaseSchedule.start, currentPhaseSchedule.end)}</div>
+        <div><strong>狀態日期</strong> ${formatDate(project.phaseChangedAt)}</div>
+        <div><strong>專案時程</strong> ${plannedRange || "尚未設定"}</div>
+        ${requirement}
+        <div><strong>實際</strong> ${actualRange || "尚無任務日期"}</div>
+        <div><strong>任務</strong> ${taskCount} 筆</div>
+      `
+    : `
+        <div><strong>分類</strong> ${getProjectCategoryLabel(project.category)}</div>
+        <div><strong>實際</strong> ${actualRange || "尚無任務日期"}</div>
+        <div><strong>任務</strong> ${taskCount} 筆</div>
+      `;
+
+  return `
+    <article class="project-card ${closed ? "closed" : ""}">
+      <div class="project-card-header">
+        <div>
+          <h3>${escapeHtml(project.name)}</h3>
+          <div class="project-system">${escapeHtml(system?.name || "未指定系統")}・${getProjectCategoryLabel(project.category)}</div>
+        </div>
+        <span class="status-badge ${closed ? "closed" : ""}">${isDevelopmentProject ? (closed ? "已結案" : "進行中") : "一般"}</span>
+      </div>
+
+      <p class="project-description">${escapeHtml(project.description || "沒有描述")}</p>
+
+      ${phaseControl}
+      ${delayed ? `<div class="delay-alert">delay 須調整時程或加強追蹤</div>` : ""}
+
+      <div class="project-dates">
+        ${dateRows}
+      </div>
+
+      ${relatedSummary ? `<div class="related-summary">${relatedSummary}</div>` : ""}
+
+      ${scheduleDetails}
 
       <div class="project-card-actions">
         <button class="chip-button" type="button" data-project-filter="${project.id}">查看任務</button>
         <button class="chip-button" type="button" data-project-add-task="${project.id}">新增任務</button>
         <button class="chip-button" type="button" data-project-edit="${project.id}">設定</button>
-        <button class="chip-button" type="button" data-project-close="${project.id}">${closed ? "重開" : "結案"}</button>
+        ${isDevelopmentProject ? `<button class="chip-button" type="button" data-project-close="${project.id}">${closed ? "重開" : "結案"}</button>` : ""}
       </div>
     </article>
   `;
@@ -7307,10 +7633,60 @@ function renderProjectTabs() {
 
   els.projectTabs.querySelectorAll("[data-project-tab]").forEach((button) => {
     button.addEventListener("click", () => {
+      selectedTagFilter = "";
       selectedProjectId = button.dataset.projectTab;
       render();
     });
   });
+}
+
+function renderTagFilterBar() {
+  if (!selectedTagFilter) {
+    els.tagFilterBar.classList.add("hidden");
+    els.tagFilterBar.innerHTML = "";
+    return;
+  }
+
+  els.tagFilterBar.classList.remove("hidden");
+  els.tagFilterBar.innerHTML = `
+    <span>標籤篩選：${escapeHtml(selectedTagFilter)}</span>
+    <button class="chip-button" type="button" data-clear-tag-filter>清除篩選</button>
+  `;
+}
+
+function handleTagFilterClick(event) {
+  const tagButton = event.target.closest("[data-tag-filter]");
+  if (tagButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    applyTagFilter(tagButton.dataset.tagFilter);
+    return;
+  }
+
+  if (event.target.closest("[data-clear-tag-filter]")) {
+    event.preventDefault();
+    selectedTagFilter = "";
+    render();
+  }
+}
+
+function applyTagFilter(tag) {
+  const normalizedTag = (tag || "").trim();
+  if (!normalizedTag) return;
+  selectedTagFilter = normalizedTag;
+  selectedSystemId = null;
+  selectedProjectId = "all";
+  els.phaseFilter.value = "all";
+  els.searchInput.value = "";
+  closeTodoDrawer();
+  render();
+}
+
+function renderTagButtons(tags = []) {
+  if (!tags.length) return "";
+  return tags
+    .map((tag) => `<button class="tag tag-button" type="button" data-tag-filter="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`)
+    .join("");
 }
 
 function renderBoard() {
@@ -7318,7 +7694,9 @@ function renderBoard() {
   const scopeProject = getProject(selectedProjectId);
   const scopeSystem = getSystem(selectedSystemId);
 
-  els.taskScopeLabel.textContent = selectedScopeIsGeneral()
+  els.taskScopeLabel.textContent = selectedTagFilter
+    ? `目前顯示標籤「${selectedTagFilter}」的全部任務。`
+    : selectedScopeIsGeneral()
     ? "目前顯示一般工作任務。"
     : scopeProject
       ? `目前顯示「${scopeProject.name}」的任務。`
@@ -7331,8 +7709,39 @@ function renderBoard() {
     .join("");
 
   els.board.querySelectorAll(".task-card").forEach((card) => {
-    card.addEventListener("click", () => {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button, a")) return;
       openTodoDrawer(card.dataset.taskId, "view");
+    });
+    card.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("button, a")) return;
+      event.preventDefault();
+      openTodoDrawer(card.dataset.taskId, "view");
+    });
+    card.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("text/plain", card.dataset.taskId);
+      event.dataTransfer.effectAllowed = "move";
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+    });
+  });
+
+  els.board.querySelectorAll("[data-task-drop-status]").forEach((list) => {
+    list.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      list.classList.add("drag-over");
+      event.dataTransfer.dropEffect = "move";
+    });
+    list.addEventListener("dragleave", () => {
+      list.classList.remove("drag-over");
+    });
+    list.addEventListener("drop", (event) => {
+      event.preventDefault();
+      list.classList.remove("drag-over");
+      updateTaskStatusFromBoard(event.dataTransfer.getData("text/plain"), list.dataset.taskDropStatus);
     });
   });
 }
@@ -7344,12 +7753,12 @@ function renderTaskColumn(column, tasks) {
     : `<p class="empty-state">目前沒有任務</p>`;
 
   return `
-    <section class="column">
+    <section class="column" data-column-status="${column.id}">
       <div class="column-header">
         <h2>${column.title}</h2>
         <span class="count">${columnTasks.length}</span>
       </div>
-      <div class="task-list">${cards}</div>
+      <div class="task-list" data-task-drop-status="${column.id}">${cards}</div>
     </section>
   `;
 }
@@ -7358,23 +7767,50 @@ function renderTaskCard(task) {
   const system = getSystem(task.systemId);
   const project = getProject(task.projectId);
   const priorityText = getPriorityLabel(task.priority);
-  const tags = task.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+  const tags = renderTagButtons(task.tags || []);
   const relatedSummary = getRelatedSummary(task);
+  const stakeholders = task.stakeholders?.length ? `<div class="task-stakeholders">關係人：${escapeHtml(task.stakeholders.join(", "))}</div>` : "";
+  const completedDate = task.status === "done" ? `<div class="task-completed-date">已完成日期：${formatDate(task.completedDate)}</div>` : "";
 
   return `
-    <button class="task-card priority-${task.priority}" type="button" data-task-id="${task.id}">
+    <article class="task-card priority-${task.priority}" data-task-id="${task.id}" draggable="true" tabindex="0">
       <div class="task-path">${escapeHtml(getTaskContextLabel(task))}</div>
       <h3>${escapeHtml(task.title)}</h3>
       <p>${escapeHtml(task.description || "沒有描述")}</p>
       <div class="task-date-line">${getTaskDateLine(task)}</div>
+      ${completedDate}
       ${relatedSummary ? `<div class="related-summary">${relatedSummary}</div>` : ""}
+      ${stakeholders}
       <div class="task-meta">
         <span>${escapeHtml(task.owner)}</span>
         <span>優先級：${priorityText}</span>
       </div>
       <div class="tags">${tags}</div>
-    </button>
+    </article>
   `;
+}
+
+function updateTaskStatusFromBoard(taskId, status) {
+  const task = getProjectTask(taskId);
+  if (!task) return;
+  const nextStatus = normalizeTaskStatus(status);
+  if (task.status === nextStatus) return;
+  if (nextStatus === "done" && !canCompleteTask(task)) {
+    alert("請先完成所有細項步驟，才能將任務狀態改為已完成。");
+    return;
+  }
+
+  state.tasks = state.tasks.map((item) => {
+    if (item.id !== taskId) return item;
+    return applyTaskStatusSideEffects({ ...item, status: nextStatus }, item, nextStatus === "done" ? todayString() : "");
+  });
+
+  saveState();
+  if (nextStatus === "done") {
+    playCompletionSound();
+    showToast(`已完成：${task.title}`);
+  }
+  render();
 }
 
 function getScopedProjects(applyPhaseFilter = false) {
@@ -7383,7 +7819,7 @@ function getScopedProjects(applyPhaseFilter = false) {
   return state.projects.filter((project) => {
     const system = getSystem(project.systemId);
     const matchSystem = selectedScopeIsGeneral() ? false : selectedSystemId ? project.systemId === selectedSystemId : true;
-    const matchPhase = !applyPhaseFilter || phase === "all" || project.phase === phase;
+    const matchPhase = !applyPhaseFilter || project.category === "general" || phase === "all" || project.phase === phase;
     const matchQuery = projectMatchesSearch(project, system, query);
     return matchSystem && matchPhase && matchQuery;
   });
@@ -7395,6 +7831,9 @@ function projectMatchesSearch(project, system, query) {
   const haystack = [
     project.name,
     project.description,
+    getProjectCategoryLabel(project.category),
+    project.requirementRequest,
+    project.phaseChangedAt,
     (project.relatedEmails || []).join(" "),
     (project.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
     system?.name,
@@ -7406,25 +7845,31 @@ function projectMatchesSearch(project, system, query) {
   return haystack.includes(query);
 }
 
-function getVisibleTasks() {
+function getVisibleTasks(options = {}) {
   const query = els.searchInput.value.trim().toLowerCase();
   const phase = els.phaseFilter.value;
+  const projectId = options.projectId ?? selectedProjectId;
+  const tagFilter = options.tag ?? selectedTagFilter;
+  const normalizedTagFilter = tagFilter.trim().toLowerCase();
   const phaseProjectIds = state.projects
-    .filter((project) => phase === "all" || project.phase === phase)
+    .filter((project) => project.category === "general" || phase === "all" || project.phase === phase)
     .map((project) => project.id);
 
   return state.tasks.filter((task) => {
     const system = getSystem(task.systemId);
     const project = getProject(task.projectId);
     const matchSystem = taskMatchesSystemScope(task);
-    const matchProject = taskMatchesProjectScope(task);
+    const matchProject = taskMatchesProjectScope(task, projectId);
     const matchPhase = taskMatchesPhaseScope(task, phaseProjectIds, phase);
+    const matchTag = !normalizedTagFilter || (task.tags || []).some((tag) => tag.toLowerCase() === normalizedTagFilter);
     const haystack = [
       task.title,
       task.description,
       task.owner,
+      (task.stakeholders || []).join(" "),
       task.priority,
       task.status,
+      task.completedDate,
       getTaskScopeLabel(getTaskScope(task)),
       getTaskContextLabel(task),
       task.tags.join(" "),
@@ -7437,6 +7882,9 @@ function getVisibleTasks() {
       system?.name,
       project?.name,
       project?.description,
+      getProjectCategoryLabel(project?.category),
+      project?.requirementRequest,
+      project?.phaseChangedAt,
       (project?.relatedEmails || []).join(" "),
       (project?.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
       getPhaseLabel(project?.phase),
@@ -7444,7 +7892,7 @@ function getVisibleTasks() {
       .join(" ")
       .toLowerCase();
 
-    return matchSystem && matchProject && matchPhase && haystack.includes(query);
+    return matchSystem && matchProject && matchPhase && matchTag && haystack.includes(query);
   });
 }
 
@@ -7482,15 +7930,19 @@ function openProjectDialog(project = null, defaults = {}) {
   els.projectForm.reset();
   projectFields.id.value = project?.id || "";
   projectFields.systemId.innerHTML = renderSystemOptions(defaultSystemId);
+  projectFields.category.value = normalizeProjectCategory(project?.category);
   projectFields.name.value = project?.name || "";
   projectFields.description.value = project?.description || "";
   projectFields.phase.value = project?.phase || "deal";
+  projectFields.phaseChangedAt.value = project?.phaseChangedAt || todayString();
+  projectFields.requirementRequest.value = project?.requirementRequest || "";
   projectFields.plannedStart.value = project?.plannedStart || "";
   projectFields.plannedEnd.value = project?.plannedEnd || "";
   projectFields.phaseSchedules.innerHTML = renderPhaseScheduleFields(project?.phaseSchedules || createPhaseSchedules());
   renderEmailRows(projectFields.relatedEmails, project?.relatedEmails || []);
   renderLinkRows(projectFields.relatedLinks, project?.relatedLinks || []);
   attachProjectScheduleHandlers();
+  syncProjectCategoryFields();
   updateProjectScheduleConstraints();
   els.projectDialog.showModal();
 }
@@ -7499,27 +7951,37 @@ function handleProjectSubmit(event) {
   event.preventDefault();
 
   updateProjectScheduleConstraints();
-  const phaseSchedules = collectPhaseSchedules();
-  const invalidPhase = phases.find((phase) => {
-    const schedule = phaseSchedules[phase.id];
-    return schedule.start && schedule.end && schedule.end < schedule.start;
-  });
+  const category = normalizeProjectCategory(projectFields.category.value);
+  const isDevelopmentProject = category === "development";
+  const phaseSchedules = isDevelopmentProject ? collectPhaseSchedules() : createPhaseSchedules();
+  const invalidPhase = isDevelopmentProject
+    ? phases.find((phase) => {
+        const schedule = phaseSchedules[phase.id];
+        return schedule.start && schedule.end && schedule.end < schedule.start;
+      })
+    : null;
 
   if (invalidPhase) {
     alert(`${invalidPhase.label} 階段的結束時間不能早於開始時間。`);
     return;
   }
 
-  const plannedRange = getProjectScheduleRange(projectFields.plannedStart.value, projectFields.plannedEnd.value, phaseSchedules);
+  const plannedRange = isDevelopmentProject
+    ? getProjectScheduleRange(projectFields.plannedStart.value, projectFields.plannedEnd.value, phaseSchedules)
+    : { start: "", end: "" };
   const previousProject = getProject(projectFields.id.value);
-  const isClosed = projectFields.phase.value === "closed";
+  const phase = isDevelopmentProject ? projectFields.phase.value : "deal";
+  const isClosed = isDevelopmentProject && phase === "closed";
 
   const project = {
     id: projectFields.id.value || createId(),
     systemId: projectFields.systemId.value,
+    category,
     name: projectFields.name.value.trim(),
     description: projectFields.description.value.trim(),
-    phase: projectFields.phase.value,
+    phase,
+    phaseChangedAt: isDevelopmentProject ? projectFields.phaseChangedAt.value || todayString() : "",
+    requirementRequest: isDevelopmentProject ? projectFields.requirementRequest.value.trim() : "",
     plannedStart: plannedRange.start,
     plannedEnd: plannedRange.end,
     phaseSchedules,
@@ -7543,6 +8005,16 @@ function handleProjectSubmit(event) {
   saveState();
   els.projectDialog.close();
   render();
+}
+
+function syncProjectCategoryFields() {
+  const isDevelopmentProject = normalizeProjectCategory(projectFields.category.value) === "development";
+  projectFields.phaseFields.classList.toggle("hidden", !isDevelopmentProject);
+  projectFields.requirementField.classList.toggle("hidden", !isDevelopmentProject);
+  projectFields.scheduleSection.classList.toggle("hidden", !isDevelopmentProject);
+  projectFields.phaseScheduleSection.classList.toggle("hidden", !isDevelopmentProject);
+  projectFields.phase.required = isDevelopmentProject;
+  projectFields.phaseChangedAt.required = isDevelopmentProject;
 }
 
 function attachProjectScheduleHandlers() {
@@ -7614,12 +8086,15 @@ function openTaskDialog(task = null, defaults = {}) {
   taskFields.rangeEnd.value = task?.rangeEnd || task?.endDate || taskFields.rangeStart.value;
   taskFields.executionDate.value = task?.executionDate || task?.startDate || taskFields.rangeStart.value;
   taskFields.deadline.value = task?.deadline || taskFields.rangeEnd.value;
+  taskFields.completedDate.value = task?.completedDate || "";
   taskFields.owner.value = task?.owner || "";
   taskFields.tags.value = task?.tags?.join(", ") || "";
+  taskFields.stakeholders.value = task?.stakeholders?.join(", ") || "";
   renderEmailRows(taskFields.relatedEmails, task?.relatedEmails || []);
   renderLinkRows(taskFields.relatedLinks, task?.relatedLinks || []);
 
   syncTaskScopeFields(taskFields, false);
+  syncTaskCompletedField(taskFields);
   updateTaskDateConstraints(taskFields);
   els.taskDialog.showModal();
 }
@@ -7648,11 +8123,9 @@ function handleTaskSubmit(event) {
     return;
   }
 
-  const completedDate = status === "done"
-    ? (existingTask?.status === "done" ? existingTask.completedDate || todayString() : todayString())
-    : "";
+  const requestedCompletedDate = status === "done" ? taskFields.completedDate.value || todayString() : "";
 
-  const task = {
+  const task = applyTaskStatusSideEffects({
     id: taskFields.id.value || createId(),
     scope,
     systemId,
@@ -7666,19 +8139,16 @@ function handleTaskSubmit(event) {
     rangeEnd,
     executionDate,
     deadline,
-    tags: taskFields.tags.value
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean),
+    tags: splitCommaList(taskFields.tags.value),
+    stakeholders: splitCommaList(taskFields.stakeholders.value),
     relatedEmails: collectEmailRows(taskFields.relatedEmails),
     relatedLinks: collectLinkRows(taskFields.relatedLinks),
-    completedDate,
     important: existingTask?.important || false,
     steps: existingTask?.steps || [],
     files: existingTask?.files || [],
     notes: existingTask?.notes || "",
     history: existingTask?.history || [],
-  };
+  }, existingTask, requestedCompletedDate);
 
   state.tasks = taskFields.id.value
     ? state.tasks.map((item) => (item.id === task.id ? task : item))
@@ -7704,10 +8174,12 @@ function handleTaskDelete() {
 function toggleProjectClosed(projectId) {
   const project = getProject(projectId);
   if (!project) return;
+  if (project.category === "general") return;
 
   const isClosed = project.closed || project.phase === "closed";
   project.closed = !isClosed;
   project.phase = isClosed ? "development" : "closed";
+  project.phaseChangedAt = todayString();
   project.closedAt = project.closed ? todayString() : "";
   project.phaseSchedules = createPhaseSchedules(project.phaseSchedules);
 
@@ -7957,6 +8429,10 @@ function getPhaseLabel(id) {
   return phases.find((phase) => phase.id === id)?.label || "";
 }
 
+function getProjectCategoryLabel(id) {
+  return projectCategories.find((category) => category.id === id)?.label || "開發";
+}
+
 function getStatusLabel(id) {
   return taskColumns.find((column) => column.id === id)?.title || "未開始";
 }
@@ -8019,6 +8495,12 @@ function getProjectScheduleRange(plannedStart = "", plannedEnd = "", schedules =
 function getProjectPlannedRange(project) {
   const range = getProjectScheduleRange(project.plannedStart, project.plannedEnd, project.phaseSchedules || {});
   return formatRange(range.start, range.end);
+}
+
+function isProjectDelayed(project) {
+  if (!project || project.category === "general" || project.closed || project.phase === "closed") return false;
+  const schedule = project.phaseSchedules?.[project.phase];
+  return Boolean(schedule?.end && schedule.end < todayString());
 }
 
 function clampDate(value, min, max) {
@@ -8131,6 +8613,6 @@ function escapeHtml(value = "") {
   });
 }
 
-    </script>
+</script>
   </body>
 </html>

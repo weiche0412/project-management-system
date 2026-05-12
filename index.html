@@ -7,7 +7,18 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <section class="auth-screen" id="authScreen" aria-live="polite">
+      <div class="auth-card">
+        <span class="brand-mark">PM</span>
+        <p class="eyebrow">Project Desk Cloud</p>
+        <h1>專案管理系統</h1>
+        <p id="authStatusText">請使用 Google 帳號登入。管理員需先在後台建立使用者帳號。</p>
+        <button class="primary-button" id="googleSignInButton" type="button">使用 Google 登入</button>
+        <p class="auth-help" id="authHelpText">若尚未被授權，請聯絡系統管理員開通帳號。</p>
+      </div>
+    </section>
+
+    <div class="app-shell hidden" id="appShell">
       <aside class="sidebar" aria-label="系統導覽">
         <div class="brand">
           <span class="brand-mark">PM</span>
@@ -35,10 +46,21 @@
             <p class="page-subtitle" id="pageSubtitle">依系統管理專案，再由專案掌握任務與實際時程。</p>
           </div>
           <div class="topbar-actions">
+            <button class="secondary-button hidden" id="adminButton" type="button">後台</button>
             <button class="secondary-button" id="addSystemButton" type="button">新增系統</button>
             <button class="secondary-button" id="addProjectButton" type="button">新增專案</button>
             <button class="secondary-button" id="openGanttPageButton" type="button">甘特圖</button>
             <button class="primary-button" id="addTaskButton" type="button">新增任務</button>
+            <div class="account-panel">
+              <button class="account-button" id="accountButton" type="button" aria-expanded="false">
+                <span id="accountName">使用者</span>
+                <small id="accountRole">user</small>
+              </button>
+              <div class="account-menu hidden" id="accountMenu">
+                <button type="button" id="editProfileButton">修改名稱</button>
+                <button type="button" id="signOutButton">登出</button>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -75,7 +97,7 @@
         <section class="control-strip" aria-label="篩選">
           <label class="field">
             搜尋
-            <input id="searchInput" type="search" placeholder="系統、專案、任務、負責人、標籤" />
+            <input id="searchInput" type="search" placeholder="系統、專案、任務、負責人、關係人、標籤" />
           </label>
           <label class="field">
             專案階段
@@ -85,11 +107,12 @@
               <option value="planning">規劃</option>
               <option value="development">開發</option>
               <option value="testing">測試</option>
-              <option value="launch">上線</option>
+              <option value="launch">版更</option>
               <option value="closed">結案</option>
             </select>
           </label>
         </section>
+        <div class="tag-filter-bar hidden" id="tagFilterBar"></div>
 
         <section class="project-section" aria-labelledby="project-section-title">
           <div class="section-header">
@@ -141,6 +164,25 @@
       </form>
     </dialog>
 
+    <dialog id="profileDialog">
+      <form class="entity-form" id="profileForm">
+        <header>
+          <h2>設定顯示名稱</h2>
+          <button class="icon-button" id="profileDialogClose" type="button" data-close-dialog="profileDialog" aria-label="關閉">×</button>
+        </header>
+
+        <label class="field">
+          顯示名稱
+          <input id="profileName" required maxlength="40" placeholder="例如：王小明" />
+        </label>
+
+        <footer>
+          <button class="secondary-button" id="profileCancelButton" type="button" data-close-dialog="profileDialog">取消</button>
+          <button class="primary-button" type="submit">儲存名稱</button>
+        </footer>
+      </form>
+    </dialog>
+
     <dialog id="projectDialog">
       <form class="entity-form" id="projectForm">
         <header>
@@ -156,6 +198,14 @@
         </label>
 
         <label class="field">
+          專案分類
+          <select id="projectCategory" required>
+            <option value="development">開發</option>
+            <option value="general">一般</option>
+          </select>
+        </label>
+
+        <label class="field">
           專案名稱
           <input id="projectName" required maxlength="70" placeholder="例如：會員登入改版" />
         </label>
@@ -165,6 +215,7 @@
           <textarea id="projectDescription" rows="3" maxlength="220" placeholder="補充專案背景、目標或注意事項"></textarea>
         </label>
 
+        <div class="form-grid" id="projectPhaseFields">
         <label class="field">
           目前階段
           <select id="projectPhase" required>
@@ -172,12 +223,22 @@
             <option value="planning">規劃</option>
             <option value="development">開發</option>
             <option value="testing">測試</option>
-            <option value="launch">上線</option>
+            <option value="launch">版更</option>
             <option value="closed">結案</option>
           </select>
         </label>
+        <label class="field">
+          狀態日期
+          <input id="projectPhaseChangedAt" type="date" />
+        </label>
+        </div>
 
-        <section class="phase-schedule-editor project-schedule-editor" aria-labelledby="project-schedule-title">
+        <label class="field" id="projectRequirementField">
+          資訊需求單
+          <input id="projectRequirementRequest" maxlength="160" placeholder="需求單號、標題或網址" />
+        </label>
+
+        <section class="phase-schedule-editor project-schedule-editor" id="projectScheduleSection" aria-labelledby="project-schedule-title">
           <div>
             <h3 id="project-schedule-title">專案時程</h3>
             <p>可先留空；填寫階段時程後，專案時程會自動擴大涵蓋所有階段。</p>
@@ -194,7 +255,7 @@
           </div>
         </section>
 
-        <section class="phase-schedule-editor" aria-labelledby="phase-schedule-title">
+        <section class="phase-schedule-editor" id="phaseScheduleSection" aria-labelledby="phase-schedule-title">
           <div>
             <h3 id="phase-schedule-title">各階段時程</h3>
             <p>各階段時程可留空；若日期超出專案時程，專案時程會自動更新。</p>
@@ -309,6 +370,11 @@
           </label>
         </div>
 
+        <label class="field hidden" id="taskCompletedDateField">
+          已完成日期
+          <input id="taskCompletedDate" type="date" />
+        </label>
+
         <div class="form-grid">
           <label class="field">
             負責人
@@ -320,6 +386,11 @@
             <input id="taskTags" placeholder="用逗號分隔，例如 UI, API" maxlength="80" />
           </label>
         </div>
+
+        <label class="field">
+          關係人
+          <input id="taskStakeholders" placeholder="用逗號分隔，例如 王小明, 李小華" maxlength="120" />
+        </label>
 
         <section class="related-section" aria-label="關聯信件">
           <div class="related-section-header">
@@ -498,9 +569,19 @@
               </label>
             </div>
 
+            <label class="hidden" id="todoAddCompletedDateField">
+              已完成日期
+              <input id="todoAddCompletedDate" type="date" />
+            </label>
+
             <label>
               標籤
               <input id="todoAddTags" placeholder="用逗號分隔，例如 UI, API" maxlength="80" />
+            </label>
+
+            <label>
+              關係人
+              <input id="todoAddStakeholders" placeholder="用逗號分隔，例如 王小明, 李小華" maxlength="120" />
             </label>
 
             <section class="related-section" aria-label="待辦關聯信件">
@@ -533,6 +614,82 @@
       </div>
     </section>
 
+    <section class="admin-page hidden" id="adminPage" aria-hidden="true">
+      <header class="todo-page-topbar admin-page-topbar">
+        <div class="todo-page-brand">
+          <span class="app-launcher">PM</span>
+          <strong>後台管理</strong>
+        </div>
+        <div class="admin-page-actions">
+          <button class="secondary-button" id="exportJsonButton" type="button">匯出 JSON</button>
+          <button class="secondary-button" id="exportCsvButton" type="button">匯出 CSV</button>
+          <button class="todo-page-close" id="closeAdminPageButton" type="button">返回專案管理</button>
+        </div>
+      </header>
+
+      <main class="admin-page-main">
+        <section class="admin-metrics" id="adminMetrics" aria-label="後台摘要"></section>
+
+        <section class="admin-panel" aria-labelledby="create-user-title">
+          <div class="section-header">
+            <div>
+              <h2 id="create-user-title">建立使用者帳號</h2>
+              <p>先建立允許登入的 Google Email，使用者登入後即可設定顯示名稱。</p>
+            </div>
+          </div>
+          <form class="admin-user-form" id="adminUserForm">
+            <label class="field">
+              Google Email
+              <input id="adminUserEmail" type="email" required placeholder="name@example.com" />
+            </label>
+            <label class="field">
+              角色
+              <select id="adminUserRole">
+                <option value="user">一般使用者</option>
+                <option value="admin">管理員</option>
+              </select>
+            </label>
+            <button class="primary-button" type="submit">建立帳號</button>
+          </form>
+        </section>
+
+        <section class="admin-panel" aria-labelledby="users-title">
+          <div class="section-header">
+            <div>
+              <h2 id="users-title">使用者與權限</h2>
+              <p>調整管理員與一般使用者角色，或停用無需存取的人員。</p>
+            </div>
+          </div>
+          <div class="admin-table-wrap" id="adminUsersTable"></div>
+        </section>
+
+        <section class="admin-panel" aria-labelledby="audit-title">
+          <div class="section-header">
+            <div>
+              <h2 id="audit-title">操作紀錄</h2>
+              <p>查看登入、帳號管理與重要資料異動紀錄。</p>
+            </div>
+          </div>
+          <div class="audit-filters">
+            <label class="field">
+              關鍵字
+              <input id="auditSearchInput" type="search" placeholder="搜尋使用者、動作或資料" />
+            </label>
+            <label class="field">
+              動作
+              <select id="auditActionFilter">
+                <option value="all">全部</option>
+                <option value="login">登入</option>
+                <option value="admin">帳號管理</option>
+                <option value="data">資料異動</option>
+              </select>
+            </label>
+          </div>
+          <div class="admin-table-wrap" id="auditLogTable"></div>
+        </section>
+      </main>
+    </section>
+
     <section class="gantt-page hidden" id="ganttPage" aria-hidden="true">
       <header class="todo-page-topbar gantt-page-topbar">
         <div class="todo-page-brand">
@@ -541,7 +698,7 @@
         </div>
         <label class="todo-page-search">
           <span>搜尋</span>
-          <input id="ganttSearchInput" type="search" placeholder="搜尋系統、專案、任務" />
+          <input id="ganttSearchInput" type="search" placeholder="搜尋系統、專案、任務、關係人" />
         </label>
         <div class="gantt-topbar-actions">
           <label class="todo-sort-control">
@@ -549,7 +706,12 @@
             <select id="ganttScaleSelect">
               <option value="week" selected>週</option>
               <option value="month">月</option>
+              <option value="year">年</option>
             </select>
+          </label>
+          <label class="todo-sort-control">
+            <span>專案</span>
+            <select id="ganttProjectFilter"></select>
           </label>
           <button class="todo-page-close" id="closeGanttPageButton" type="button">返回專案管理</button>
         </div>
@@ -578,6 +740,11 @@
 
     <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
+    <script src="/__/firebase/10.12.5/firebase-app-compat.js"></script>
+    <script src="/__/firebase/10.12.5/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="/__/firebase/10.12.5/firebase-functions-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

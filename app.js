@@ -3,8 +3,13 @@ const phases = [
   { id: "planning", label: "規劃" },
   { id: "development", label: "開發" },
   { id: "testing", label: "測試" },
-  { id: "launch", label: "上線" },
+  { id: "launch", label: "版更" },
   { id: "closed", label: "結案" },
+];
+
+const projectCategories = [
+  { id: "development", label: "開發" },
+  { id: "general", label: "一般" },
 ];
 
 const taskColumns = [
@@ -28,41 +33,86 @@ const taskScopeOptions = [
   { id: "general", label: "一般任務" },
 ];
 
-const storageKey = "project-desk-v2";
-let state = loadState();
+const preferencesKey = "project-desk-preferences-v1";
+let state = createEmptyState();
+let preferences = loadPreferences();
 let selectedSystemId = null;
 let selectedProjectId = "all";
-let activeTodoView = "today";
-let todoSortKey = "executionDate";
-let todoSortDirection = "asc";
-let todoGroupBySystem = false;
+let activeTodoView = preferences.activeTodoView || "today";
+let todoSortKey = preferences.todoSortKey || "executionDate";
+let todoSortDirection = preferences.todoSortDirection || "asc";
+let todoGroupBySystem = Boolean(preferences.todoGroupBySystem);
 let todoFocusSection = "";
-let sidebarCollapsed = false;
+let sidebarCollapsed = Boolean(preferences.sidebarCollapsed);
 let todoSectionCollapsed = {
   deadline: false,
   general: false,
   range: true,
   completed: false,
+  ...(preferences.todoSectionCollapsed || {}),
 };
-let ganttScale = "week";
+let ganttScale = preferences.ganttScale || "week";
+let ganttProjectFilter = preferences.ganttProjectFilter || "all";
+let selectedTagFilter = "";
 let ganttCollapsed = {
   systems: {},
   projects: {},
   taskGroups: {},
+  ...(preferences.ganttCollapsed || {}),
 };
 let selectedTodoTaskId = null;
 let drawerMode = "view";
 let toastTimer = null;
 let completionAudioContext = null;
+let auth = null;
+let db = null;
+let cloudFunctions = null;
+let currentFirebaseUser = null;
+let currentProfile = null;
+let cloudReady = false;
+let cloudSaveTimer = null;
+let cloudSaveChain = Promise.resolve();
+let profileDialogRequired = false;
+let authSessionVersion = 0;
+let profileUnsubscribe = null;
+let cloudUnsubscribes = [];
+let adminUnsubscribes = [];
+let remoteState = createEmptyState();
+let remoteLoaded = { systems: false, projects: false, tasks: false };
+let lastSyncedState = createEmptyStateMaps();
+let adminUsers = [];
+let adminAllowedUsers = [];
+let adminAuditLogs = [];
+let adminFilters = {
+  query: "",
+  action: "all",
+};
 
 const els = {
-  appShell: document.querySelector(".app-shell"),
+  authScreen: document.querySelector("#authScreen"),
+  googleSignInButton: document.querySelector("#googleSignInButton"),
+  authStatusText: document.querySelector("#authStatusText"),
+  authHelpText: document.querySelector("#authHelpText"),
+  appShell: document.querySelector("#appShell") || document.querySelector(".app-shell"),
+  adminButton: document.querySelector("#adminButton"),
+  accountButton: document.querySelector("#accountButton"),
+  accountName: document.querySelector("#accountName"),
+  accountRole: document.querySelector("#accountRole"),
+  accountMenu: document.querySelector("#accountMenu"),
+  editProfileButton: document.querySelector("#editProfileButton"),
+  signOutButton: document.querySelector("#signOutButton"),
+  profileDialog: document.querySelector("#profileDialog"),
+  profileForm: document.querySelector("#profileForm"),
+  profileName: document.querySelector("#profileName"),
+  profileDialogClose: document.querySelector("#profileDialogClose"),
+  profileCancelButton: document.querySelector("#profileCancelButton"),
   sidebarToggle: document.querySelector("#sidebarToggle"),
   systemList: document.querySelector("#systemList"),
   pageTitle: document.querySelector("#pageTitle"),
   pageSubtitle: document.querySelector("#pageSubtitle"),
   searchInput: document.querySelector("#searchInput"),
   phaseFilter: document.querySelector("#phaseFilter"),
+  tagFilterBar: document.querySelector("#tagFilterBar"),
   todoDashboard: document.querySelector("#todoDashboard"),
   openTodoPageButton: document.querySelector("#openTodoPageButton"),
   openGanttPageButton: document.querySelector("#openGanttPageButton"),
@@ -87,6 +137,7 @@ const els = {
   closeGanttPageButton: document.querySelector("#closeGanttPageButton"),
   ganttSearchInput: document.querySelector("#ganttSearchInput"),
   ganttScaleSelect: document.querySelector("#ganttScaleSelect"),
+  ganttProjectFilter: document.querySelector("#ganttProjectFilter"),
   ganttRangeLabel: document.querySelector("#ganttRangeLabel"),
   ganttChart: document.querySelector("#ganttChart"),
   ganttTaskDrawer: document.querySelector("#ganttTaskDrawer"),
@@ -119,6 +170,18 @@ const els = {
   projectCount: document.querySelector("#projectCount"),
   activeTaskCount: document.querySelector("#activeTaskCount"),
   deadlineCount: document.querySelector("#deadlineCount"),
+  adminPage: document.querySelector("#adminPage"),
+  closeAdminPageButton: document.querySelector("#closeAdminPageButton"),
+  adminMetrics: document.querySelector("#adminMetrics"),
+  adminUserForm: document.querySelector("#adminUserForm"),
+  adminUserEmail: document.querySelector("#adminUserEmail"),
+  adminUserRole: document.querySelector("#adminUserRole"),
+  adminUsersTable: document.querySelector("#adminUsersTable"),
+  auditLogTable: document.querySelector("#auditLogTable"),
+  auditSearchInput: document.querySelector("#auditSearchInput"),
+  auditActionFilter: document.querySelector("#auditActionFilter"),
+  exportJsonButton: document.querySelector("#exportJsonButton"),
+  exportCsvButton: document.querySelector("#exportCsvButton"),
 };
 
 const systemFields = {
@@ -130,11 +193,18 @@ const systemFields = {
 const projectFields = {
   id: document.querySelector("#projectId"),
   systemId: document.querySelector("#projectSystem"),
+  category: document.querySelector("#projectCategory"),
   name: document.querySelector("#projectName"),
   description: document.querySelector("#projectDescription"),
+  phaseFields: document.querySelector("#projectPhaseFields"),
   phase: document.querySelector("#projectPhase"),
+  phaseChangedAt: document.querySelector("#projectPhaseChangedAt"),
+  requirementField: document.querySelector("#projectRequirementField"),
+  requirementRequest: document.querySelector("#projectRequirementRequest"),
+  scheduleSection: document.querySelector("#projectScheduleSection"),
   plannedStart: document.querySelector("#projectPlannedStart"),
   plannedEnd: document.querySelector("#projectPlannedEnd"),
+  phaseScheduleSection: document.querySelector("#phaseScheduleSection"),
   phaseSchedules: document.querySelector("#phaseScheduleFields"),
   relatedEmails: document.querySelector("#projectRelatedEmails"),
   relatedLinks: document.querySelector("#projectRelatedLinks"),
@@ -155,8 +225,11 @@ const taskFields = {
   rangeEnd: document.querySelector("#taskRangeEnd"),
   executionDate: document.querySelector("#taskExecutionDate"),
   deadline: document.querySelector("#taskDeadline"),
+  completedDateField: document.querySelector("#taskCompletedDateField"),
+  completedDate: document.querySelector("#taskCompletedDate"),
   owner: document.querySelector("#taskOwner"),
   tags: document.querySelector("#taskTags"),
+  stakeholders: document.querySelector("#taskStakeholders"),
   relatedEmails: document.querySelector("#taskRelatedEmails"),
   relatedLinks: document.querySelector("#taskRelatedLinks"),
 };
@@ -179,11 +252,40 @@ const todoAddFields = {
   rangeEnd: document.querySelector("#todoAddRangeEnd"),
   executionDate: document.querySelector("#todoAddExecutionDate"),
   deadline: document.querySelector("#todoAddDeadline"),
+  completedDateField: document.querySelector("#todoAddCompletedDateField"),
+  completedDate: document.querySelector("#todoAddCompletedDate"),
   tags: document.querySelector("#todoAddTags"),
+  stakeholders: document.querySelector("#todoAddStakeholders"),
   relatedEmails: document.querySelector("#todoRelatedEmails"),
   relatedLinks: document.querySelector("#todoRelatedLinks"),
 };
 
+els.googleSignInButton?.addEventListener("click", signInWithGoogle);
+els.signOutButton?.addEventListener("click", signOutCurrentUser);
+els.accountButton?.addEventListener("click", () => {
+  els.accountMenu.classList.toggle("hidden");
+  els.accountButton.setAttribute("aria-expanded", String(!els.accountMenu.classList.contains("hidden")));
+});
+els.editProfileButton?.addEventListener("click", () => openProfileDialog(false));
+els.profileForm?.addEventListener("submit", handleProfileSubmit);
+els.profileDialog?.addEventListener("cancel", (event) => {
+  if (profileDialogRequired) event.preventDefault();
+});
+els.adminButton?.addEventListener("click", openAdminPage);
+els.closeAdminPageButton?.addEventListener("click", closeAdminPage);
+els.adminUserForm?.addEventListener("submit", handleAdminUserCreate);
+els.adminUsersTable?.addEventListener("change", handleAdminTableChange);
+els.adminUsersTable?.addEventListener("click", handleAdminTableClick);
+els.auditSearchInput?.addEventListener("input", () => {
+  adminFilters.query = els.auditSearchInput.value.trim().toLowerCase();
+  renderAuditLogs();
+});
+els.auditActionFilter?.addEventListener("change", () => {
+  adminFilters.action = els.auditActionFilter.value;
+  renderAuditLogs();
+});
+els.exportJsonButton?.addEventListener("click", exportProjectDataJson);
+els.exportCsvButton?.addEventListener("click", exportProjectDataCsv);
 els.addSystemButton.addEventListener("click", () => openSystemDialog());
 els.quickSystemButton.addEventListener("click", () => openSystemDialog());
 els.addProjectButton.addEventListener("click", () => openProjectDialog());
@@ -191,6 +293,7 @@ els.addTaskButton.addEventListener("click", () => openTaskDialog());
 els.sidebarToggle.addEventListener("click", () => {
   sidebarCollapsed = !sidebarCollapsed;
   syncSidebarCollapsed();
+  persistViewPreferences();
 });
 els.openTodoPageButton.addEventListener("click", () => openTodoPage("today"));
 els.openGanttPageButton.addEventListener("click", openGanttPage);
@@ -203,22 +306,32 @@ els.ganttSearchInput.addEventListener("input", () => {
 });
 els.ganttScaleSelect.addEventListener("change", () => {
   ganttScale = els.ganttScaleSelect.value;
+  persistViewPreferences();
+  renderGanttPage();
+});
+els.ganttProjectFilter.addEventListener("change", () => {
+  ganttProjectFilter = els.ganttProjectFilter.value;
+  persistViewPreferences();
   renderGanttPage();
 });
 els.todoSortSelect.addEventListener("change", () => {
   todoSortKey = els.todoSortSelect.value;
+  persistViewPreferences();
   renderTodoPage();
 });
 els.todoSortDirectionSelect.addEventListener("change", () => {
   todoSortDirection = els.todoSortDirectionSelect.value;
+  persistViewPreferences();
   renderTodoPage();
 });
 els.todoGroupSystemButton.addEventListener("click", () => {
   todoGroupBySystem = true;
+  persistViewPreferences();
   renderTodoPage();
 });
 els.todoClearGroupButton.addEventListener("click", () => {
   todoGroupBySystem = false;
+  persistViewPreferences();
   renderTodoPage();
 });
 els.todoAddTrigger.addEventListener("click", () => openTodoAddDetails());
@@ -227,6 +340,7 @@ els.todoAddReset.addEventListener("click", () => resetTodoAddForm(false));
 els.todoAddCancel.addEventListener("click", () => resetTodoAddForm(true));
 els.searchInput.addEventListener("input", render);
 els.phaseFilter.addEventListener("change", () => {
+  selectedTagFilter = "";
   selectedProjectId = "all";
   render();
 });
@@ -240,11 +354,16 @@ els.addTaskEmailButton.addEventListener("click", () => addEmailRow(taskFields.re
 els.addTaskLinkButton.addEventListener("click", () => addLinkRow(taskFields.relatedLinks));
 els.addTodoEmailButton.addEventListener("click", () => addEmailRow(todoAddFields.relatedEmails));
 els.addTodoLinkButton.addEventListener("click", () => addLinkRow(todoAddFields.relatedLinks));
+projectFields.category.addEventListener("change", () => syncProjectCategoryFields());
+projectFields.phase.addEventListener("change", () => {
+  projectFields.phaseChangedAt.value = todayString();
+});
 taskFields.scope.addEventListener("change", () => syncTaskScopeFields(taskFields));
 taskFields.systemId.addEventListener("change", () => {
   populateTaskProjectSelect(taskFields.systemId.value);
   syncTaskScopeFields(taskFields, false);
 });
+taskFields.status.addEventListener("change", () => syncTaskCompletedField(taskFields));
 taskFields.rangeStart.addEventListener("change", () => updateTaskDateConstraints(taskFields));
 taskFields.rangeEnd.addEventListener("change", () => updateTaskDateConstraints(taskFields));
 taskFields.executionDate.addEventListener("change", () => updateTaskDateConstraints(taskFields, false));
@@ -266,6 +385,7 @@ todoAddFields.projectId.addEventListener("change", () => {
   if (todoAddFields.mode.value === "existing") fillTodoAddFromExistingTask();
 });
 todoAddFields.existingTaskId.addEventListener("change", fillTodoAddFromExistingTask);
+todoAddFields.status.addEventListener("change", () => syncTaskCompletedField(todoAddFields));
 todoAddFields.rangeStart.addEventListener("change", () => updateTaskDateConstraints(todoAddFields));
 todoAddFields.rangeEnd.addEventListener("change", () => updateTaskDateConstraints(todoAddFields));
 todoAddFields.executionDate.addEventListener("change", () => updateTaskDateConstraints(todoAddFields, false));
@@ -273,14 +393,22 @@ todoAddFields.deadline.addEventListener("change", () => updateTaskDateConstraint
 projectFields.plannedStart.addEventListener("change", () => updateProjectScheduleConstraints());
 projectFields.plannedEnd.addEventListener("change", () => updateProjectScheduleConstraints());
 document.addEventListener("click", handleRelatedRowClick);
+document.addEventListener("click", handleTagFilterClick);
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".account-panel")) {
+    els.accountMenu?.classList.add("hidden");
+    els.accountButton?.setAttribute("aria-expanded", "false");
+  }
+});
 
 document.querySelectorAll("[data-close-dialog]").forEach((button) => {
   button.addEventListener("click", () => {
+    if (button.dataset.closeDialog === "profileDialog" && profileDialogRequired) return;
     document.querySelector(`#${button.dataset.closeDialog}`).close();
   });
 });
 
-render();
+initializeCloudApp();
 
 function buildStarterState() {
   const systemA = createId();
@@ -1045,26 +1173,55 @@ function buildStarterState() {
   };
 }
 
-function loadState() {
-  const saved = localStorage.getItem(storageKey);
-  if (!saved) return buildStarterState();
+function createEmptyState() {
+  return {
+    systems: [],
+    projects: [],
+    tasks: [],
+  };
+}
 
+function createEmptyStateMaps() {
+  return {
+    systems: new Map(),
+    projects: new Map(),
+    tasks: new Map(),
+  };
+}
+
+function loadState() {
+  return createEmptyState();
+}
+
+function loadPreferences() {
   try {
-    const parsed = JSON.parse(saved);
-    if (!Array.isArray(parsed.systems) || !Array.isArray(parsed.projects) || !Array.isArray(parsed.tasks)) {
-      return buildStarterState();
-    }
-    return normalizeState(parsed);
+    const saved = localStorage.getItem(preferencesKey);
+    return saved ? JSON.parse(saved) : {};
   } catch {
-    return buildStarterState();
+    return {};
   }
 }
 
-function normalizeState(rawState) {
+function persistViewPreferences() {
+  const nextPreferences = {
+    activeTodoView,
+    todoSortKey,
+    todoSortDirection,
+    todoGroupBySystem,
+    sidebarCollapsed,
+    todoSectionCollapsed,
+    ganttScale,
+    ganttProjectFilter,
+    ganttCollapsed,
+  };
+  localStorage.setItem(preferencesKey, JSON.stringify(nextPreferences));
+}
+
+function normalizeState(rawState = {}) {
   return {
-    systems: rawState.systems,
-    projects: rawState.projects.map(normalizeProject),
-    tasks: rawState.tasks.map(normalizeTask),
+    systems: Array.isArray(rawState.systems) ? rawState.systems : [],
+    projects: Array.isArray(rawState.projects) ? rawState.projects.map(normalizeProject) : [],
+    tasks: Array.isArray(rawState.tasks) ? rawState.tasks.map(normalizeTask) : [],
   };
 }
 
@@ -1082,6 +1239,7 @@ function normalizeTask(task) {
     projectId: scope === "project" ? task.projectId || "" : "",
     status: normalizeTaskStatus(task.status),
     tags: Array.isArray(task.tags) ? task.tags : [],
+    stakeholders: normalizeTextList(task.stakeholders),
     rangeStart,
     rangeEnd,
     executionDate,
@@ -1175,6 +1333,24 @@ function normalizeTaskStatus(status) {
   return "not_started";
 }
 
+function normalizeProjectCategory(category) {
+  return category === "general" ? "general" : "development";
+}
+
+function normalizeTextList(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function splitCommaList(value = "") {
+  return String(value)
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function normalizeEmailList(value) {
   if (!Array.isArray(value)) return [];
   return value
@@ -1249,8 +1425,11 @@ function normalizeProject(project) {
 
   return {
     ...project,
+    category: normalizeProjectCategory(project.category),
     description: project.description || "",
     phase: project.phase || "deal",
+    phaseChangedAt: project.phaseChangedAt || todayString(),
+    requirementRequest: project.requirementRequest || "",
     phaseSchedules: normalizedSchedules,
     plannedStart: plannedRange.start,
     plannedEnd: plannedRange.end,
@@ -1262,7 +1441,699 @@ function normalizeProject(project) {
 }
 
 function saveState() {
-  localStorage.setItem(storageKey, JSON.stringify(state));
+  persistViewPreferences();
+  if (!cloudReady) return;
+  window.clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = window.setTimeout(() => {
+    cloudSaveChain = cloudSaveChain
+      .then(pushStateToCloud)
+      .catch((error) => {
+        console.error(error);
+        showToast(`雲端儲存失敗：${getReadableError(error)}`);
+      });
+  }, 250);
+}
+
+function initializeCloudApp() {
+  setAuthStatus("正在初始化雲端服務...", "請稍候。");
+
+  if (!configureFirebase()) return;
+
+  auth.useDeviceLanguage?.();
+  auth.onAuthStateChanged(async (user) => {
+    const sessionVersion = ++authSessionVersion;
+    cleanupCloudSubscriptions();
+    closeAdminPage();
+    cloudReady = false;
+    currentFirebaseUser = user;
+
+    if (!user) {
+      currentProfile = null;
+      state = createEmptyState();
+      remoteState = createEmptyState();
+      remoteLoaded = { systems: false, projects: false, tasks: false };
+      lastSyncedState = createEmptyStateMaps();
+      showAuthScreen("請使用 Google 帳號登入。管理員需先在後台建立使用者帳號。");
+      updateAccountUi();
+      return;
+    }
+
+    showAuthScreen("正在確認帳號權限...", "第一次登入可能需要幾秒鐘建立雲端帳號。", true);
+
+    try {
+      const result = await callFunction("bootstrapCurrentUser", {
+        name: user.displayName || "",
+      });
+      if (sessionVersion !== authSessionVersion) return;
+
+      await user.getIdToken(true);
+      currentProfile = normalizeProfile(result.data?.profile || {});
+      updateAccountUi();
+      startProfileListener(user.uid);
+      startCloudListeners();
+    } catch (error) {
+      console.error(error);
+      await auth.signOut().catch(() => {});
+      showAuthScreen("此 Google 帳號尚未被授權。", getReadableError(error));
+    }
+  });
+}
+
+function configureFirebase() {
+  if (!window.firebase) {
+    showAuthScreen("Firebase SDK 尚未載入。", "請透過 Firebase Hosting 開啟此系統，或確認 /__/firebase/init.js 可正常載入。", false, true);
+    return false;
+  }
+
+  try {
+    if (!firebase.apps.length && window.firebaseConfig) {
+      firebase.initializeApp(window.firebaseConfig);
+    }
+
+    if (!firebase.apps.length) {
+      showAuthScreen("Firebase 尚未完成初始化。", "部署到 Firebase Hosting 後會自動載入專案設定。", false, true);
+      return false;
+    }
+
+    auth = firebase.auth();
+    db = firebase.firestore();
+    cloudFunctions = firebase.functions();
+    return true;
+  } catch (error) {
+    console.error(error);
+    showAuthScreen("Firebase 初始化失敗。", getReadableError(error), false, true);
+    return false;
+  }
+}
+
+function showAuthScreen(message, helpText = "若尚未被授權，請聯絡系統管理員開通帳號。", loading = false, disabled = false) {
+  els.authScreen?.classList.remove("hidden");
+  els.appShell?.classList.add("hidden");
+  els.adminPage?.classList.add("hidden");
+  setAuthStatus(message, helpText, loading || disabled);
+}
+
+function setAuthStatus(message, helpText = "", buttonDisabled = false) {
+  if (els.authStatusText) els.authStatusText.textContent = message;
+  if (els.authHelpText) els.authHelpText.textContent = helpText;
+  if (els.googleSignInButton) els.googleSignInButton.disabled = buttonDisabled;
+}
+
+function showAppShell() {
+  els.authScreen?.classList.add("hidden");
+  els.appShell?.classList.remove("hidden");
+}
+
+async function signInWithGoogle() {
+  if (!auth) return;
+  setAuthStatus("正在開啟 Google 登入...", "請在 Google 視窗完成登入。", true);
+
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await auth.signInWithPopup(provider);
+  } catch (error) {
+    if (error.code === "auth/popup-blocked" || error.code === "auth/popup-closed-by-user") {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      await auth.signInWithRedirect(provider);
+      return;
+    }
+    console.error(error);
+    setAuthStatus("Google 登入失敗。", getReadableError(error));
+  } finally {
+    if (!auth.currentUser && els.googleSignInButton) els.googleSignInButton.disabled = false;
+  }
+}
+
+async function signOutCurrentUser() {
+  closeAdminPage();
+  cleanupCloudSubscriptions();
+  cleanupProfileListener();
+  currentProfile = null;
+  currentFirebaseUser = null;
+  cloudReady = false;
+  await auth?.signOut();
+}
+
+function callFunction(name, payload = {}) {
+  return cloudFunctions.httpsCallable(name)(payload);
+}
+
+function startProfileListener(uid) {
+  cleanupProfileListener();
+  profileUnsubscribe = db.collection("users").doc(uid).onSnapshot((snapshot) => {
+    if (!snapshot.exists) return;
+    const nextProfile = normalizeProfile({ uid: snapshot.id, ...snapshot.data() });
+    currentProfile = nextProfile;
+    updateAccountUi();
+
+    if (nextProfile.status === "disabled") {
+      showToast("帳號已停用，系統將登出。");
+      signOutCurrentUser();
+    }
+  });
+}
+
+function cleanupProfileListener() {
+  if (profileUnsubscribe) profileUnsubscribe();
+  profileUnsubscribe = null;
+}
+
+function startCloudListeners() {
+  cleanupCloudSubscriptions();
+  remoteState = createEmptyState();
+  remoteLoaded = { systems: false, projects: false, tasks: false };
+
+  ["systems", "projects", "tasks"].forEach((collectionName) => {
+    const unsubscribe = db.collection(collectionName).onSnapshot((snapshot) => {
+      remoteState[collectionName] = snapshot.docs
+        .map((doc) => ({ ...doc.data(), id: doc.id }))
+        .sort(compareCloudRecords);
+      remoteLoaded[collectionName] = true;
+      if (Object.values(remoteLoaded).every(Boolean)) {
+        applyRemoteState();
+      }
+    }, (error) => {
+      console.error(error);
+      showToast(`雲端資料讀取失敗：${getReadableError(error)}`);
+      if (error.code === "permission-denied") signOutCurrentUser();
+    });
+    cloudUnsubscribes.push(unsubscribe);
+  });
+}
+
+function cleanupCloudSubscriptions() {
+  cloudUnsubscribes.forEach((unsubscribe) => unsubscribe());
+  cloudUnsubscribes = [];
+  cleanupAdminSubscriptions();
+}
+
+function applyRemoteState() {
+  state = normalizeState(remoteState);
+  lastSyncedState = stateToMaps(remoteState);
+  cloudReady = true;
+  showAppShell();
+  updateAccountUi();
+  render();
+
+  if (currentProfile && !currentProfile.name) {
+    openProfileDialog(true);
+  }
+}
+
+async function pushStateToCloud() {
+  if (!cloudReady || !db || !currentFirebaseUser) return;
+
+  let batch = db.batch();
+  let operations = 0;
+
+  const commitIfNeeded = async (force = false) => {
+    if (!operations) return;
+    if (!force && operations < 450) return;
+    await batch.commit();
+    batch = db.batch();
+    operations = 0;
+  };
+
+  for (const collectionName of ["systems", "projects", "tasks"]) {
+    const currentMap = new Map(state[collectionName].map((item) => [item.id, item]));
+    const previousMap = lastSyncedState[collectionName] || new Map();
+    const collectionRef = db.collection(collectionName);
+
+    for (const [id, item] of currentMap.entries()) {
+      const previous = previousMap.get(id);
+      if (!previous || hasCloudDataChanged(item, previous)) {
+        batch.set(collectionRef.doc(id), prepareCloudDocument(item, previous));
+        operations += 1;
+        await commitIfNeeded();
+      }
+    }
+
+    for (const id of previousMap.keys()) {
+      if (!currentMap.has(id)) {
+        batch.delete(collectionRef.doc(id));
+        operations += 1;
+        await commitIfNeeded();
+      }
+    }
+  }
+
+  await commitIfNeeded(true);
+}
+
+function prepareCloudDocument(item, previous = {}) {
+  const documentData = stripUndefinedDeep({ ...item });
+  documentData.createdAt = previous.createdAt || firebase.firestore.FieldValue.serverTimestamp();
+  documentData.createdBy = previous.createdBy || currentFirebaseUser?.uid || "";
+  documentData.createdByEmail = previous.createdByEmail || currentFirebaseUser?.email || "";
+  documentData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+  documentData.updatedBy = currentFirebaseUser?.uid || "";
+  documentData.updatedByEmail = currentFirebaseUser?.email || "";
+  return documentData;
+}
+
+function stripUndefinedDeep(value) {
+  if (Array.isArray(value)) {
+    return value.map(stripUndefinedDeep).filter((item) => item !== undefined);
+  }
+
+  if (value && typeof value === "object" && !isFirestoreTimestamp(value)) {
+    return Object.entries(value).reduce((result, [key, item]) => {
+      if (item !== undefined) result[key] = stripUndefinedDeep(item);
+      return result;
+    }, {});
+  }
+
+  return value;
+}
+
+function hasCloudDataChanged(item, previous) {
+  return stableStringify(stripCloudMetadata(item)) !== stableStringify(stripCloudMetadata(previous));
+}
+
+function stripCloudMetadata(value) {
+  if (Array.isArray(value)) return value.map(stripCloudMetadata);
+  if (value && typeof value === "object" && !isFirestoreTimestamp(value)) {
+    return Object.entries(value)
+      .filter(([key]) => !["createdAt", "createdBy", "createdByEmail", "updatedAt", "updatedBy", "updatedByEmail"].includes(key))
+      .reduce((result, [key, item]) => {
+        result[key] = stripCloudMetadata(item);
+        return result;
+      }, {});
+  }
+  return value;
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object" && !isFirestoreTimestamp(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function stateToMaps(sourceState) {
+  return {
+    systems: new Map((sourceState.systems || []).map((item) => [item.id, item])),
+    projects: new Map((sourceState.projects || []).map((item) => [item.id, item])),
+    tasks: new Map((sourceState.tasks || []).map((item) => [item.id, item])),
+  };
+}
+
+function compareCloudRecords(a, b) {
+  const timeDiff = getSortableTimestamp(b.createdAt || b.updatedAt) - getSortableTimestamp(a.createdAt || a.updatedAt);
+  if (timeDiff) return timeDiff;
+  return String(a.name || a.title || a.email || "").localeCompare(String(b.name || b.title || b.email || ""), "zh-Hant");
+}
+
+function getSortableTimestamp(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.toDate === "function") return value.toDate().getTime();
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function isFirestoreTimestamp(value) {
+  return value && typeof value === "object" && (typeof value.toDate === "function" || typeof value.toMillis === "function");
+}
+
+function normalizeProfile(profile = {}) {
+  return {
+    uid: profile.uid || currentFirebaseUser?.uid || "",
+    email: normalizeEmail(profile.email || currentFirebaseUser?.email || ""),
+    name: (profile.name || "").trim(),
+    role: profile.role === "admin" ? "admin" : "user",
+    status: profile.status === "disabled" ? "disabled" : "active",
+    lastLoginAt: profile.lastLoginAt || "",
+  };
+}
+
+function updateAccountUi() {
+  const isAdmin = currentProfile?.role === "admin" && currentProfile?.status === "active";
+  els.accountName && (els.accountName.textContent = currentProfile?.name || currentProfile?.email || "使用者");
+  els.accountRole && (els.accountRole.textContent = isAdmin ? "管理員" : "一般使用者");
+  els.adminButton?.classList.toggle("hidden", !isAdmin);
+}
+
+function openProfileDialog(required = false) {
+  profileDialogRequired = required;
+  els.accountMenu?.classList.add("hidden");
+  if (els.profileName) els.profileName.value = currentProfile?.name || "";
+  els.profileDialogClose.hidden = required;
+  els.profileCancelButton.hidden = required;
+  els.profileDialog?.showModal();
+  els.profileName?.focus();
+}
+
+async function handleProfileSubmit(event) {
+  event.preventDefault();
+  const name = els.profileName.value.trim();
+  if (!name) return;
+
+  try {
+    const result = await callFunction("updateCurrentUserProfile", { name });
+    currentProfile = normalizeProfile(result.data?.profile || { ...currentProfile, name });
+    updateAccountUi();
+    profileDialogRequired = false;
+    els.profileDialog.close();
+    showToast("名稱已更新。");
+  } catch (error) {
+    console.error(error);
+    alert(`名稱儲存失敗：${getReadableError(error)}`);
+  }
+}
+
+function openAdminPage() {
+  if (currentProfile?.role !== "admin") return;
+  closeTodoPage();
+  closeGanttPage();
+  closeTodoDrawer();
+  els.adminPage.classList.remove("hidden");
+  els.adminPage.setAttribute("aria-hidden", "false");
+  startAdminListeners();
+}
+
+function closeAdminPage() {
+  if (!els.adminPage) return;
+  els.adminPage.classList.add("hidden");
+  els.adminPage.setAttribute("aria-hidden", "true");
+  cleanupAdminSubscriptions();
+}
+
+function startAdminListeners() {
+  cleanupAdminSubscriptions();
+
+  const userUnsubscribe = db.collection("users").onSnapshot((snapshot) => {
+    adminUsers = snapshot.docs.map((doc) => normalizeAdminUser({ uid: doc.id, ...doc.data() }));
+    renderAdminPage();
+  }, handleAdminReadError);
+
+  const allowedUnsubscribe = db.collection("allowedUsers").onSnapshot((snapshot) => {
+    adminAllowedUsers = snapshot.docs.map((doc) => normalizeAllowedUser({ emailKey: doc.id, ...doc.data() }));
+    renderAdminPage();
+  }, handleAdminReadError);
+
+  const auditUnsubscribe = db.collection("auditLogs").orderBy("createdAt", "desc").limit(100).onSnapshot((snapshot) => {
+    adminAuditLogs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderAuditLogs();
+  }, handleAdminReadError);
+
+  adminUnsubscribes = [userUnsubscribe, allowedUnsubscribe, auditUnsubscribe];
+}
+
+function cleanupAdminSubscriptions() {
+  adminUnsubscribes.forEach((unsubscribe) => unsubscribe());
+  adminUnsubscribes = [];
+}
+
+function handleAdminReadError(error) {
+  console.error(error);
+  showToast(`後台資料讀取失敗：${getReadableError(error)}`);
+}
+
+function normalizeAdminUser(user = {}) {
+  return {
+    uid: user.uid || "",
+    email: normalizeEmail(user.email),
+    name: (user.name || "").trim(),
+    role: user.role === "admin" ? "admin" : "user",
+    status: user.status === "disabled" ? "disabled" : "active",
+    lastLoginAt: user.lastLoginAt || "",
+    createdAt: user.createdAt || "",
+  };
+}
+
+function normalizeAllowedUser(user = {}) {
+  return {
+    emailKey: user.emailKey || "",
+    uid: user.uid || "",
+    email: normalizeEmail(user.email),
+    role: user.role === "admin" ? "admin" : "user",
+    status: user.status === "disabled" ? "disabled" : "active",
+    createdAt: user.createdAt || "",
+  };
+}
+
+function getAdminAccountRows() {
+  const rows = new Map();
+
+  adminAllowedUsers.forEach((allowedUser) => {
+    rows.set(allowedUser.email, {
+      ...allowedUser,
+      name: "",
+      lastLoginAt: "",
+      linked: Boolean(allowedUser.uid),
+    });
+  });
+
+  adminUsers.forEach((user) => {
+    const existing = rows.get(user.email) || {};
+    rows.set(user.email, {
+      ...existing,
+      ...user,
+      email: user.email || existing.email,
+      linked: true,
+    });
+  });
+
+  return [...rows.values()].sort((a, b) => a.email.localeCompare(b.email));
+}
+
+function renderAdminPage() {
+  if (!els.adminPage || els.adminPage.classList.contains("hidden")) return;
+  const rows = getAdminAccountRows();
+  const activeUsers = rows.filter((row) => row.status === "active").length;
+  const admins = rows.filter((row) => row.role === "admin" && row.status === "active").length;
+  const disabled = rows.filter((row) => row.status === "disabled").length;
+
+  els.adminMetrics.innerHTML = [
+    ["使用者", rows.length],
+    ["管理員", admins],
+    ["啟用帳號", activeUsers],
+    ["停用帳號", disabled],
+  ].map(([label, value]) => `
+    <article class="admin-metric">
+      <span>${label}</span>
+      <strong>${value}</strong>
+    </article>
+  `).join("");
+
+  renderAdminUsers(rows);
+  renderAuditLogs();
+}
+
+function renderAdminUsers(rows = getAdminAccountRows()) {
+  if (!els.adminUsersTable) return;
+  if (!rows.length) {
+    els.adminUsersTable.innerHTML = `<p class="empty-state">尚未建立使用者帳號。</p>`;
+    return;
+  }
+
+  els.adminUsersTable.innerHTML = `
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>名稱</th>
+          <th>狀態</th>
+          <th>角色</th>
+          <th>最後登入</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr>
+            <td>
+              <strong>${escapeHtml(row.email)}</strong>
+              <small>${row.linked ? "已連結 Google 帳號" : "等待首次登入"}</small>
+            </td>
+            <td>${escapeHtml(row.name || "尚未設定")}</td>
+            <td><span class="status-pill ${row.status === "disabled" ? "disabled" : ""}">${row.status === "disabled" ? "停用" : "啟用"}</span></td>
+            <td>
+              <select data-admin-role data-uid="${escapeHtml(row.uid || "")}" data-email="${escapeHtml(row.email)}">
+                <option value="user" ${row.role === "user" ? "selected" : ""}>一般使用者</option>
+                <option value="admin" ${row.role === "admin" ? "selected" : ""}>管理員</option>
+              </select>
+            </td>
+            <td>${formatDateTime(row.lastLoginAt)}</td>
+            <td>
+              <button class="secondary-button" type="button" data-toggle-user-status data-status="${row.status}" data-uid="${escapeHtml(row.uid || "")}" data-email="${escapeHtml(row.email)}">
+                ${row.status === "disabled" ? "啟用" : "停用"}
+              </button>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderAuditLogs() {
+  if (!els.auditLogTable) return;
+  const logs = adminAuditLogs.filter((log) => {
+    const query = adminFilters.query;
+    const action = getAuditCategory(log.action);
+    const queryText = `${log.actorEmail || ""} ${log.action || ""} ${log.collection || ""} ${log.targetEmail || ""} ${log.docId || ""}`.toLowerCase();
+    return (!query || queryText.includes(query)) && (adminFilters.action === "all" || adminFilters.action === action);
+  });
+
+  if (!logs.length) {
+    els.auditLogTable.innerHTML = `<p class="empty-state">尚無符合條件的操作紀錄。</p>`;
+    return;
+  }
+
+  els.auditLogTable.innerHTML = `
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>時間</th>
+          <th>操作者</th>
+          <th>動作</th>
+          <th>目標</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${logs.map((log) => `
+          <tr>
+            <td>${formatDateTime(log.createdAt)}</td>
+            <td>${escapeHtml(log.actorEmail || "system")}</td>
+            <td>${escapeHtml(getAuditActionLabel(log.action))}</td>
+            <td>${escapeHtml(log.targetEmail || log.collection || "")}${log.docId ? `<small>${escapeHtml(log.docId)}</small>` : ""}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+async function handleAdminUserCreate(event) {
+  event.preventDefault();
+  const email = normalizeEmail(els.adminUserEmail.value);
+  const role = els.adminUserRole.value === "admin" ? "admin" : "user";
+  if (!email) return;
+
+  try {
+    await callFunction("createAllowedUser", { email, role });
+    els.adminUserForm.reset();
+    showToast("使用者帳號已建立。");
+  } catch (error) {
+    console.error(error);
+    alert(`建立帳號失敗：${getReadableError(error)}`);
+  }
+}
+
+async function handleAdminTableChange(event) {
+  const control = event.target.closest("[data-admin-role]");
+  if (!control) return;
+
+  try {
+    await callFunction("setUserRole", {
+      uid: control.dataset.uid || "",
+      email: control.dataset.email,
+      role: control.value === "admin" ? "admin" : "user",
+    });
+    showToast("角色已更新。");
+  } catch (error) {
+    console.error(error);
+    alert(`角色更新失敗：${getReadableError(error)}`);
+    renderAdminUsers();
+  }
+}
+
+async function handleAdminTableClick(event) {
+  const button = event.target.closest("[data-toggle-user-status]");
+  if (!button) return;
+
+  const nextStatus = button.dataset.status === "disabled" ? "active" : "disabled";
+  try {
+    await callFunction("setUserStatus", {
+      uid: button.dataset.uid || "",
+      email: button.dataset.email,
+      status: nextStatus,
+    });
+    showToast(nextStatus === "active" ? "帳號已啟用。" : "帳號已停用。");
+  } catch (error) {
+    console.error(error);
+    alert(`狀態更新失敗：${getReadableError(error)}`);
+  }
+}
+
+function exportProjectDataJson() {
+  downloadTextFile(`project-desk-${todayString()}.json`, JSON.stringify(state, null, 2), "application/json");
+}
+
+function exportProjectDataCsv() {
+  const rows = [
+    ["type", "system", "project", "title", "status", "owner", "executionDate", "deadline"],
+    ...state.systems.map((system) => ["system", system.name, "", "", "", "", "", ""]),
+    ...state.projects.map((project) => [project.category || "project", getSystem(project.systemId)?.name || "", project.name, "", project.phase || "", "", project.plannedStart || "", project.plannedEnd || ""]),
+    ...state.tasks.map((task) => ["task", getSystem(task.systemId)?.name || "", getProject(task.projectId)?.name || "", task.title, task.status, task.owner, task.executionDate, task.deadline]),
+  ];
+  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+  downloadTextFile(`project-desk-${todayString()}.csv`, csv, "text/csv;charset=utf-8");
+}
+
+function csvCell(value) {
+  const text = String(value || "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function downloadTextFile(fileName, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function getAuditCategory(action = "") {
+  if (action === "login") return "login";
+  if (action.startsWith("account.") || action.startsWith("profile.")) return "admin";
+  return "data";
+}
+
+function getAuditActionLabel(action = "") {
+  return {
+    login: "登入",
+    "account.create": "建立帳號",
+    "account.role": "調整角色",
+    "account.status": "調整狀態",
+    "profile.update": "修改名稱",
+    "data.create": "新增資料",
+    "data.update": "更新資料",
+    "data.delete": "刪除資料",
+  }[action] || action || "資料異動";
+}
+
+function formatDateTime(value) {
+  if (!value) return "未紀錄";
+  const date = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(date.getTime())) return "未紀錄";
+  return new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function normalizeEmail(email = "") {
+  return String(email).trim().toLowerCase();
+}
+
+function getReadableError(error = {}) {
+  const code = error.code || "";
+  const message = error.message || "";
+  if (code.includes("permission-denied")) return "權限不足或帳號未被授權。";
+  if (code.includes("unauthenticated")) return "登入狀態已失效，請重新登入。";
+  if (code.includes("already-exists")) return "此帳號已存在。";
+  if (code.includes("invalid-argument")) return message || "輸入資料格式不正確。";
+  if (code.includes("failed-precondition")) return message || "目前狀態不允許這項操作。";
+  return message || "請稍後再試。";
 }
 
 function render() {
@@ -1274,6 +2145,7 @@ function render() {
   renderTodoDashboard();
   renderProjects();
   renderProjectTabs();
+  renderTagFilterBar();
   renderBoard();
   if (!els.todoPage.classList.contains("hidden")) {
     renderTodoPage();
@@ -1341,6 +2213,7 @@ function renderSystems() {
   els.systemList.innerHTML = buttons;
   els.systemList.querySelectorAll(".system-item").forEach((button) => {
     button.addEventListener("click", () => {
+      selectedTagFilter = "";
       selectedSystemId = button.dataset.systemId || null;
       selectedProjectId = "all";
       render();
@@ -1579,11 +2452,10 @@ function markTaskDone(taskId, completed = true) {
 
   state.tasks = state.tasks.map((item) => {
     if (item.id !== taskId) return item;
-    return {
+    return applyTaskStatusSideEffects({
       ...item,
       status: completed ? "done" : "not_started",
-      completedDate: completed ? todayString() : "",
-    };
+    }, item, completed ? todayString() : "");
   });
   saveState();
   if (completed && task) {
@@ -1630,6 +2502,7 @@ function openTodoPage(viewId = "today", focusSection = "") {
   els.ganttPage.setAttribute("aria-hidden", "true");
   activeTodoView = viewId;
   todoFocusSection = focusSection;
+  persistViewPreferences();
   els.todoPage.classList.remove("hidden");
   els.todoPage.setAttribute("aria-hidden", "false");
   resetTodoAddForm(true);
@@ -1651,6 +2524,7 @@ function openGanttPage() {
 
   els.ganttSearchInput.value = els.searchInput.value;
   els.ganttScaleSelect.value = ganttScale;
+  ganttProjectFilter = selectedProjectId !== "all" ? selectedProjectId : "all";
   els.ganttPage.classList.remove("hidden");
   els.ganttPage.setAttribute("aria-hidden", "false");
   renderGanttPage();
@@ -1713,10 +2587,12 @@ function renderTodoPage() {
 function renderGanttPage() {
   els.ganttSearchInput.value = els.searchInput.value;
   els.ganttScaleSelect.value = ganttScale;
+  syncGanttProjectFilterOptions();
 
   const groups = getGanttGroups();
   const timeline = buildGanttTimeline(groups);
-  els.ganttRangeLabel.textContent = `${formatRange(timeline.startString, timeline.endString)}・${ganttScale === "week" ? "以日檢視" : "以週檢視"}`;
+  const scaleLabel = ganttScale === "week" ? "以日檢視" : ganttScale === "month" ? "以週檢視" : "以月檢視";
+  els.ganttRangeLabel.textContent = `${formatRange(timeline.startString, timeline.endString)}・${scaleLabel}`;
 
   if (!groups.length) {
     els.ganttChart.innerHTML = `<p class="empty-state">目前沒有符合條件的系統、專案或任務。</p>`;
@@ -1735,8 +2611,31 @@ function renderGanttPage() {
   renderTodoDrawer();
 }
 
+function syncGanttProjectFilterOptions() {
+  const projects = getGanttFilterProjects();
+  if (ganttProjectFilter !== "all" && !projects.some((project) => project.id === ganttProjectFilter)) {
+    ganttProjectFilter = "all";
+  }
+
+  els.ganttProjectFilter.innerHTML = [
+    `<option value="all">全部專案</option>`,
+    ...projects.map((project) => `<option value="${project.id}">${escapeHtml(project.name)}</option>`),
+  ].join("");
+  els.ganttProjectFilter.value = ganttProjectFilter;
+}
+
+function getGanttFilterProjects() {
+  if (selectedScopeIsGeneral()) return [];
+  const phase = els.phaseFilter.value;
+  return state.projects.filter((project) => {
+    const matchSystem = selectedSystemId ? project.systemId === selectedSystemId : true;
+    const matchPhase = project.category === "general" || phase === "all" || project.phase === phase;
+    return matchSystem && matchPhase;
+  });
+}
+
 function getGanttGroups() {
-  const visibleTasks = getVisibleTasks();
+  const visibleTasks = getVisibleTasks({ projectId: ganttProjectFilter });
   const projects = getGanttScopedProjects(visibleTasks);
   const groups = [];
 
@@ -1808,8 +2707,8 @@ function getGanttScopedProjects(visibleTasks) {
   return state.projects.filter((project) => {
     const system = getSystem(project.systemId);
     const matchSystem = selectedSystemId ? project.systemId === selectedSystemId : true;
-    const matchProject = selectedProjectId === "all" || project.id === selectedProjectId;
-    const matchPhase = phase === "all" || project.phase === phase;
+    const matchProject = ganttProjectFilter === "all" || project.id === ganttProjectFilter;
+    const matchPhase = project.category === "general" || phase === "all" || project.phase === phase;
     const matchQuery = !query || projectMatchesSearch(project, system, query) || visibleTaskProjectIds.has(project.id);
     return matchSystem && matchProject && matchPhase && matchQuery;
   });
@@ -1907,8 +2806,11 @@ function renderGanttProject(item, timeline) {
   const range = getGanttProjectRange(project, tasks);
   const phaseRows = getGanttProjectPhases(project).map((phaseItem) => renderGanttPhaseRow(project, phaseItem, timeline)).join("");
   const taskRows = renderGanttTaskBlock("專案任務", tasks, timeline, "project-task", `project-${project.id}-tasks`);
-  const closed = project.closed || project.phase === "closed";
+  const closed = project.category !== "general" && (project.closed || project.phase === "closed");
   const rangeLabel = range ? formatRange(range.start, range.end) : "尚未設定時程";
+  const meta = project.category === "general"
+    ? `${getProjectCategoryLabel(project.category)}・${progress.label}・${rangeLabel}`
+    : `${getPhaseLabel(project.phase)}・${progress.label}・${rangeLabel}`;
 
   return `
     ${renderGanttRow({
@@ -1918,7 +2820,7 @@ function renderGanttProject(item, timeline) {
         type: "專案",
         typeClass: "project",
         name: project.name,
-        meta: `${getPhaseLabel(project.phase)}・${progress.label}・${rangeLabel}`,
+        meta,
         actionAttributes: `data-gantt-project="${project.id}"`,
         toggle: {
           id: project.id,
@@ -2079,6 +2981,7 @@ function attachGanttHandlers() {
     button.addEventListener("click", () => {
       const id = button.dataset.ganttToggleSystem;
       ganttCollapsed.systems[id] = !ganttCollapsed.systems[id];
+      persistViewPreferences();
       renderGanttPage();
     });
   });
@@ -2087,6 +2990,7 @@ function attachGanttHandlers() {
     button.addEventListener("click", () => {
       const id = button.dataset.ganttToggleProject;
       ganttCollapsed.projects[id] = !ganttCollapsed.projects[id];
+      persistViewPreferences();
       renderGanttPage();
     });
   });
@@ -2095,6 +2999,7 @@ function attachGanttHandlers() {
     button.addEventListener("click", () => {
       const id = button.dataset.ganttToggleTaskGroup;
       ganttCollapsed.taskGroups[id] = !ganttCollapsed.taskGroups[id];
+      persistViewPreferences();
       renderGanttPage();
     });
   });
@@ -2116,20 +3021,26 @@ function buildGanttTimeline(groups) {
   const today = todayString();
   const firstDate = dates[0] || today;
   const lastDate = dates[dates.length - 1] || getDateOffset(30);
-  const paddedStart = addDaysToDateString(firstDate, ganttScale === "week" ? -3 : -14);
-  const paddedEnd = addDaysToDateString(lastDate, ganttScale === "week" ? 5 : 21);
+  const paddedStart = addDaysToDateString(firstDate, ganttScale === "week" ? -3 : ganttScale === "month" ? -14 : -45);
+  const paddedEnd = addDaysToDateString(lastDate, ganttScale === "week" ? 5 : ganttScale === "month" ? 21 : 90);
+  const parsedStart = parseDateString(paddedStart);
+  const parsedEnd = parseDateString(paddedEnd);
   const startDate = ganttScale === "week"
-    ? getStartOfWeek(parseDateString(paddedStart))
-    : getStartOfMonth(parseDateString(paddedStart));
+    ? getStartOfWeek(parsedStart)
+    : ganttScale === "month"
+      ? getStartOfMonth(parsedStart)
+      : getStartOfYear(parsedStart);
   const endDate = ganttScale === "week"
-    ? getEndOfWeek(parseDateString(paddedEnd))
-    : getEndOfMonth(parseDateString(paddedEnd));
+    ? getEndOfWeek(parsedEnd)
+    : ganttScale === "month"
+      ? getEndOfMonth(parsedEnd)
+      : getEndOfYear(parsedEnd);
   const units = buildGanttUnits(startDate, endDate, ganttScale);
 
   return {
     startString: toDateInputValue(startDate),
     endString: toDateInputValue(endDate),
-    unitWidth: ganttScale === "week" ? 48 : 86,
+    unitWidth: ganttScale === "week" ? 48 : ganttScale === "month" ? 86 : 112,
     units,
   };
 }
@@ -2141,7 +3052,11 @@ function buildGanttUnits(startDate, endDate, scale) {
 
   while (cursor <= endDate) {
     const unitStart = new Date(cursor);
-    const unitEnd = scale === "week" ? new Date(cursor) : addDaysToDate(cursor, 6);
+    const unitEnd = scale === "week"
+      ? new Date(cursor)
+      : scale === "month"
+        ? addDaysToDate(cursor, 6)
+        : getEndOfMonth(cursor);
     if (unitEnd > endDate) unitEnd.setTime(endDate.getTime());
     const startString = toDateInputValue(unitStart);
     const endString = toDateInputValue(unitEnd);
@@ -2149,12 +3064,20 @@ function buildGanttUnits(startDate, endDate, scale) {
     units.push({
       startString,
       endString,
-      label: scale === "week" ? formatGanttShortDate(startString) : formatGanttShortDate(startString),
-      subLabel: scale === "week" ? formatGanttWeekday(startString) : `至 ${formatGanttShortDate(endString)}`,
+      label: scale === "year" ? formatGanttMonthLabel(startString) : formatGanttShortDate(startString),
+      subLabel: scale === "week"
+        ? formatGanttWeekday(startString)
+        : scale === "month"
+          ? `至 ${formatGanttShortDate(endString)}`
+          : "月",
       isToday: today >= startString && today <= endString,
     });
 
-    cursor = scale === "week" ? addDaysToDate(cursor, 1) : addDaysToDate(cursor, 7);
+    cursor = scale === "week"
+      ? addDaysToDate(cursor, 1)
+      : scale === "month"
+        ? addDaysToDate(cursor, 7)
+        : addMonthsToDate(cursor, 1);
   }
 
   return units;
@@ -2197,12 +3120,14 @@ function getGanttGroupRange(group) {
 }
 
 function getGanttProjectRange(project, tasks = []) {
+  if (project.category === "general") return getGanttTasksRange(tasks);
   const plannedRange = getProjectScheduleRange(project.plannedStart, project.plannedEnd, project.phaseSchedules || {});
   if (plannedRange.start || plannedRange.end) return normalizeGanttRange(plannedRange.start, plannedRange.end);
   return getGanttTasksRange(tasks);
 }
 
 function getGanttProjectPhases(project) {
+  if (project.category === "general") return [];
   const schedules = project.phaseSchedules || createPhaseSchedules();
   return phases
     .map((phase) => {
@@ -2277,6 +3202,10 @@ function addDaysToDateString(dateString, days) {
   return toDateInputValue(addDaysToDate(parseDateString(dateString), days));
 }
 
+function addMonthsToDate(date, months) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
 function getStartOfWeek(date) {
   const start = new Date(date);
   const day = start.getDay();
@@ -2297,6 +3226,14 @@ function getEndOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
+function getStartOfYear(date) {
+  return new Date(date.getFullYear(), 0, 1);
+}
+
+function getEndOfYear(date) {
+  return new Date(date.getFullYear(), 11, 31);
+}
+
 function formatGanttShortDate(dateString) {
   const date = parseDateString(dateString);
   return `${date.getMonth() + 1}/${date.getDate()}`;
@@ -2304,6 +3241,11 @@ function formatGanttShortDate(dateString) {
 
 function formatGanttWeekday(dateString) {
   return new Intl.DateTimeFormat("zh-TW", { weekday: "short" }).format(parseDateString(dateString));
+}
+
+function formatGanttMonthLabel(dateString) {
+  const date = parseDateString(dateString);
+  return `${date.getFullYear()}/${date.getMonth() + 1}`;
 }
 
 function renderTodoSystemTabs(activeBucketId, query) {
@@ -2347,6 +3289,7 @@ function renderTodoSystemTabs(activeBucketId, query) {
     button.addEventListener("click", () => {
       const nextSystemId = button.dataset.todoSystemId || null;
       if (selectedSystemId === nextSystemId) return;
+      selectedTagFilter = "";
       selectedSystemId = nextSystemId;
       selectedProjectId = "all";
       closeTodoDrawer();
@@ -2467,6 +3410,7 @@ function renderTodoTaskRow(task) {
   const shouldMarkOverdue = activeTodoView === "incomplete" && !completed;
   const executionOverdueClass = shouldMarkOverdue && task.executionDate && task.executionDate < today ? "todo-overdue-date" : "";
   const deadlineOverdueClass = shouldMarkOverdue && task.deadline && task.deadline < today ? "todo-overdue-date" : "";
+  const completedMeta = completed ? `・已完成 ${formatDate(task.completedDate)}` : "";
 
   return `
     <article class="todo-task-row ${completed ? "completed" : ""}" data-task-row="${task.id}">
@@ -2476,7 +3420,7 @@ function renderTodoTaskRow(task) {
           <input class="todo-title-input" data-inline-title="${task.id}" value="${escapeHtml(task.title)}" aria-label="任務名稱" />
           <button class="todo-open-edit" type="button" data-open-edit-drawer="${task.id}" title="編輯任務">✎</button>
         </div>
-        <span class="todo-subtitle">${escapeHtml(getTaskContextLabel(task))}</span>
+        <span class="todo-subtitle">${escapeHtml(getTaskContextLabel(task))}${completedMeta}</span>
       </div>
       <input class="todo-inline-date ${executionOverdueClass}" data-inline-execution="${task.id}" type="date" min="${task.rangeStart}" max="${task.rangeEnd}" value="${task.executionDate}" aria-label="執行日期" />
       <input class="todo-inline-date ${deadlineOverdueClass}" data-inline-deadline="${task.id}" type="date" min="${task.rangeEnd}" value="${task.deadline}" aria-label="最後期限" />
@@ -2497,6 +3441,7 @@ function attachTodoPageHandlers() {
     button.addEventListener("click", () => {
       const sectionKey = button.dataset.toggleSection;
       todoSectionCollapsed[sectionKey] = !todoSectionCollapsed[sectionKey];
+      persistViewPreferences();
       renderTodoPage();
     });
   });
@@ -2549,7 +3494,11 @@ function attachTodoPageHandlers() {
 }
 
 function getTasksForTodoView(viewId, systemId = selectedSystemId) {
-  const scopedTasks = state.tasks.filter((task) => taskMatchesSystemScope(task, systemId));
+  const normalizedTagFilter = selectedTagFilter.trim().toLowerCase();
+  const scopedTasks = state.tasks.filter((task) => {
+    const matchTag = !normalizedTagFilter || (task.tags || []).some((tag) => tag.toLowerCase() === normalizedTagFilter);
+    return taskMatchesSystemScope(task, systemId) && matchTag;
+  });
   const today = todayString();
   const tomorrow = getDateOffset(1);
   const thisWeek = getWeekRange(0);
@@ -2595,6 +3544,8 @@ function taskMatchesTodoQuery(task, query) {
     task.title,
     task.description,
     task.owner,
+    (task.stakeholders || []).join(" "),
+    task.completedDate,
     getStatusLabel(task.status),
     getPriorityLabel(task.priority),
     getTaskScopeLabel(getTaskScope(task)),
@@ -2609,6 +3560,9 @@ function taskMatchesTodoQuery(task, query) {
     system?.name,
     project?.name,
     project?.description,
+    getProjectCategoryLabel(project?.category),
+    project?.requirementRequest,
+    project?.phaseChangedAt,
     (project?.relatedEmails || []).join(" "),
     (project?.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
   ]
@@ -2674,20 +3628,59 @@ function renderPriorityOptions(selectedPriority = "medium") {
     .join("");
 }
 
+function applyTaskStatusSideEffects(nextTask, previousTask = null, requestedCompletedDate = "") {
+  const today = todayString();
+  const previous = previousTask || nextTask;
+  const nextStatus = normalizeTaskStatus(nextTask.status);
+  const updatedTask = {
+    ...nextTask,
+    status: nextStatus,
+  };
+
+  updatedTask.completedDate = nextStatus === "done"
+    ? requestedCompletedDate || (previous.status === "done" ? previous.completedDate || today : today)
+    : "";
+
+  if (previousTask && nextStatus === "doing" && previous.status !== "doing" && previous.rangeStart && previous.rangeStart > today) {
+    const rangeDays = Math.max(0, getDateDiffFromStrings(previous.rangeStart, previous.rangeEnd || previous.rangeStart));
+    const deadlineDays = previous.deadline
+      ? Math.max(0, getDateDiffFromStrings(previous.rangeEnd || previous.rangeStart, previous.deadline))
+      : 0;
+    updatedTask.rangeStart = today;
+    updatedTask.rangeEnd = addDaysToDateString(today, rangeDays);
+    updatedTask.executionDate = today;
+    updatedTask.deadline = addDaysToDateString(updatedTask.rangeEnd, deadlineDays);
+  }
+
+  return updatedTask;
+}
+
+function getDateDiffFromStrings(start, end) {
+  return getDayDiff(parseDateString(start), parseDateString(end));
+}
+
+function syncTaskCompletedField(fields) {
+  const isDone = normalizeTaskStatus(fields.status.value) === "done";
+  fields.completedDateField?.classList.toggle("hidden", !isDone);
+  if (fields.completedDate) {
+    fields.completedDate.required = isDone;
+    if (isDone && !fields.completedDate.value) fields.completedDate.value = todayString();
+    if (!isDone) fields.completedDate.value = "";
+  }
+}
+
 function updateInlineTask(taskId, patch) {
   state.tasks = state.tasks.map((task) => {
     if (task.id !== taskId) return task;
 
     const nextStatus = patch.status ? normalizeTaskStatus(patch.status) : task.status;
-    const wasDone = task.status === "done";
-    const completedDate = nextStatus === "done" ? (wasDone ? task.completedDate || todayString() : todayString()) : "";
-
-    return {
+    const nextTask = {
       ...task,
       ...patch,
       status: nextStatus,
-      completedDate,
     };
+
+    return applyTaskStatusSideEffects(nextTask, task, patch.completedDate);
   });
 
   saveState();
@@ -2859,18 +3852,28 @@ function renderTodoDrawer() {
 
   const drawerFields = getDrawerDateFields(form);
   const updateDrawerDates = (autoCorrect = true) => updateTaskDateConstraints(drawerFields, autoCorrect);
+  const syncDrawerCompletedDate = () => {
+    const isDone = normalizeTaskStatus(form.elements.status.value) === "done";
+    const field = form.querySelector("[data-drawer-completed-date-field]");
+    field?.classList.toggle("hidden", !isDone);
+    form.elements.completedDate.required = isDone;
+    if (isDone && !form.elements.completedDate.value) form.elements.completedDate.value = todayString();
+    if (!isDone) form.elements.completedDate.value = "";
+  };
 
   form.elements.scope.addEventListener("change", () => syncDrawerScopeFields(form));
   form.elements.systemId.addEventListener("change", () => {
     form.elements.projectId.innerHTML = renderProjectOptionsForSystem(form.elements.systemId.value, "");
     syncDrawerScopeFields(form, false);
   });
+  form.elements.status.addEventListener("change", syncDrawerCompletedDate);
   drawerFields.rangeStart.addEventListener("change", () => updateDrawerDates(true));
   drawerFields.rangeEnd.addEventListener("change", () => updateDrawerDates(true));
   drawerFields.executionDate.addEventListener("change", () => updateDrawerDates(false));
   drawerFields.deadline.addEventListener("change", () => updateDrawerDates(false));
   form.addEventListener("submit", handleDrawerTaskSubmit);
   syncDrawerScopeFields(form, false);
+  syncDrawerCompletedDate();
   updateDrawerDates(false);
 }
 
@@ -2884,6 +3887,8 @@ function renderTodoDrawerView(task) {
     ? `<ul>${task.relatedLinks.map((link) => `<li><a href="${escapeHtml(link.url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(link.title || link.url)}</a></li>`).join("")}</ul>`
     : `<strong>無</strong>`;
   const stepProgress = getTaskStepProgress(task);
+  const tagList = task.tags?.length ? `<div class="tags">${renderTagButtons(task.tags)}</div>` : `<strong>無</strong>`;
+  const stakeholders = task.stakeholders?.length ? task.stakeholders.join(", ") : "無";
 
   return `
     <div class="drawer-header">
@@ -2930,8 +3935,12 @@ function renderTodoDrawerView(task) {
       <strong>${task.completedDate ? formatDate(task.completedDate) : "未完成"}</strong>
     </section>
     <section class="drawer-section">
-      <span>負責人 / 標籤</span>
-      <strong>${escapeHtml(task.owner || "未指定")} / ${escapeHtml(task.tags?.join(", ") || "無")}</strong>
+      <span>負責人</span>
+      <strong>${escapeHtml(task.owner || "未指定")}</strong>
+      <span>關係人</span>
+      <strong>${escapeHtml(stakeholders)}</strong>
+      <span>標籤</span>
+      ${tagList}
     </section>
     <section class="drawer-section">
       <span>關聯信件</span>
@@ -3044,6 +4053,10 @@ function renderTodoDrawerEdit(task) {
           <input name="rangeEnd" type="date" required value="${task.rangeEnd}" />
         </label>
       </div>
+      <label data-drawer-completed-date-field class="${task.status === "done" ? "" : "hidden"}">
+        已完成日期
+        <input name="completedDate" type="date" value="${task.completedDate || ""}" />
+      </label>
       <div class="drawer-edit-grid">
         <label>
           負責人
@@ -3054,6 +4067,10 @@ function renderTodoDrawerEdit(task) {
           <input name="tags" value="${escapeHtml(task.tags?.join(", ") || "")}" placeholder="以逗號分隔" />
         </label>
       </div>
+      <label>
+        關係人
+        <input name="stakeholders" maxlength="120" value="${escapeHtml(task.stakeholders?.join(", ") || "")}" placeholder="以逗號分隔" />
+      </label>
       <label>
         關聯信件
         <textarea name="relatedEmails" rows="3" placeholder="一行一個信件標題">${escapeHtml((task.relatedEmails || []).join("\n"))}</textarea>
@@ -3273,11 +4290,9 @@ function handleDrawerTaskSubmit(event) {
     return;
   }
 
-  const completedDate = status === "done"
-    ? (existingTask.status === "done" ? existingTask.completedDate || todayString() : todayString())
-    : "";
+  const requestedCompletedDate = status === "done" ? form.elements.completedDate.value || todayString() : "";
 
-  const updatedTask = {
+  const updatedTask = applyTaskStatusSideEffects({
     ...existingTask,
     scope: scopeValues.scope,
     systemId: scopeValues.systemId,
@@ -3291,14 +4306,11 @@ function handleDrawerTaskSubmit(event) {
     rangeEnd,
     executionDate,
     deadline,
-    tags: form.elements.tags.value
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean),
+    tags: splitCommaList(form.elements.tags.value),
+    stakeholders: splitCommaList(form.elements.stakeholders.value),
     relatedEmails: parseEmailTextarea(form.elements.relatedEmails.value),
     relatedLinks: parseLinkTextarea(form.elements.relatedLinks.value),
-    completedDate,
-  };
+  }, existingTask, requestedCompletedDate);
 
   state.tasks = state.tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task));
   selectedSystemId = updatedTask.scope === "general" ? generalWorkScopeId : updatedTask.systemId;
@@ -3469,11 +4481,9 @@ function handleTodoQuickSubmit(event) {
     return;
   }
 
-  const completedDate = status === "done"
-    ? (existingTask?.status === "done" ? existingTask.completedDate || todayString() : todayString())
-    : "";
+  const requestedCompletedDate = status === "done" ? todoAddFields.completedDate.value || todayString() : "";
 
-  const task = {
+  const task = applyTaskStatusSideEffects({
     id: todoAddFields.mode.value === "existing" ? todoAddFields.existingTaskId.value : createId(),
     scope,
     systemId,
@@ -3487,19 +4497,16 @@ function handleTodoQuickSubmit(event) {
     rangeEnd,
     executionDate,
     deadline,
-    tags: todoAddFields.tags.value
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean),
+    tags: splitCommaList(todoAddFields.tags.value),
+    stakeholders: splitCommaList(todoAddFields.stakeholders.value),
     relatedEmails: collectEmailRows(todoAddFields.relatedEmails),
     relatedLinks: collectLinkRows(todoAddFields.relatedLinks),
-    completedDate,
     important: existingTask?.important || false,
     steps: existingTask?.steps || [],
     files: existingTask?.files || [],
     notes: existingTask?.notes || "",
     history: existingTask?.history || [],
-  };
+  }, existingTask, requestedCompletedDate);
 
   if (todoAddFields.mode.value === "existing" && existingTask) {
     state.tasks = state.tasks.map((item) => (item.id === existingTask.id ? task : item));
@@ -3534,9 +4541,12 @@ function resetTodoAddForm(collapse = true) {
   todoAddFields.rangeEnd.value = date;
   todoAddFields.executionDate.value = date;
   todoAddFields.deadline.value = date;
+  todoAddFields.completedDate.value = "";
+  todoAddFields.stakeholders.value = "";
   renderEmailRows(todoAddFields.relatedEmails, []);
   renderLinkRows(todoAddFields.relatedLinks, []);
   syncTaskScopeFields(todoAddFields, false);
+  syncTaskCompletedField(todoAddFields);
   updateTaskDateConstraints(todoAddFields);
   updateTodoAddMode();
 
@@ -3608,9 +4618,12 @@ function fillTodoAddFromExistingTask() {
   todoAddFields.rangeEnd.value = task.rangeEnd || task.endDate || todoAddFields.rangeStart.value;
   todoAddFields.executionDate.value = task.executionDate || task.startDate || todoAddFields.rangeStart.value;
   todoAddFields.deadline.value = task.deadline || todoAddFields.rangeEnd.value;
+  todoAddFields.completedDate.value = task.completedDate || "";
   todoAddFields.tags.value = Array.isArray(task.tags) ? task.tags.join(", ") : "";
+  todoAddFields.stakeholders.value = Array.isArray(task.stakeholders) ? task.stakeholders.join(", ") : "";
   renderEmailRows(todoAddFields.relatedEmails, task.relatedEmails || []);
   renderLinkRows(todoAddFields.relatedLinks, task.relatedLinks || []);
+  syncTaskCompletedField(todoAddFields);
   updateTaskDateConstraints(todoAddFields);
 }
 
@@ -3701,6 +4714,7 @@ function renderProjects() {
   els.projectList.querySelectorAll("[data-project-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       const project = getProject(button.dataset.projectFilter);
+      selectedTagFilter = "";
       selectedSystemId = project.systemId;
       selectedProjectId = project.id;
       render();
@@ -3723,6 +4737,7 @@ function renderProjects() {
     select.addEventListener("change", () => {
       const project = getProject(select.dataset.projectPhase);
       project.phase = select.value;
+      project.phaseChangedAt = todayString();
       project.closed = select.value === "closed";
       project.closedAt = project.closed ? todayString() : "";
       project.phaseSchedules = createPhaseSchedules(project.phaseSchedules);
@@ -3741,50 +4756,77 @@ function renderProjects() {
 
 function renderProjectCard(project) {
   const system = getSystem(project.systemId);
+  const isDevelopmentProject = project.category !== "general";
   const actualRange = getProjectActualRange(project.id);
-  const plannedRange = getProjectPlannedRange(project);
+  const plannedRange = isDevelopmentProject ? getProjectPlannedRange(project) : "";
   const currentPhaseSchedule = project.phaseSchedules?.[project.phase] || {};
   const taskCount = state.tasks.filter((task) => task.projectId === project.id).length;
   const relatedSummary = getProjectRelatedSummary(project);
-  const closed = project.closed || project.phase === "closed";
-
-  return `
-    <article class="project-card ${closed ? "closed" : ""}">
-      <div class="project-card-header">
-        <div>
-          <h3>${escapeHtml(project.name)}</h3>
-          <div class="project-system">${escapeHtml(system?.name || "未指定系統")}</div>
-        </div>
-        <span class="status-badge ${closed ? "closed" : ""}">${closed ? "已結案" : "進行中"}</span>
-      </div>
-
-      <p class="project-description">${escapeHtml(project.description || "沒有描述")}</p>
-
+  const closed = isDevelopmentProject && (project.closed || project.phase === "closed");
+  const delayed = isProjectDelayed(project);
+  const requirement = isDevelopmentProject && project.requirementRequest
+    ? `<div><strong>資訊需求單</strong> ${escapeHtml(project.requirementRequest)}</div>`
+    : "";
+  const phaseControl = isDevelopmentProject
+    ? `
       <select class="phase-select" data-project-phase="${project.id}" aria-label="專案階段">
         ${renderPhaseOptions(project.phase)}
       </select>
-
-      <div class="project-dates">
-        <div><strong>目前階段</strong> ${getPhaseLabel(project.phase)}・${formatRange(currentPhaseSchedule.start, currentPhaseSchedule.end)}</div>
-        <div><strong>專案時程</strong> ${plannedRange || "尚未設定"}</div>
-        <div><strong>實際</strong> ${actualRange || "尚無任務日期"}</div>
-        <div><strong>任務</strong> ${taskCount} 筆</div>
-      </div>
-
-      ${relatedSummary ? `<div class="related-summary">${relatedSummary}</div>` : ""}
-
+    `
+    : "";
+  const scheduleDetails = isDevelopmentProject
+    ? `
       <details class="phase-timeline-details">
         <summary>查看全部階段時程</summary>
         <div class="phase-timeline">
           ${renderProjectPhaseTimeline(project)}
         </div>
       </details>
+    `
+    : "";
+  const dateRows = isDevelopmentProject
+    ? `
+        <div><strong>目前階段</strong> ${getPhaseLabel(project.phase)}・${formatRange(currentPhaseSchedule.start, currentPhaseSchedule.end)}</div>
+        <div><strong>狀態日期</strong> ${formatDate(project.phaseChangedAt)}</div>
+        <div><strong>專案時程</strong> ${plannedRange || "尚未設定"}</div>
+        ${requirement}
+        <div><strong>實際</strong> ${actualRange || "尚無任務日期"}</div>
+        <div><strong>任務</strong> ${taskCount} 筆</div>
+      `
+    : `
+        <div><strong>分類</strong> ${getProjectCategoryLabel(project.category)}</div>
+        <div><strong>實際</strong> ${actualRange || "尚無任務日期"}</div>
+        <div><strong>任務</strong> ${taskCount} 筆</div>
+      `;
+
+  return `
+    <article class="project-card ${closed ? "closed" : ""}">
+      <div class="project-card-header">
+        <div>
+          <h3>${escapeHtml(project.name)}</h3>
+          <div class="project-system">${escapeHtml(system?.name || "未指定系統")}・${getProjectCategoryLabel(project.category)}</div>
+        </div>
+        <span class="status-badge ${closed ? "closed" : ""}">${isDevelopmentProject ? (closed ? "已結案" : "進行中") : "一般"}</span>
+      </div>
+
+      <p class="project-description">${escapeHtml(project.description || "沒有描述")}</p>
+
+      ${phaseControl}
+      ${delayed ? `<div class="delay-alert">delay 須調整時程或加強追蹤</div>` : ""}
+
+      <div class="project-dates">
+        ${dateRows}
+      </div>
+
+      ${relatedSummary ? `<div class="related-summary">${relatedSummary}</div>` : ""}
+
+      ${scheduleDetails}
 
       <div class="project-card-actions">
         <button class="chip-button" type="button" data-project-filter="${project.id}">查看任務</button>
         <button class="chip-button" type="button" data-project-add-task="${project.id}">新增任務</button>
         <button class="chip-button" type="button" data-project-edit="${project.id}">設定</button>
-        <button class="chip-button" type="button" data-project-close="${project.id}">${closed ? "重開" : "結案"}</button>
+        ${isDevelopmentProject ? `<button class="chip-button" type="button" data-project-close="${project.id}">${closed ? "重開" : "結案"}</button>` : ""}
       </div>
     </article>
   `;
@@ -3813,10 +4855,60 @@ function renderProjectTabs() {
 
   els.projectTabs.querySelectorAll("[data-project-tab]").forEach((button) => {
     button.addEventListener("click", () => {
+      selectedTagFilter = "";
       selectedProjectId = button.dataset.projectTab;
       render();
     });
   });
+}
+
+function renderTagFilterBar() {
+  if (!selectedTagFilter) {
+    els.tagFilterBar.classList.add("hidden");
+    els.tagFilterBar.innerHTML = "";
+    return;
+  }
+
+  els.tagFilterBar.classList.remove("hidden");
+  els.tagFilterBar.innerHTML = `
+    <span>標籤篩選：${escapeHtml(selectedTagFilter)}</span>
+    <button class="chip-button" type="button" data-clear-tag-filter>清除篩選</button>
+  `;
+}
+
+function handleTagFilterClick(event) {
+  const tagButton = event.target.closest("[data-tag-filter]");
+  if (tagButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    applyTagFilter(tagButton.dataset.tagFilter);
+    return;
+  }
+
+  if (event.target.closest("[data-clear-tag-filter]")) {
+    event.preventDefault();
+    selectedTagFilter = "";
+    render();
+  }
+}
+
+function applyTagFilter(tag) {
+  const normalizedTag = (tag || "").trim();
+  if (!normalizedTag) return;
+  selectedTagFilter = normalizedTag;
+  selectedSystemId = null;
+  selectedProjectId = "all";
+  els.phaseFilter.value = "all";
+  els.searchInput.value = "";
+  closeTodoDrawer();
+  render();
+}
+
+function renderTagButtons(tags = []) {
+  if (!tags.length) return "";
+  return tags
+    .map((tag) => `<button class="tag tag-button" type="button" data-tag-filter="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`)
+    .join("");
 }
 
 function renderBoard() {
@@ -3824,7 +4916,9 @@ function renderBoard() {
   const scopeProject = getProject(selectedProjectId);
   const scopeSystem = getSystem(selectedSystemId);
 
-  els.taskScopeLabel.textContent = selectedScopeIsGeneral()
+  els.taskScopeLabel.textContent = selectedTagFilter
+    ? `目前顯示標籤「${selectedTagFilter}」的全部任務。`
+    : selectedScopeIsGeneral()
     ? "目前顯示一般工作任務。"
     : scopeProject
       ? `目前顯示「${scopeProject.name}」的任務。`
@@ -3837,8 +4931,39 @@ function renderBoard() {
     .join("");
 
   els.board.querySelectorAll(".task-card").forEach((card) => {
-    card.addEventListener("click", () => {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button, a")) return;
       openTodoDrawer(card.dataset.taskId, "view");
+    });
+    card.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("button, a")) return;
+      event.preventDefault();
+      openTodoDrawer(card.dataset.taskId, "view");
+    });
+    card.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("text/plain", card.dataset.taskId);
+      event.dataTransfer.effectAllowed = "move";
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+    });
+  });
+
+  els.board.querySelectorAll("[data-task-drop-status]").forEach((list) => {
+    list.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      list.classList.add("drag-over");
+      event.dataTransfer.dropEffect = "move";
+    });
+    list.addEventListener("dragleave", () => {
+      list.classList.remove("drag-over");
+    });
+    list.addEventListener("drop", (event) => {
+      event.preventDefault();
+      list.classList.remove("drag-over");
+      updateTaskStatusFromBoard(event.dataTransfer.getData("text/plain"), list.dataset.taskDropStatus);
     });
   });
 }
@@ -3850,12 +4975,12 @@ function renderTaskColumn(column, tasks) {
     : `<p class="empty-state">目前沒有任務</p>`;
 
   return `
-    <section class="column">
+    <section class="column" data-column-status="${column.id}">
       <div class="column-header">
         <h2>${column.title}</h2>
         <span class="count">${columnTasks.length}</span>
       </div>
-      <div class="task-list">${cards}</div>
+      <div class="task-list" data-task-drop-status="${column.id}">${cards}</div>
     </section>
   `;
 }
@@ -3864,23 +4989,50 @@ function renderTaskCard(task) {
   const system = getSystem(task.systemId);
   const project = getProject(task.projectId);
   const priorityText = getPriorityLabel(task.priority);
-  const tags = task.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+  const tags = renderTagButtons(task.tags || []);
   const relatedSummary = getRelatedSummary(task);
+  const stakeholders = task.stakeholders?.length ? `<div class="task-stakeholders">關係人：${escapeHtml(task.stakeholders.join(", "))}</div>` : "";
+  const completedDate = task.status === "done" ? `<div class="task-completed-date">已完成日期：${formatDate(task.completedDate)}</div>` : "";
 
   return `
-    <button class="task-card priority-${task.priority}" type="button" data-task-id="${task.id}">
+    <article class="task-card priority-${task.priority}" data-task-id="${task.id}" draggable="true" tabindex="0">
       <div class="task-path">${escapeHtml(getTaskContextLabel(task))}</div>
       <h3>${escapeHtml(task.title)}</h3>
       <p>${escapeHtml(task.description || "沒有描述")}</p>
       <div class="task-date-line">${getTaskDateLine(task)}</div>
+      ${completedDate}
       ${relatedSummary ? `<div class="related-summary">${relatedSummary}</div>` : ""}
+      ${stakeholders}
       <div class="task-meta">
         <span>${escapeHtml(task.owner)}</span>
         <span>優先級：${priorityText}</span>
       </div>
       <div class="tags">${tags}</div>
-    </button>
+    </article>
   `;
+}
+
+function updateTaskStatusFromBoard(taskId, status) {
+  const task = getProjectTask(taskId);
+  if (!task) return;
+  const nextStatus = normalizeTaskStatus(status);
+  if (task.status === nextStatus) return;
+  if (nextStatus === "done" && !canCompleteTask(task)) {
+    alert("請先完成所有細項步驟，才能將任務狀態改為已完成。");
+    return;
+  }
+
+  state.tasks = state.tasks.map((item) => {
+    if (item.id !== taskId) return item;
+    return applyTaskStatusSideEffects({ ...item, status: nextStatus }, item, nextStatus === "done" ? todayString() : "");
+  });
+
+  saveState();
+  if (nextStatus === "done") {
+    playCompletionSound();
+    showToast(`已完成：${task.title}`);
+  }
+  render();
 }
 
 function getScopedProjects(applyPhaseFilter = false) {
@@ -3889,7 +5041,7 @@ function getScopedProjects(applyPhaseFilter = false) {
   return state.projects.filter((project) => {
     const system = getSystem(project.systemId);
     const matchSystem = selectedScopeIsGeneral() ? false : selectedSystemId ? project.systemId === selectedSystemId : true;
-    const matchPhase = !applyPhaseFilter || phase === "all" || project.phase === phase;
+    const matchPhase = !applyPhaseFilter || project.category === "general" || phase === "all" || project.phase === phase;
     const matchQuery = projectMatchesSearch(project, system, query);
     return matchSystem && matchPhase && matchQuery;
   });
@@ -3901,6 +5053,9 @@ function projectMatchesSearch(project, system, query) {
   const haystack = [
     project.name,
     project.description,
+    getProjectCategoryLabel(project.category),
+    project.requirementRequest,
+    project.phaseChangedAt,
     (project.relatedEmails || []).join(" "),
     (project.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
     system?.name,
@@ -3912,25 +5067,31 @@ function projectMatchesSearch(project, system, query) {
   return haystack.includes(query);
 }
 
-function getVisibleTasks() {
+function getVisibleTasks(options = {}) {
   const query = els.searchInput.value.trim().toLowerCase();
   const phase = els.phaseFilter.value;
+  const projectId = options.projectId ?? selectedProjectId;
+  const tagFilter = options.tag ?? selectedTagFilter;
+  const normalizedTagFilter = tagFilter.trim().toLowerCase();
   const phaseProjectIds = state.projects
-    .filter((project) => phase === "all" || project.phase === phase)
+    .filter((project) => project.category === "general" || phase === "all" || project.phase === phase)
     .map((project) => project.id);
 
   return state.tasks.filter((task) => {
     const system = getSystem(task.systemId);
     const project = getProject(task.projectId);
     const matchSystem = taskMatchesSystemScope(task);
-    const matchProject = taskMatchesProjectScope(task);
+    const matchProject = taskMatchesProjectScope(task, projectId);
     const matchPhase = taskMatchesPhaseScope(task, phaseProjectIds, phase);
+    const matchTag = !normalizedTagFilter || (task.tags || []).some((tag) => tag.toLowerCase() === normalizedTagFilter);
     const haystack = [
       task.title,
       task.description,
       task.owner,
+      (task.stakeholders || []).join(" "),
       task.priority,
       task.status,
+      task.completedDate,
       getTaskScopeLabel(getTaskScope(task)),
       getTaskContextLabel(task),
       task.tags.join(" "),
@@ -3943,6 +5104,9 @@ function getVisibleTasks() {
       system?.name,
       project?.name,
       project?.description,
+      getProjectCategoryLabel(project?.category),
+      project?.requirementRequest,
+      project?.phaseChangedAt,
       (project?.relatedEmails || []).join(" "),
       (project?.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
       getPhaseLabel(project?.phase),
@@ -3950,7 +5114,7 @@ function getVisibleTasks() {
       .join(" ")
       .toLowerCase();
 
-    return matchSystem && matchProject && matchPhase && haystack.includes(query);
+    return matchSystem && matchProject && matchPhase && matchTag && haystack.includes(query);
   });
 }
 
@@ -3988,15 +5152,19 @@ function openProjectDialog(project = null, defaults = {}) {
   els.projectForm.reset();
   projectFields.id.value = project?.id || "";
   projectFields.systemId.innerHTML = renderSystemOptions(defaultSystemId);
+  projectFields.category.value = normalizeProjectCategory(project?.category);
   projectFields.name.value = project?.name || "";
   projectFields.description.value = project?.description || "";
   projectFields.phase.value = project?.phase || "deal";
+  projectFields.phaseChangedAt.value = project?.phaseChangedAt || todayString();
+  projectFields.requirementRequest.value = project?.requirementRequest || "";
   projectFields.plannedStart.value = project?.plannedStart || "";
   projectFields.plannedEnd.value = project?.plannedEnd || "";
   projectFields.phaseSchedules.innerHTML = renderPhaseScheduleFields(project?.phaseSchedules || createPhaseSchedules());
   renderEmailRows(projectFields.relatedEmails, project?.relatedEmails || []);
   renderLinkRows(projectFields.relatedLinks, project?.relatedLinks || []);
   attachProjectScheduleHandlers();
+  syncProjectCategoryFields();
   updateProjectScheduleConstraints();
   els.projectDialog.showModal();
 }
@@ -4005,27 +5173,37 @@ function handleProjectSubmit(event) {
   event.preventDefault();
 
   updateProjectScheduleConstraints();
-  const phaseSchedules = collectPhaseSchedules();
-  const invalidPhase = phases.find((phase) => {
-    const schedule = phaseSchedules[phase.id];
-    return schedule.start && schedule.end && schedule.end < schedule.start;
-  });
+  const category = normalizeProjectCategory(projectFields.category.value);
+  const isDevelopmentProject = category === "development";
+  const phaseSchedules = isDevelopmentProject ? collectPhaseSchedules() : createPhaseSchedules();
+  const invalidPhase = isDevelopmentProject
+    ? phases.find((phase) => {
+        const schedule = phaseSchedules[phase.id];
+        return schedule.start && schedule.end && schedule.end < schedule.start;
+      })
+    : null;
 
   if (invalidPhase) {
     alert(`${invalidPhase.label} 階段的結束時間不能早於開始時間。`);
     return;
   }
 
-  const plannedRange = getProjectScheduleRange(projectFields.plannedStart.value, projectFields.plannedEnd.value, phaseSchedules);
+  const plannedRange = isDevelopmentProject
+    ? getProjectScheduleRange(projectFields.plannedStart.value, projectFields.plannedEnd.value, phaseSchedules)
+    : { start: "", end: "" };
   const previousProject = getProject(projectFields.id.value);
-  const isClosed = projectFields.phase.value === "closed";
+  const phase = isDevelopmentProject ? projectFields.phase.value : "deal";
+  const isClosed = isDevelopmentProject && phase === "closed";
 
   const project = {
     id: projectFields.id.value || createId(),
     systemId: projectFields.systemId.value,
+    category,
     name: projectFields.name.value.trim(),
     description: projectFields.description.value.trim(),
-    phase: projectFields.phase.value,
+    phase,
+    phaseChangedAt: isDevelopmentProject ? projectFields.phaseChangedAt.value || todayString() : "",
+    requirementRequest: isDevelopmentProject ? projectFields.requirementRequest.value.trim() : "",
     plannedStart: plannedRange.start,
     plannedEnd: plannedRange.end,
     phaseSchedules,
@@ -4049,6 +5227,16 @@ function handleProjectSubmit(event) {
   saveState();
   els.projectDialog.close();
   render();
+}
+
+function syncProjectCategoryFields() {
+  const isDevelopmentProject = normalizeProjectCategory(projectFields.category.value) === "development";
+  projectFields.phaseFields.classList.toggle("hidden", !isDevelopmentProject);
+  projectFields.requirementField.classList.toggle("hidden", !isDevelopmentProject);
+  projectFields.scheduleSection.classList.toggle("hidden", !isDevelopmentProject);
+  projectFields.phaseScheduleSection.classList.toggle("hidden", !isDevelopmentProject);
+  projectFields.phase.required = isDevelopmentProject;
+  projectFields.phaseChangedAt.required = isDevelopmentProject;
 }
 
 function attachProjectScheduleHandlers() {
@@ -4120,12 +5308,15 @@ function openTaskDialog(task = null, defaults = {}) {
   taskFields.rangeEnd.value = task?.rangeEnd || task?.endDate || taskFields.rangeStart.value;
   taskFields.executionDate.value = task?.executionDate || task?.startDate || taskFields.rangeStart.value;
   taskFields.deadline.value = task?.deadline || taskFields.rangeEnd.value;
+  taskFields.completedDate.value = task?.completedDate || "";
   taskFields.owner.value = task?.owner || "";
   taskFields.tags.value = task?.tags?.join(", ") || "";
+  taskFields.stakeholders.value = task?.stakeholders?.join(", ") || "";
   renderEmailRows(taskFields.relatedEmails, task?.relatedEmails || []);
   renderLinkRows(taskFields.relatedLinks, task?.relatedLinks || []);
 
   syncTaskScopeFields(taskFields, false);
+  syncTaskCompletedField(taskFields);
   updateTaskDateConstraints(taskFields);
   els.taskDialog.showModal();
 }
@@ -4154,11 +5345,9 @@ function handleTaskSubmit(event) {
     return;
   }
 
-  const completedDate = status === "done"
-    ? (existingTask?.status === "done" ? existingTask.completedDate || todayString() : todayString())
-    : "";
+  const requestedCompletedDate = status === "done" ? taskFields.completedDate.value || todayString() : "";
 
-  const task = {
+  const task = applyTaskStatusSideEffects({
     id: taskFields.id.value || createId(),
     scope,
     systemId,
@@ -4172,19 +5361,16 @@ function handleTaskSubmit(event) {
     rangeEnd,
     executionDate,
     deadline,
-    tags: taskFields.tags.value
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean),
+    tags: splitCommaList(taskFields.tags.value),
+    stakeholders: splitCommaList(taskFields.stakeholders.value),
     relatedEmails: collectEmailRows(taskFields.relatedEmails),
     relatedLinks: collectLinkRows(taskFields.relatedLinks),
-    completedDate,
     important: existingTask?.important || false,
     steps: existingTask?.steps || [],
     files: existingTask?.files || [],
     notes: existingTask?.notes || "",
     history: existingTask?.history || [],
-  };
+  }, existingTask, requestedCompletedDate);
 
   state.tasks = taskFields.id.value
     ? state.tasks.map((item) => (item.id === task.id ? task : item))
@@ -4210,10 +5396,12 @@ function handleTaskDelete() {
 function toggleProjectClosed(projectId) {
   const project = getProject(projectId);
   if (!project) return;
+  if (project.category === "general") return;
 
   const isClosed = project.closed || project.phase === "closed";
   project.closed = !isClosed;
   project.phase = isClosed ? "development" : "closed";
+  project.phaseChangedAt = todayString();
   project.closedAt = project.closed ? todayString() : "";
   project.phaseSchedules = createPhaseSchedules(project.phaseSchedules);
 
@@ -4463,6 +5651,10 @@ function getPhaseLabel(id) {
   return phases.find((phase) => phase.id === id)?.label || "";
 }
 
+function getProjectCategoryLabel(id) {
+  return projectCategories.find((category) => category.id === id)?.label || "開發";
+}
+
 function getStatusLabel(id) {
   return taskColumns.find((column) => column.id === id)?.title || "未開始";
 }
@@ -4525,6 +5717,12 @@ function getProjectScheduleRange(plannedStart = "", plannedEnd = "", schedules =
 function getProjectPlannedRange(project) {
   const range = getProjectScheduleRange(project.plannedStart, project.plannedEnd, project.phaseSchedules || {});
   return formatRange(range.start, range.end);
+}
+
+function isProjectDelayed(project) {
+  if (!project || project.category === "general" || project.closed || project.phase === "closed") return false;
+  const schedule = project.phaseSchedules?.[project.phase];
+  return Boolean(schedule?.end && schedule.end < todayString());
 }
 
 function clampDate(value, min, max) {
