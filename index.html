@@ -13,7 +13,10 @@
         <p class="eyebrow">Project Desk Cloud</p>
         <h1>專案管理系統</h1>
         <p id="authStatusText">請使用 Google 帳號登入。管理員需先在後台建立使用者帳號。</p>
-        <button class="primary-button" id="googleSignInButton" type="button">使用 Google 登入</button>
+        <div class="auth-actions">
+          <button class="primary-button" id="googleSignInButton" type="button">使用 Google 登入</button>
+          <button class="secondary-button" id="previewModeButton" type="button">預覽操作介面</button>
+        </div>
         <p class="auth-help" id="authHelpText">若尚未被授權，請聯絡系統管理員開通帳號。</p>
       </div>
     </section>
@@ -683,6 +686,10 @@
                 <option value="admin">帳號管理</option>
                 <option value="data">資料異動</option>
               </select>
+            </label>
+            <label class="field">
+              日期
+              <input id="auditDateFilter" type="date" />
             </label>
           </div>
           <div class="admin-table-wrap" id="auditLogTable"></div>

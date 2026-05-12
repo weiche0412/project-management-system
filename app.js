@@ -34,6 +34,7 @@ const taskScopeOptions = [
 ];
 
 const preferencesKey = "project-desk-preferences-v1";
+const previewStorageKey = "project-desk-preview-v1";
 let state = createEmptyState();
 let preferences = loadPreferences();
 let selectedSystemId = null;
@@ -70,6 +71,7 @@ let cloudFunctions = null;
 let currentFirebaseUser = null;
 let currentProfile = null;
 let cloudReady = false;
+let previewMode = false;
 let cloudSaveTimer = null;
 let cloudSaveChain = Promise.resolve();
 let profileDialogRequired = false;
@@ -86,11 +88,13 @@ let adminAuditLogs = [];
 let adminFilters = {
   query: "",
   action: "all",
+  date: "",
 };
 
 const els = {
   authScreen: document.querySelector("#authScreen"),
   googleSignInButton: document.querySelector("#googleSignInButton"),
+  previewModeButton: document.querySelector("#previewModeButton"),
   authStatusText: document.querySelector("#authStatusText"),
   authHelpText: document.querySelector("#authHelpText"),
   appShell: document.querySelector("#appShell") || document.querySelector(".app-shell"),
@@ -180,6 +184,7 @@ const els = {
   auditLogTable: document.querySelector("#auditLogTable"),
   auditSearchInput: document.querySelector("#auditSearchInput"),
   auditActionFilter: document.querySelector("#auditActionFilter"),
+  auditDateFilter: document.querySelector("#auditDateFilter"),
   exportJsonButton: document.querySelector("#exportJsonButton"),
   exportCsvButton: document.querySelector("#exportCsvButton"),
 };
@@ -261,6 +266,7 @@ const todoAddFields = {
 };
 
 els.googleSignInButton?.addEventListener("click", signInWithGoogle);
+els.previewModeButton?.addEventListener("click", startPreviewMode);
 els.signOutButton?.addEventListener("click", signOutCurrentUser);
 els.accountButton?.addEventListener("click", () => {
   els.accountMenu.classList.toggle("hidden");
@@ -282,6 +288,10 @@ els.auditSearchInput?.addEventListener("input", () => {
 });
 els.auditActionFilter?.addEventListener("change", () => {
   adminFilters.action = els.auditActionFilter.value;
+  renderAuditLogs();
+});
+els.auditDateFilter?.addEventListener("change", () => {
+  adminFilters.date = els.auditDateFilter.value;
   renderAuditLogs();
 });
 els.exportJsonButton?.addEventListener("click", exportProjectDataJson);
@@ -1193,6 +1203,21 @@ function loadState() {
   return createEmptyState();
 }
 
+function loadPreviewState() {
+  try {
+    const saved = localStorage.getItem(previewStorageKey);
+    if (!saved) return normalizeState(buildStarterState());
+
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed.systems) || !Array.isArray(parsed.projects) || !Array.isArray(parsed.tasks)) {
+      return normalizeState(buildStarterState());
+    }
+    return normalizeState(parsed);
+  } catch {
+    return normalizeState(buildStarterState());
+  }
+}
+
 function loadPreferences() {
   try {
     const saved = localStorage.getItem(preferencesKey);
@@ -1442,6 +1467,15 @@ function normalizeProject(project) {
 
 function saveState() {
   persistViewPreferences();
+  if (previewMode) {
+    try {
+      localStorage.setItem(previewStorageKey, JSON.stringify(state));
+    } catch (error) {
+      console.error(error);
+      showToast("預覽資料儲存失敗，請稍後再試。");
+    }
+    return;
+  }
   if (!cloudReady) return;
   window.clearTimeout(cloudSaveTimer);
   cloudSaveTimer = window.setTimeout(() => {
@@ -1462,6 +1496,7 @@ function initializeCloudApp() {
   auth.useDeviceLanguage?.();
   auth.onAuthStateChanged(async (user) => {
     const sessionVersion = ++authSessionVersion;
+    if (previewMode) return;
     cleanupCloudSubscriptions();
     closeAdminPage();
     cloudReady = false;
@@ -1544,6 +1579,52 @@ function showAppShell() {
   els.appShell?.classList.remove("hidden");
 }
 
+function startPreviewMode() {
+  authSessionVersion += 1;
+  cleanupCloudSubscriptions();
+  cleanupProfileListener();
+  closeAdminPage();
+  closeTodoPage();
+  closeGanttPage();
+  closeTodoDrawer();
+
+  previewMode = true;
+  cloudReady = false;
+  currentFirebaseUser = null;
+  currentProfile = {
+    uid: "preview",
+    email: "",
+    name: "預覽模式",
+    role: "user",
+    status: "active",
+  };
+  state = loadPreviewState();
+  remoteState = createEmptyState();
+  remoteLoaded = { systems: false, projects: false, tasks: false };
+  lastSyncedState = createEmptyStateMaps();
+
+  showAppShell();
+  updateAccountUi();
+  render();
+  showToast("已進入預覽模式，資料只會保存在這台瀏覽器。");
+}
+
+function exitPreviewMode() {
+  previewMode = false;
+  currentProfile = null;
+  currentFirebaseUser = auth?.currentUser || null;
+  state = createEmptyState();
+  remoteState = createEmptyState();
+  remoteLoaded = { systems: false, projects: false, tasks: false };
+  lastSyncedState = createEmptyStateMaps();
+  closeAdminPage();
+  closeTodoPage();
+  closeGanttPage();
+  closeTodoDrawer();
+  showAuthScreen("請使用 Google 帳號登入。管理員需先在後台建立使用者帳號。", "也可以使用預覽操作介面查看功能畫面。", false, !auth);
+  updateAccountUi();
+}
+
 async function signInWithGoogle() {
   if (!auth) return;
   setAuthStatus("正在開啟 Google 登入...", "請在 Google 視窗完成登入。", true);
@@ -1565,6 +1646,11 @@ async function signInWithGoogle() {
 }
 
 async function signOutCurrentUser() {
+  if (previewMode) {
+    exitPreviewMode();
+    return;
+  }
+
   closeAdminPage();
   cleanupCloudSubscriptions();
   cleanupProfileListener();
@@ -1775,7 +1861,8 @@ function normalizeProfile(profile = {}) {
 function updateAccountUi() {
   const isAdmin = currentProfile?.role === "admin" && currentProfile?.status === "active";
   els.accountName && (els.accountName.textContent = currentProfile?.name || currentProfile?.email || "使用者");
-  els.accountRole && (els.accountRole.textContent = isAdmin ? "管理員" : "一般使用者");
+  els.accountRole && (els.accountRole.textContent = previewMode ? "本機預覽" : isAdmin ? "管理員" : "一般使用者");
+  els.signOutButton && (els.signOutButton.textContent = previewMode ? "離開預覽" : "登出");
   els.adminButton?.classList.toggle("hidden", !isAdmin);
 }
 
@@ -1793,6 +1880,15 @@ async function handleProfileSubmit(event) {
   event.preventDefault();
   const name = els.profileName.value.trim();
   if (!name) return;
+
+  if (previewMode) {
+    currentProfile = { ...currentProfile, name };
+    updateAccountUi();
+    profileDialogRequired = false;
+    els.profileDialog.close();
+    showToast("預覽名稱已更新。");
+    return;
+  }
 
   try {
     const result = await callFunction("updateCurrentUserProfile", { name });
@@ -1979,7 +2075,10 @@ function renderAuditLogs() {
     const query = adminFilters.query;
     const action = getAuditCategory(log.action);
     const queryText = `${log.actorEmail || ""} ${log.action || ""} ${log.collection || ""} ${log.targetEmail || ""} ${log.docId || ""}`.toLowerCase();
-    return (!query || queryText.includes(query)) && (adminFilters.action === "all" || adminFilters.action === action);
+    const logDate = getIsoDateFromTimestamp(log.createdAt);
+    return (!query || queryText.includes(query))
+      && (adminFilters.action === "all" || adminFilters.action === action)
+      && (!adminFilters.date || logDate === adminFilters.date);
   });
 
   if (!logs.length) {
@@ -2123,6 +2222,17 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function getIsoDateFromTimestamp(value) {
+  if (!value) return "";
+  const date = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function normalizeEmail(email = "") {

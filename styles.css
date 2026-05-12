@@ -69,9 +69,15 @@ body {
   line-height: 1.6;
 }
 
-.auth-card .primary-button {
-  width: 100%;
+.auth-actions {
+  display: grid;
+  gap: 10px;
   margin-top: 12px;
+}
+
+.auth-card .primary-button,
+.auth-card .secondary-button {
+  width: 100%;
 }
 
 .auth-help {
@@ -1299,7 +1305,7 @@ h1 {
 .admin-user-form,
 .audit-filters {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) 180px auto;
+  grid-template-columns: minmax(240px, 1fr) 180px 180px;
   gap: 12px;
   align-items: end;
 }

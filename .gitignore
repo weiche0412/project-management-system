@@ -1,5 +1,7 @@
 node_modules/
 functions/node_modules/
+.npm-cache/
+.firebase-config/
 .firebaserc
 functions/.env
 firebase-debug.log
