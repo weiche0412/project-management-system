@@ -23,19 +23,31 @@ exports.bootstrapCurrentUser = onCall(async (request) => {
 
   const userRef = db.collection("users").doc(uid);
   const allowedRef = db.collection("allowedUsers").doc(emailKey(email));
+  const requestRef = db.collection("accountRequests").doc(uid);
   let profile;
+  let accountRequest;
+  let outcome = "active";
 
   await db.runTransaction(async (transaction) => {
-    const [userSnap, allowedSnap] = await Promise.all([
+    const [userSnap, allowedSnap, requestSnap] = await Promise.all([
       transaction.get(userRef),
       transaction.get(allowedRef),
+      transaction.get(requestRef),
     ]);
     const allowedUser = allowedSnap.exists ? allowedSnap.data() : null;
     const existingUser = userSnap.exists ? userSnap.data() : null;
+    const existingRequest = requestSnap.exists ? requestSnap.data() : null;
     const isConfiguredFirstAdmin = Boolean(firstAdminEmail && email === firstAdminEmail);
 
     if (!existingUser && !isConfiguredFirstAdmin && (!allowedUser || allowedUser.status !== "active")) {
-      throw new HttpsError("permission-denied", "此 Google 帳號尚未由管理員建立。");
+      accountRequest = normalizeAccountRequest({
+        uid,
+        email,
+        name: existingRequest?.name || name,
+        ...(existingRequest || {}),
+      });
+      outcome = existingRequest ? accountRequest.status : "needs_request";
+      return;
     }
 
     const role = existingUser?.role === "admin" || isConfiguredFirstAdmin || allowedUser?.role === "admin" ? "admin" : "user";
@@ -72,7 +84,24 @@ exports.bootstrapCurrentUser = onCall(async (request) => {
       createdAt: allowedUser?.createdAt || FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+
+    if (existingRequest && existingRequest.status !== "approved") {
+      transaction.set(requestRef, {
+        uid,
+        email,
+        name: profile.name,
+        role,
+        status: "approved",
+        updatedAt: FieldValue.serverTimestamp(),
+        reviewedAt: FieldValue.serverTimestamp(),
+        reviewedByEmail: "system",
+      }, { merge: true });
+    }
   });
+
+  if (outcome !== "active") {
+    return { outcome, request: sanitizeAccountRequestForClient(accountRequest) };
+  }
 
   await setClaims(uid, profile.role, profile.status);
   await writeAudit(request, {
@@ -80,7 +109,7 @@ exports.bootstrapCurrentUser = onCall(async (request) => {
     targetEmail: email,
   });
 
-  return { profile };
+  return { outcome: "active", profile: sanitizeProfileForClient(profile, auth.token) };
 });
 
 exports.updateCurrentUserProfile = onCall(async (request) => {
@@ -95,17 +124,14 @@ exports.updateCurrentUserProfile = onCall(async (request) => {
     name,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
-  await admin.auth().updateUser(auth.uid, { displayName: name }).catch((error) => logger.warn(error));
+  await admin.auth().updateUser(auth.uid, { displayName: name }).catch((error) => logSafeWarning("auth.updateUser", error));
   await writeAudit(request, {
     action: "profile.update",
     targetEmail: profile.email,
   });
 
   return {
-    profile: {
-      ...profile,
-      name,
-    },
+    profile: sanitizeProfileForClient({ ...profile, name }, auth.token),
   };
 });
 
@@ -121,10 +147,15 @@ exports.createAllowedUser = onCall(async (request) => {
   const authUser = await getAuthUserByEmail(email);
   const allowedRef = db.collection("allowedUsers").doc(emailKey(email));
   const userRef = authUser ? db.collection("users").doc(authUser.uid) : null;
+  const requestRef = authUser ? db.collection("accountRequests").doc(authUser.uid) : null;
 
   await db.runTransaction(async (transaction) => {
-    const allowedSnap = await transaction.get(allowedRef);
+    const [allowedSnap, requestSnap] = await Promise.all([
+      transaction.get(allowedRef),
+      requestRef ? transaction.get(requestRef) : Promise.resolve(null),
+    ]);
     const allowedUser = allowedSnap.exists ? allowedSnap.data() : {};
+    const accountRequest = requestSnap?.exists ? requestSnap.data() : {};
     let user = {};
 
     if (userRef) {
@@ -152,6 +183,19 @@ exports.createAllowedUser = onCall(async (request) => {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     }
+
+    if (requestRef && requestSnap?.exists) {
+      transaction.set(requestRef, {
+        uid: authUser.uid,
+        email,
+        name: user.name || accountRequest.name || authUser.displayName || "",
+        role,
+        status: "approved",
+        updatedAt: FieldValue.serverTimestamp(),
+        reviewedAt: FieldValue.serverTimestamp(),
+        reviewedByEmail: normalizeEmail(request.auth?.token?.email),
+      }, { merge: true });
+    }
   });
 
   if (authUser) await setClaims(authUser.uid, role, "active");
@@ -161,6 +205,195 @@ exports.createAllowedUser = onCall(async (request) => {
   });
 
   return { email, role, status: "active", uid: authUser?.uid || "" };
+});
+
+exports.submitAccountRequest = onCall(async (request) => {
+  const auth = requireAuth(request);
+  const uid = auth.uid;
+  const email = normalizeEmail(auth.token.email);
+  const name = sanitizeName(request.data?.name);
+
+  if (!email) {
+    throw new HttpsError("invalid-argument", "Google 帳號缺少 Email。");
+  }
+
+  if (!name) {
+    throw new HttpsError("invalid-argument", "請輸入顯示名稱。");
+  }
+
+  const userRef = db.collection("users").doc(uid);
+  const allowedRef = db.collection("allowedUsers").doc(emailKey(email));
+  const requestRef = db.collection("accountRequests").doc(uid);
+  let accountRequest;
+
+  await db.runTransaction(async (transaction) => {
+    const [userSnap, allowedSnap, requestSnap] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(allowedRef),
+      transaction.get(requestRef),
+    ]);
+    const existingUser = userSnap.exists ? userSnap.data() : null;
+    const allowedUser = allowedSnap.exists ? allowedSnap.data() : null;
+
+    if (existingUser?.status === "active" || allowedUser?.status === "active") {
+      throw new HttpsError("failed-precondition", "此帳號已可登入，請重新檢查登入狀態。");
+    }
+
+    const existingRequest = requestSnap.exists ? requestSnap.data() : {};
+    accountRequest = normalizeAccountRequest({
+      ...existingRequest,
+      uid,
+      email,
+      name,
+      role: existingRequest.role || "user",
+      status: "pending",
+      reviewedAt: "",
+      reviewedByEmail: "",
+    });
+
+    transaction.set(requestRef, {
+      uid,
+      email,
+      name,
+      role: accountRequest.role,
+      status: "pending",
+      requestedAt: existingRequest.requestedAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      reviewedAt: FieldValue.delete(),
+      reviewedByEmail: FieldValue.delete(),
+    }, { merge: true });
+  });
+
+  await writeAudit(request, {
+    action: "account.request.submit",
+    targetEmail: email,
+  });
+
+  return { outcome: "pending", request: sanitizeAccountRequestForClient(accountRequest) };
+});
+
+exports.approveAccountRequest = onCall(async (request) => {
+  const adminProfile = await requireAdmin(request);
+  const uid = String(request.data?.uid || "").trim();
+  const role = normalizeRole(request.data?.role);
+
+  if (!uid) {
+    throw new HttpsError("invalid-argument", "找不到要審核的申請。");
+  }
+
+  const requestRef = db.collection("accountRequests").doc(uid);
+  let approvedRequest;
+
+  await db.runTransaction(async (transaction) => {
+    const requestSnap = await transaction.get(requestRef);
+    if (!requestSnap.exists) {
+      throw new HttpsError("not-found", "找不到帳號申請。");
+    }
+
+    const accountRequest = normalizeAccountRequest({ uid, ...requestSnap.data() });
+    if (!accountRequest.email) {
+      throw new HttpsError("failed-precondition", "帳號申請缺少 Email。");
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    const allowedRef = db.collection("allowedUsers").doc(emailKey(accountRequest.email));
+    const [userSnap, allowedSnap] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(allowedRef),
+    ]);
+    const user = userSnap.exists ? userSnap.data() : {};
+    const allowedUser = allowedSnap.exists ? allowedSnap.data() : {};
+    const name = accountRequest.name || sanitizeName(user.name || "");
+
+    approvedRequest = {
+      ...accountRequest,
+      role,
+      status: "approved",
+      name,
+    };
+
+    transaction.set(userRef, {
+      uid,
+      email: accountRequest.email,
+      name,
+      role,
+      status: "active",
+      createdAt: user.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    transaction.set(allowedRef, {
+      email: accountRequest.email,
+      uid,
+      role,
+      status: "active",
+      createdAt: allowedUser.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    transaction.set(requestRef, {
+      uid,
+      email: accountRequest.email,
+      name,
+      role,
+      status: "approved",
+      updatedAt: FieldValue.serverTimestamp(),
+      reviewedAt: FieldValue.serverTimestamp(),
+      reviewedByEmail: adminProfile.email,
+    }, { merge: true });
+  });
+
+  await setClaims(uid, role, "active");
+  await writeAudit(request, {
+    action: "account.request.approve",
+    targetEmail: approvedRequest.email,
+    details: { role },
+  });
+
+  return { request: approvedRequest };
+});
+
+exports.rejectAccountRequest = onCall(async (request) => {
+  const adminProfile = await requireAdmin(request);
+  const uid = String(request.data?.uid || "").trim();
+
+  if (!uid) {
+    throw new HttpsError("invalid-argument", "找不到要審核的申請。");
+  }
+
+  const requestRef = db.collection("accountRequests").doc(uid);
+  let rejectedRequest;
+
+  await db.runTransaction(async (transaction) => {
+    const requestSnap = await transaction.get(requestRef);
+    if (!requestSnap.exists) {
+      throw new HttpsError("not-found", "找不到帳號申請。");
+    }
+
+    const accountRequest = normalizeAccountRequest({ uid, ...requestSnap.data() });
+    if (accountRequest.status === "approved") {
+      throw new HttpsError("failed-precondition", "已核准的帳號申請不能改為拒絕。");
+    }
+
+    rejectedRequest = {
+      ...accountRequest,
+      status: "rejected",
+    };
+
+    transaction.set(requestRef, {
+      status: "rejected",
+      updatedAt: FieldValue.serverTimestamp(),
+      reviewedAt: FieldValue.serverTimestamp(),
+      reviewedByEmail: adminProfile.email,
+    }, { merge: true });
+  });
+
+  await writeAudit(request, {
+    action: "account.request.reject",
+    targetEmail: rejectedRequest.email,
+  });
+
+  return { request: rejectedRequest };
 });
 
 exports.setUserRole = onCall(async (request) => {
@@ -197,6 +430,51 @@ exports.setUserStatus = onCall(async (request) => {
   });
 
   return { email: target.email, uid: target.uid, role: target.role, status };
+});
+
+exports.listAssignableOwners = onCall(async (request) => {
+  const auth = requireAuth(request);
+  const profile = await requireActiveUser(auth.uid);
+  const canDelegate = profile.role === "admin" || await userHasDelegationScope(auth.uid);
+  let snapshots;
+
+  if (canDelegate) {
+    snapshots = await db.collection("users")
+      .where("status", "==", "active")
+      .get();
+  } else {
+    const [selfSnap, adminsSnap] = await Promise.all([
+      db.collection("users").doc(auth.uid).get(),
+      db.collection("users")
+        .where("role", "==", "admin")
+        .where("status", "==", "active")
+        .get(),
+    ]);
+    snapshots = {
+      docs: [
+        ...(selfSnap.exists ? [selfSnap] : []),
+        ...adminsSnap.docs,
+      ],
+    };
+  }
+
+  const owners = new Map();
+  snapshots.docs.forEach((snapshot) => {
+    const user = snapshot.data();
+    if (user.status !== "active") return;
+    owners.set(snapshot.id, {
+      uid: snapshot.id,
+      name: sanitizeName(user.name || ""),
+      role: normalizeRole(user.role),
+      status: "active",
+    });
+  });
+
+  return {
+    owners: [...owners.values()].sort((a, b) => {
+      return a.name.localeCompare(b.name, "zh-Hant");
+    }),
+  };
 });
 
 exports.auditSystemChanges = onDocumentWritten("systems/{docId}", (event) => auditDataChange(event, "systems"));
@@ -320,6 +598,14 @@ async function assertNotLastActiveAdmin(uid, nextRole, nextStatus) {
   }
 }
 
+async function userHasDelegationScope(uid) {
+  const [systemSnap, projectSnap] = await Promise.all([
+    db.collection("systems").where("ownerUid", "==", uid).limit(1).get(),
+    db.collection("projects").where("ownerUid", "==", uid).limit(1).get(),
+  ]);
+  return !systemSnap.empty || !projectSnap.empty;
+}
+
 async function setClaims(uid, role, status) {
   await admin.auth().setCustomUserClaims(uid, {
     role,
@@ -379,6 +665,101 @@ function normalizeStatus(status = "active") {
   return status === "disabled" ? "disabled" : "active";
 }
 
+function normalizeRequestStatus(status = "pending") {
+  return status === "approved" || status === "rejected" ? status : "pending";
+}
+
+function normalizeAccountRequest(request = {}) {
+  return {
+    uid: String(request.uid || "").trim(),
+    email: normalizeEmail(request.email),
+    name: sanitizeName(request.name),
+    role: normalizeRole(request.role),
+    status: normalizeRequestStatus(request.status),
+    requestedAt: request.requestedAt || "",
+    updatedAt: request.updatedAt || "",
+    reviewedAt: request.reviewedAt || "",
+    reviewedByEmail: normalizeEmail(request.reviewedByEmail),
+  };
+}
+
 function sanitizeName(name = "") {
   return String(name).trim().slice(0, 40);
+}
+
+function sanitizeProfileForClient(profile = {}, token = {}) {
+  const email = normalizeEmail(profile.email || token.email);
+  const displayName = sanitizeName(profile.name || token.name || "");
+  return {
+    uid: String(profile.uid || "").trim(),
+    displayName,
+    name: displayName,
+    emailMasked: maskEmail(email),
+    emailVerified: token.email_verified === true,
+    photoURL: "",
+    role: normalizeRole(profile.role),
+    status: normalizeStatus(profile.status),
+    lastLoginAt: profile.lastLoginAt || "",
+  };
+}
+
+function sanitizeAccountRequestForClient(request = {}) {
+  const email = normalizeEmail(request.email);
+  const reviewedByEmail = normalizeEmail(request.reviewedByEmail);
+  return {
+    uid: String(request.uid || "").trim(),
+    displayName: sanitizeName(request.name),
+    name: sanitizeName(request.name),
+    emailMasked: maskEmail(email),
+    role: normalizeRole(request.role),
+    status: normalizeRequestStatus(request.status),
+    requestedAt: request.requestedAt || "",
+    updatedAt: request.updatedAt || "",
+    reviewedAt: request.reviewedAt || "",
+    reviewedByEmailMasked: maskEmail(reviewedByEmail),
+  };
+}
+
+function maskEmail(email = "") {
+  const normalized = normalizeEmail(email);
+  const atIndex = normalized.indexOf("@");
+  if (atIndex <= 0) return normalized ? "***" : "";
+  const local = normalized.slice(0, atIndex);
+  const domain = normalized.slice(atIndex + 1);
+  const visible = local.slice(0, 1);
+  const stars = "*".repeat(Math.max(3, local.length - 1));
+  return `${visible}${stars}@${domain}`;
+}
+
+function getSensitiveAuthFields() {
+  return [
+    "idToken",
+    "refreshToken",
+    "oauthAccessToken",
+    "stsTokenManager",
+    "accessToken",
+    "apiKey",
+    "federatedId",
+    "providerUserInfo",
+    "rawUserInfo",
+  ];
+}
+
+function redactSensitiveText(value = "") {
+  return String(value)
+    .replace(new RegExp(`\\b(${getSensitiveAuthFields().join("|")})\\b\\s*[:=]\\s*("[^"]*"|'[^']*'|[^\\s,}]+)`, "gi"), "$1: [redacted]")
+    .replace(/[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+/g, "[redacted-token]")
+    .replace(/[A-Za-z0-9_/-]{120,}={0,2}/g, "[redacted-token]");
+}
+
+function sanitizeLogError(error = {}) {
+  return {
+    name: String(error.name || "Error"),
+    code: String(error.code || ""),
+    message: redactSensitiveText(error.message || ""),
+  };
+}
+
+function logSafeWarning(context, error = {}) {
+  logger.warn(context, sanitizeLogError(error));
 }

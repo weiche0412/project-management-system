@@ -69,6 +69,7 @@ let auth = null;
 let db = null;
 let cloudFunctions = null;
 let currentFirebaseUser = null;
+let currentSafeUser = sanitizeUser(null);
 let currentProfile = null;
 let cloudReady = false;
 let previewMode = false;
@@ -79,12 +80,15 @@ let authSessionVersion = 0;
 let profileUnsubscribe = null;
 let cloudUnsubscribes = [];
 let adminUnsubscribes = [];
+let currentAccountRequest = null;
 let remoteState = createEmptyState();
 let remoteLoaded = { systems: false, projects: false, tasks: false };
 let lastSyncedState = createEmptyStateMaps();
 let adminUsers = [];
 let adminAllowedUsers = [];
+let adminAccountRequests = [];
 let adminAuditLogs = [];
+let assignableOwners = [];
 let adminFilters = {
   query: "",
   action: "all",
@@ -93,12 +97,21 @@ let adminFilters = {
 
 const els = {
   authScreen: document.querySelector("#authScreen"),
+  authActions: document.querySelector("#authActions"),
   googleSignInButton: document.querySelector("#googleSignInButton"),
   previewModeButton: document.querySelector("#previewModeButton"),
+  accountRequestPanel: document.querySelector("#accountRequestPanel"),
+  accountRequestForm: document.querySelector("#accountRequestForm"),
+  accountRequestEmail: document.querySelector("#accountRequestEmail"),
+  accountRequestName: document.querySelector("#accountRequestName"),
+  accountRequestSubmitButton: document.querySelector("#accountRequestSubmitButton"),
+  accountRequestCheckButton: document.querySelector("#accountRequestCheckButton"),
+  accountRequestSignOutButton: document.querySelector("#accountRequestSignOutButton"),
   authStatusText: document.querySelector("#authStatusText"),
   authHelpText: document.querySelector("#authHelpText"),
   appShell: document.querySelector("#appShell") || document.querySelector(".app-shell"),
   adminButton: document.querySelector("#adminButton"),
+  editSystemButton: document.querySelector("#editSystemButton"),
   accountButton: document.querySelector("#accountButton"),
   accountName: document.querySelector("#accountName"),
   accountRole: document.querySelector("#accountRole"),
@@ -180,6 +193,7 @@ const els = {
   adminUserForm: document.querySelector("#adminUserForm"),
   adminUserEmail: document.querySelector("#adminUserEmail"),
   adminUserRole: document.querySelector("#adminUserRole"),
+  adminAccountRequestsTable: document.querySelector("#adminAccountRequestsTable"),
   adminUsersTable: document.querySelector("#adminUsersTable"),
   auditLogTable: document.querySelector("#auditLogTable"),
   auditSearchInput: document.querySelector("#auditSearchInput"),
@@ -191,6 +205,7 @@ const els = {
 
 const systemFields = {
   id: document.querySelector("#systemId"),
+  owner: document.querySelector("#systemOwner"),
   name: document.querySelector("#systemName"),
   description: document.querySelector("#systemDescription"),
 };
@@ -198,6 +213,7 @@ const systemFields = {
 const projectFields = {
   id: document.querySelector("#projectId"),
   systemId: document.querySelector("#projectSystem"),
+  owner: document.querySelector("#projectOwner"),
   category: document.querySelector("#projectCategory"),
   name: document.querySelector("#projectName"),
   description: document.querySelector("#projectDescription"),
@@ -267,6 +283,9 @@ const todoAddFields = {
 
 els.googleSignInButton?.addEventListener("click", signInWithGoogle);
 els.previewModeButton?.addEventListener("click", startPreviewMode);
+els.accountRequestForm?.addEventListener("submit", handleAccountRequestSubmit);
+els.accountRequestCheckButton?.addEventListener("click", handleAccountRequestCheck);
+els.accountRequestSignOutButton?.addEventListener("click", signOutCurrentUser);
 els.signOutButton?.addEventListener("click", signOutCurrentUser);
 els.accountButton?.addEventListener("click", () => {
   els.accountMenu.classList.toggle("hidden");
@@ -280,6 +299,7 @@ els.profileDialog?.addEventListener("cancel", (event) => {
 els.adminButton?.addEventListener("click", openAdminPage);
 els.closeAdminPageButton?.addEventListener("click", closeAdminPage);
 els.adminUserForm?.addEventListener("submit", handleAdminUserCreate);
+els.adminAccountRequestsTable?.addEventListener("click", handleAccountRequestReview);
 els.adminUsersTable?.addEventListener("change", handleAdminTableChange);
 els.adminUsersTable?.addEventListener("click", handleAdminTableClick);
 els.auditSearchInput?.addEventListener("input", () => {
@@ -297,6 +317,7 @@ els.auditDateFilter?.addEventListener("change", () => {
 els.exportJsonButton?.addEventListener("click", exportProjectDataJson);
 els.exportCsvButton?.addEventListener("click", exportProjectDataCsv);
 els.addSystemButton.addEventListener("click", () => openSystemDialog());
+els.editSystemButton?.addEventListener("click", () => openSystemDialog(getSystem(selectedSystemId)));
 els.quickSystemButton.addEventListener("click", () => openSystemDialog());
 els.addProjectButton.addEventListener("click", () => openProjectDialog());
 els.addTaskButton.addEventListener("click", () => openTaskDialog());
@@ -365,14 +386,20 @@ els.addTaskLinkButton.addEventListener("click", () => addLinkRow(taskFields.rela
 els.addTodoEmailButton.addEventListener("click", () => addEmailRow(todoAddFields.relatedEmails));
 els.addTodoLinkButton.addEventListener("click", () => addLinkRow(todoAddFields.relatedLinks));
 projectFields.category.addEventListener("change", () => syncProjectCategoryFields());
+projectFields.systemId.addEventListener("change", () => syncProjectOwnerOptions());
 projectFields.phase.addEventListener("change", () => {
   projectFields.phaseChangedAt.value = todayString();
 });
-taskFields.scope.addEventListener("change", () => syncTaskScopeFields(taskFields));
+taskFields.scope.addEventListener("change", () => {
+  syncTaskScopeFields(taskFields);
+  syncTaskOwnerOptions(taskFields);
+});
 taskFields.systemId.addEventListener("change", () => {
   populateTaskProjectSelect(taskFields.systemId.value);
   syncTaskScopeFields(taskFields, false);
+  syncTaskOwnerOptions(taskFields);
 });
+taskFields.projectId.addEventListener("change", () => syncTaskOwnerOptions(taskFields));
 taskFields.status.addEventListener("change", () => syncTaskCompletedField(taskFields));
 taskFields.rangeStart.addEventListener("change", () => updateTaskDateConstraints(taskFields));
 taskFields.rangeEnd.addEventListener("change", () => updateTaskDateConstraints(taskFields));
@@ -382,16 +409,19 @@ todoAddFields.mode.addEventListener("change", updateTodoAddMode);
 todoAddFields.scope.addEventListener("change", () => {
   syncTaskScopeFields(todoAddFields);
   populateTodoExistingTaskSelect();
+  syncTaskOwnerOptions(todoAddFields);
   if (todoAddFields.mode.value === "existing") fillTodoAddFromExistingTask();
 });
 todoAddFields.systemId.addEventListener("change", () => {
   populateTodoProjectSelect(todoAddFields.systemId.value);
   syncTaskScopeFields(todoAddFields, false);
   populateTodoExistingTaskSelect();
+  syncTaskOwnerOptions(todoAddFields);
   if (todoAddFields.mode.value === "existing") fillTodoAddFromExistingTask();
 });
 todoAddFields.projectId.addEventListener("change", () => {
   populateTodoExistingTaskSelect();
+  syncTaskOwnerOptions(todoAddFields);
   if (todoAddFields.mode.value === "existing") fillTodoAddFromExistingTask();
 });
 todoAddFields.existingTaskId.addEventListener("change", fillTodoAddFromExistingTask);
@@ -418,7 +448,10 @@ document.querySelectorAll("[data-close-dialog]").forEach((button) => {
   });
 });
 
-initializeCloudApp();
+initializeCloudApp().catch((error) => {
+  logSafeError("firebase.initialize", error);
+  showAuthScreen("Firebase initialization failed.", getReadableError(error), false, true);
+});
 
 function buildStarterState() {
   const systemA = createId();
@@ -1244,24 +1277,41 @@ function persistViewPreferences() {
 
 function normalizeState(rawState = {}) {
   return {
-    systems: Array.isArray(rawState.systems) ? rawState.systems : [],
+    systems: Array.isArray(rawState.systems) ? rawState.systems.map(normalizeSystem) : [],
     projects: Array.isArray(rawState.projects) ? rawState.projects.map(normalizeProject) : [],
     tasks: Array.isArray(rawState.tasks) ? rawState.tasks.map(normalizeTask) : [],
   };
 }
 
+function normalizeSystem(system = {}) {
+  const { ownerEmail, createdAt, createdBy, createdByEmail, updatedAt, updatedBy, updatedByEmail, ...baseSystem } = system;
+  const owner = getOwnerPayload(system.ownerUid, system);
+  return {
+    ...baseSystem,
+    description: system.description || "",
+    ownerUid: owner.ownerUid,
+    ownerName: owner.ownerName,
+    visibleToUids: normalizeVisibleToUids(system.visibleToUids),
+  };
+}
+
 function normalizeTask(task) {
+  const { ownerEmail, createdAt, createdBy, createdByEmail, updatedAt, updatedBy, updatedByEmail, ...baseTask } = task;
   const rangeStart = task.rangeStart || task.startDate || task.dueDate || todayString();
   const rangeEnd = task.rangeEnd || task.endDate || task.startDate || task.dueDate || rangeStart;
   const executionDate = clampDate(task.executionDate || task.startDate || rangeStart, rangeStart, rangeEnd);
   const deadline = task.deadline && task.deadline >= rangeEnd ? task.deadline : rangeEnd;
   const scope = normalizeTaskScope(task);
+  const owner = getOwnerPayload(task.ownerUid, task);
 
   return {
-    ...task,
+    ...baseTask,
     scope,
     systemId: scope === "general" ? "" : task.systemId || "",
     projectId: scope === "project" ? task.projectId || "" : "",
+    ...owner,
+    owner: owner.ownerName || task.owner || "",
+    visibleToUids: normalizeVisibleToUids(task.visibleToUids),
     status: normalizeTaskStatus(task.status),
     tags: Array.isArray(task.tags) ? task.tags : [],
     stakeholders: normalizeTextList(task.stakeholders),
@@ -1439,6 +1489,7 @@ function normalizeHistoryLinks(value) {
 }
 
 function normalizeProject(project) {
+  const { ownerEmail, createdAt, createdBy, createdByEmail, updatedAt, updatedBy, updatedByEmail, ...baseProject } = project;
   const phaseSchedules = project.phaseSchedules || createPhaseSchedules({
     [project.phase || "planning"]: {
       start: project.plannedStart || "",
@@ -1449,7 +1500,9 @@ function normalizeProject(project) {
   const plannedRange = getProjectScheduleRange(project.plannedStart || "", project.plannedEnd || "", normalizedSchedules);
 
   return {
-    ...project,
+    ...baseProject,
+    ...getOwnerPayload(project.ownerUid, project),
+    visibleToUids: normalizeVisibleToUids(project.visibleToUids),
     category: normalizeProjectCategory(project.category),
     description: project.description || "",
     phase: project.phase || "deal",
@@ -1465,13 +1518,68 @@ function normalizeProject(project) {
   };
 }
 
+function syncStateOwnershipVisibility() {
+  state.systems = state.systems.map(syncSystemOwnershipVisibility);
+  state.projects = state.projects.map(syncProjectOwnershipVisibility);
+  state.tasks = state.tasks.map(syncTaskOwnershipVisibility);
+}
+
+function syncSystemOwnershipVisibility(system) {
+  const owner = getOwnerPayload(system.ownerUid, system);
+  return {
+    ...system,
+    ...owner,
+    visibleToUids: owner.ownerUid ? uniqueUids([owner.ownerUid]) : [],
+  };
+}
+
+function syncProjectOwnershipVisibility(project) {
+  const owner = getOwnerPayload(project.ownerUid, project);
+  const system = getSystem(project.systemId);
+  const systemVisibleUids = system
+    ? uniqueUids([system.ownerUid])
+    : normalizeVisibleToUids(project.visibleToUids);
+  return {
+    ...project,
+    ...owner,
+    visibleToUids: owner.ownerUid ? uniqueUids([...systemVisibleUids, owner.ownerUid]) : [],
+  };
+}
+
+function syncTaskOwnershipVisibility(task) {
+  const owner = getOwnerPayload(task.ownerUid, task);
+  const scope = getTaskScope(task);
+  let parentVisibleUids = [];
+
+  if (scope === "system") {
+    const system = getSystem(task.systemId);
+    parentVisibleUids = system ? uniqueUids([system.ownerUid]) : normalizeVisibleToUids(task.visibleToUids);
+  } else if (scope === "project") {
+    const project = getProject(task.projectId);
+    const system = getSystem(project?.systemId || task.systemId);
+    parentVisibleUids = project
+      ? normalizeVisibleToUids(project.visibleToUids).length
+        ? normalizeVisibleToUids(project.visibleToUids)
+        : uniqueUids([system?.ownerUid, project.ownerUid])
+      : normalizeVisibleToUids(task.visibleToUids);
+  }
+
+  return {
+    ...task,
+    ...owner,
+    owner: owner.ownerName || task.owner || "",
+    visibleToUids: owner.ownerUid ? uniqueUids([...parentVisibleUids, owner.ownerUid]) : [],
+  };
+}
+
 function saveState() {
+  syncStateOwnershipVisibility();
   persistViewPreferences();
   if (previewMode) {
     try {
       localStorage.setItem(previewStorageKey, JSON.stringify(state));
     } catch (error) {
-      console.error(error);
+      logSafeError("preview.save", error);
       showToast("預覽資料儲存失敗，請稍後再試。");
     }
     return;
@@ -1482,16 +1590,28 @@ function saveState() {
     cloudSaveChain = cloudSaveChain
       .then(pushStateToCloud)
       .catch((error) => {
-        console.error(error);
+        logSafeError("cloud.save", error);
         showToast(`雲端儲存失敗：${getReadableError(error)}`);
       });
   }, 250);
 }
 
-function initializeCloudApp() {
+async function initializeCloudApp() {
   setAuthStatus("正在初始化雲端服務...", "請稍候。");
 
   if (!configureFirebase()) return;
+
+  try {
+    const removedLegacyAuthCache = clearLegacyAuthLocalStorage();
+    await enforceSessionAuthPersistence();
+    if (removedLegacyAuthCache) {
+      await auth.signOut().catch((error) => logSafeError("auth.forceSignOutAfterLegacyCache", error));
+    }
+  } catch (error) {
+    logSafeError("auth.persistence", error);
+    showAuthScreen("Secure sign-in setup failed.", getReadableError(error), false, true);
+    return;
+  }
 
   auth.useDeviceLanguage?.();
   auth.onAuthStateChanged(async (user) => {
@@ -1501,9 +1621,13 @@ function initializeCloudApp() {
     closeAdminPage();
     cloudReady = false;
     currentFirebaseUser = user;
+    currentSafeUser = sanitizeUser(user);
 
     if (!user) {
       currentProfile = null;
+      currentSafeUser = sanitizeUser(null);
+      currentAccountRequest = null;
+      assignableOwners = [];
       state = createEmptyState();
       remoteState = createEmptyState();
       remoteLoaded = { systems: false, projects: false, tasks: false };
@@ -1517,17 +1641,11 @@ function initializeCloudApp() {
 
     try {
       const result = await callFunction("bootstrapCurrentUser", {
-        name: user.displayName || "",
+        name: currentSafeUser.displayName || "",
       });
-      if (sessionVersion !== authSessionVersion) return;
-
-      await user.getIdToken(true);
-      currentProfile = normalizeProfile(result.data?.profile || {});
-      updateAccountUi();
-      startProfileListener(user.uid);
-      startCloudListeners();
+      await handleBootstrapResult(result.data || {}, user, sessionVersion);
     } catch (error) {
-      console.error(error);
+      logSafeError("auth.bootstrap", error);
       await auth.signOut().catch(() => {});
       showAuthScreen("此 Google 帳號尚未被授權。", getReadableError(error));
     }
@@ -1555,17 +1673,36 @@ function configureFirebase() {
     cloudFunctions = firebase.app().functions("asia-east1");
     return true;
   } catch (error) {
-    console.error(error);
+    logSafeError("firebase.configure", error);
     showAuthScreen("Firebase 初始化失敗。", getReadableError(error), false, true);
     return false;
   }
 }
 
-function showAuthScreen(message, helpText = "若尚未被授權，請聯絡系統管理員開通帳號。", loading = false, disabled = false) {
+function showAuthScreen(message, helpText = "若尚未被授權，請聯絡系統管理員開通帳號。", loading = false, disabled = false, keepRequestPanel = false) {
   els.authScreen?.classList.remove("hidden");
   els.appShell?.classList.add("hidden");
   els.adminPage?.classList.add("hidden");
+  if (!keepRequestPanel) hideAccountRequestPanel();
   setAuthStatus(message, helpText, loading || disabled);
+}
+
+async function enforceSessionAuthPersistence() {
+  const sessionPersistence = firebase?.auth?.Auth?.Persistence?.SESSION;
+  if (!auth?.setPersistence || !sessionPersistence) return;
+  await auth.setPersistence(sessionPersistence);
+}
+
+function clearLegacyAuthLocalStorage() {
+  try {
+    const legacyKeys = Object.keys(localStorage)
+      .filter((key) => key.startsWith("firebase:authUser:") || key.includes(":authUser:"));
+    legacyKeys.forEach((key) => localStorage.removeItem(key));
+    return legacyKeys.length;
+  } catch (error) {
+    logSafeError("auth.clearLegacyLocalStorage", error);
+    return 0;
+  }
 }
 
 function setAuthStatus(message, helpText = "", buttonDisabled = false) {
@@ -1577,6 +1714,94 @@ function setAuthStatus(message, helpText = "", buttonDisabled = false) {
 function showAppShell() {
   els.authScreen?.classList.add("hidden");
   els.appShell?.classList.remove("hidden");
+  hideAccountRequestPanel();
+}
+
+async function handleBootstrapResult(data, user, sessionVersion) {
+  if (sessionVersion !== authSessionVersion || user?.uid !== auth?.currentUser?.uid) return;
+
+  const outcome = data.outcome || (data.profile ? "active" : "needs_request");
+  if (outcome === "active" && data.profile) {
+    await user.getIdToken(true);
+    if (sessionVersion !== authSessionVersion || user.uid !== auth?.currentUser?.uid) return;
+    currentProfile = normalizeProfile(data.profile || {});
+    currentAccountRequest = null;
+    await refreshAssignableOwners();
+    updateAccountUi();
+    startProfileListener(user.uid);
+    startCloudListeners();
+    return;
+  }
+
+  currentProfile = null;
+  assignableOwners = [];
+  state = createEmptyState();
+  remoteState = createEmptyState();
+  remoteLoaded = { systems: false, projects: false, tasks: false };
+  lastSyncedState = createEmptyStateMaps();
+  cloudReady = false;
+  currentAccountRequest = normalizeAccountRequest({
+    uid: user.uid,
+    emailMasked: currentSafeUser.emailMasked,
+    name: currentSafeUser.displayName || "",
+    ...(data.request || {}),
+    status: outcome === "rejected" ? "rejected" : outcome === "pending" ? "pending" : "needs_request",
+  });
+  showAccountRequestPanel(outcome, currentAccountRequest);
+  updateAccountUi();
+}
+
+function showAccountRequestPanel(outcome, request = currentAccountRequest) {
+  const normalizedRequest = normalizeAccountRequest(request);
+  currentAccountRequest = normalizedRequest;
+  const panelOutcome = outcome || normalizedRequest.status || "needs_request";
+  const isPending = panelOutcome === "pending";
+  const isRejected = panelOutcome === "rejected";
+  const message = isPending
+    ? "帳號申請已送出，等待管理員審核。"
+    : isRejected
+      ? "帳號申請未通過。"
+      : "建立帳號申請";
+  const helpText = isPending
+    ? "審核通過後，按「重新檢查」即可進入系統。"
+    : isRejected
+      ? "可修改名稱後重新送出，或聯絡管理員確認。"
+      : "請填寫顯示名稱，送出後由管理員審核。";
+
+  showAuthScreen(message, helpText, false, true, true);
+  els.authActions?.classList.add("hidden");
+  els.accountRequestPanel?.classList.remove("hidden");
+  if (els.accountRequestEmail) {
+    const accountLabel = normalizedRequest.emailMasked || maskEmail(normalizedRequest.email) || currentSafeUser.emailMasked || "";
+    els.accountRequestEmail.textContent = `目前登入：${accountLabel}`;
+  }
+  if (els.accountRequestName) {
+    els.accountRequestName.value = normalizedRequest.name || currentSafeUser.displayName || "";
+    els.accountRequestName.disabled = isPending;
+  }
+  if (els.accountRequestSubmitButton) {
+    els.accountRequestSubmitButton.textContent = isRejected ? "重新送出申請" : "送出帳號申請";
+    els.accountRequestSubmitButton.classList.toggle("hidden", isPending);
+    els.accountRequestSubmitButton.disabled = false;
+  }
+  if (els.accountRequestCheckButton) {
+    els.accountRequestCheckButton.classList.toggle("hidden", !isPending && !isRejected);
+    els.accountRequestCheckButton.disabled = false;
+  }
+  if (els.accountRequestSignOutButton) els.accountRequestSignOutButton.disabled = false;
+}
+
+function hideAccountRequestPanel() {
+  els.accountRequestPanel?.classList.add("hidden");
+  els.authActions?.classList.remove("hidden");
+  if (els.accountRequestName) els.accountRequestName.disabled = false;
+  setAccountRequestControlsDisabled(false);
+}
+
+function setAccountRequestControlsDisabled(disabled) {
+  if (els.accountRequestSubmitButton) els.accountRequestSubmitButton.disabled = disabled;
+  if (els.accountRequestCheckButton) els.accountRequestCheckButton.disabled = disabled;
+  if (els.accountRequestSignOutButton) els.accountRequestSignOutButton.disabled = disabled;
 }
 
 function startPreviewMode() {
@@ -1591,6 +1816,8 @@ function startPreviewMode() {
   previewMode = true;
   cloudReady = false;
   currentFirebaseUser = null;
+  currentSafeUser = sanitizeUser(null);
+  currentAccountRequest = null;
   currentProfile = {
     uid: "preview",
     email: "",
@@ -1598,6 +1825,7 @@ function startPreviewMode() {
     role: "user",
     status: "active",
   };
+  assignableOwners = [normalizeOwnerAccount(currentProfile)];
   state = loadPreviewState();
   remoteState = createEmptyState();
   remoteLoaded = { systems: false, projects: false, tasks: false };
@@ -1612,7 +1840,10 @@ function startPreviewMode() {
 function exitPreviewMode() {
   previewMode = false;
   currentProfile = null;
+  currentAccountRequest = null;
+  assignableOwners = [];
   currentFirebaseUser = auth?.currentUser || null;
+  currentSafeUser = sanitizeUser(currentFirebaseUser);
   state = createEmptyState();
   remoteState = createEmptyState();
   remoteLoaded = { systems: false, projects: false, tasks: false };
@@ -1638,10 +1869,66 @@ async function signInWithGoogle() {
       await auth.signInWithRedirect(provider);
       return;
     }
-    console.error(error);
+    logSafeError("auth.signIn", error);
     setAuthStatus("Google 登入失敗。", getReadableError(error));
   } finally {
     if (!auth.currentUser && els.googleSignInButton) els.googleSignInButton.disabled = false;
+  }
+}
+
+async function handleAccountRequestSubmit(event) {
+  event.preventDefault();
+  if (!auth?.currentUser) return;
+
+  const name = (els.accountRequestName?.value || "").trim();
+  if (!name) {
+    setAuthStatus("請先輸入顯示名稱。", "送出後管理員會在後台審核你的帳號。", false, true, true);
+    return;
+  }
+
+  setAccountRequestControlsDisabled(true);
+  setAuthStatus("正在送出帳號申請...", "請稍候。", false, true);
+
+  try {
+    const result = await callFunction("submitAccountRequest", { name });
+    currentAccountRequest = normalizeAccountRequest(result.data?.request || {
+      uid: auth.currentUser.uid,
+      emailMasked: currentSafeUser.emailMasked,
+      name,
+      status: "pending",
+    });
+    showAccountRequestPanel("pending", currentAccountRequest);
+  } catch (error) {
+    logSafeError("accountRequest.submit", error);
+    showAccountRequestPanel(currentAccountRequest?.status || "needs_request", {
+      ...currentAccountRequest,
+      name,
+    });
+    setAuthStatus("帳號申請送出失敗。", getReadableError(error), false, true, true);
+  } finally {
+    setAccountRequestControlsDisabled(false);
+  }
+}
+
+async function handleAccountRequestCheck() {
+  const user = auth?.currentUser;
+  if (!user) return;
+
+  const sessionVersion = authSessionVersion;
+  setAccountRequestControlsDisabled(true);
+  setAuthStatus("正在重新檢查審核狀態...", "請稍候。", false, true, true);
+
+  try {
+    const result = await callFunction("bootstrapCurrentUser", {
+      name: els.accountRequestName?.value || currentSafeUser.displayName || "",
+    });
+    await handleBootstrapResult(result.data || {}, user, sessionVersion);
+  } catch (error) {
+    logSafeError("accountRequest.check", error);
+    showAccountRequestPanel(currentAccountRequest?.status || "pending", currentAccountRequest);
+    setAuthStatus("重新檢查失敗。", getReadableError(error), false, true, true);
+  } finally {
+    setAccountRequestControlsDisabled(false);
   }
 }
 
@@ -1655,7 +1942,9 @@ async function signOutCurrentUser() {
   cleanupCloudSubscriptions();
   cleanupProfileListener();
   currentProfile = null;
+  currentAccountRequest = null;
   currentFirebaseUser = null;
+  currentSafeUser = sanitizeUser(null);
   cloudReady = false;
   await auth?.signOut();
 }
@@ -1694,7 +1983,10 @@ function startCloudListeners() {
   remoteLoaded = { systems: false, projects: false, tasks: false };
 
   ["systems", "projects", "tasks"].forEach((collectionName) => {
-    const unsubscribe = db.collection(collectionName).onSnapshot((snapshot) => {
+    const collectionRef = isAdminProfile()
+      ? db.collection(collectionName)
+      : db.collection(collectionName).where("visibleToUids", "array-contains", currentFirebaseUser.uid);
+    const unsubscribe = collectionRef.onSnapshot((snapshot) => {
       remoteState[collectionName] = snapshot.docs
         .map((doc) => ({ ...doc.data(), id: doc.id }))
         .sort(compareCloudRecords);
@@ -1703,7 +1995,7 @@ function startCloudListeners() {
         applyRemoteState();
       }
     }, (error) => {
-      console.error(error);
+      logSafeError(`firestore.listen.${collectionName}`, error);
       showToast(`雲端資料讀取失敗：${getReadableError(error)}`);
       if (error.code === "permission-denied") signOutCurrentUser();
     });
@@ -1724,6 +2016,9 @@ function applyRemoteState() {
   showAppShell();
   updateAccountUi();
   render();
+  refreshAssignableOwners()
+    .then(() => render())
+    .catch((error) => logSafeError("owners.refreshAfterRemote", error));
 
   if (currentProfile && !currentProfile.name) {
     openProfileDialog(true);
@@ -1772,12 +2067,19 @@ async function pushStateToCloud() {
 
 function prepareCloudDocument(item, previous = {}) {
   const documentData = stripUndefinedDeep({ ...item });
+  if ("ownerEmail" in previous && !("ownerEmail" in item)) {
+    documentData.ownerEmail = firebase.firestore.FieldValue.delete();
+  }
+  if ("createdByEmail" in previous && !("createdByEmail" in item)) {
+    documentData.createdByEmail = firebase.firestore.FieldValue.delete();
+  }
+  if ("updatedByEmail" in previous && !("updatedByEmail" in item)) {
+    documentData.updatedByEmail = firebase.firestore.FieldValue.delete();
+  }
   documentData.createdAt = previous.createdAt || firebase.firestore.FieldValue.serverTimestamp();
   documentData.createdBy = previous.createdBy || currentFirebaseUser?.uid || "";
-  documentData.createdByEmail = previous.createdByEmail || currentFirebaseUser?.email || "";
   documentData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
   documentData.updatedBy = currentFirebaseUser?.uid || "";
-  documentData.updatedByEmail = currentFirebaseUser?.email || "";
   return documentData;
 }
 
@@ -1848,21 +2150,230 @@ function isFirestoreTimestamp(value) {
 }
 
 function normalizeProfile(profile = {}) {
+  const email = normalizeEmail(profile.email || "");
+  const safeUser = currentSafeUser || sanitizeUser(currentFirebaseUser);
+  const displayName = String(profile.displayName || profile.name || safeUser.displayName || "").trim();
   return {
-    uid: profile.uid || currentFirebaseUser?.uid || "",
-    email: normalizeEmail(profile.email || currentFirebaseUser?.email || ""),
-    name: (profile.name || "").trim(),
+    uid: String(profile.uid || safeUser.uid || "").trim(),
+    email: "",
+    emailMasked: profile.emailMasked || maskEmail(email) || safeUser.emailMasked,
+    emailVerified: Boolean(profile.emailVerified ?? safeUser.emailVerified),
+    photoURL: getSafePhotoURL(profile.photoURL) || safeUser.photoURL,
+    displayName,
+    name: displayName,
     role: profile.role === "admin" ? "admin" : "user",
     status: profile.status === "disabled" ? "disabled" : "active",
     lastLoginAt: profile.lastLoginAt || "",
   };
 }
 
+function normalizeAccountRequest(request = {}) {
+  const status = ["approved", "rejected", "needs_request"].includes(request.status) ? request.status : "pending";
+  const email = normalizeEmail(request.email || "");
+  return {
+    uid: String(request.uid || currentFirebaseUser?.uid || "").trim(),
+    email,
+    emailMasked: request.emailMasked || maskEmail(email) || currentSafeUser.emailMasked,
+    name: (request.name || request.displayName || currentSafeUser.displayName || "").trim(),
+    role: request.role === "admin" ? "admin" : "user",
+    status,
+    requestedAt: request.requestedAt || "",
+    updatedAt: request.updatedAt || "",
+    reviewedAt: request.reviewedAt || "",
+    reviewedByEmail: normalizeEmail(request.reviewedByEmail || ""),
+  };
+}
+
+function normalizeOwnerAccount(user = {}) {
+  const email = normalizeEmail(user.email);
+  const uid = String(user.uid || "").trim();
+  const name = String(user.name || user.displayName || "").trim();
+  return {
+    uid,
+    email,
+    name,
+    role: user.role === "admin" ? "admin" : "user",
+    status: user.status === "disabled" ? "disabled" : "active",
+  };
+}
+
+async function refreshAssignableOwners() {
+  if (previewMode) {
+    assignableOwners = currentProfile ? [normalizeOwnerAccount(currentProfile)] : [];
+    return assignableOwners;
+  }
+
+  if (!cloudFunctions || !currentProfile) {
+    assignableOwners = [];
+    return assignableOwners;
+  }
+
+  try {
+    const result = await callFunction("listAssignableOwners");
+    assignableOwners = uniqueOwners(result.data?.owners || []);
+  } catch (error) {
+    logSafeError("owners.list", error);
+    assignableOwners = uniqueOwners([currentProfile]);
+  }
+
+  return assignableOwners;
+}
+
+function uniqueOwners(owners = []) {
+  const rows = new Map();
+  owners.map(normalizeOwnerAccount).forEach((owner) => {
+    if (!owner.uid) return;
+    rows.set(owner.uid, { ...rows.get(owner.uid), ...owner });
+  });
+  return [...rows.values()]
+    .filter((owner) => owner.status === "active")
+    .sort((a, b) => getOwnerDisplayName(a).localeCompare(getOwnerDisplayName(b), "zh-Hant"));
+}
+
+function getOwnerDisplayName(owner = {}) {
+  return (owner.ownerName || owner.name || owner.owner || "").trim() || "未命名使用者";
+}
+
+function getOwnerFromEntity(entity = {}) {
+  if (!entity.ownerUid) return null;
+  return normalizeOwnerAccount({
+    uid: entity.ownerUid,
+    name: entity.ownerName || entity.owner,
+    status: "active",
+  });
+}
+
+function getKnownOwner(uid, fallback = {}) {
+  const normalizedUid = String(uid || "").trim();
+  if (!normalizedUid) return null;
+  return assignableOwners.find((owner) => owner.uid === normalizedUid)
+    || (currentProfile?.uid === normalizedUid ? normalizeOwnerAccount(currentProfile) : null)
+    || getOwnerFromEntity(fallback);
+}
+
+function getOwnerPayload(uid, fallback = {}) {
+  const owner = getKnownOwner(uid, fallback);
+  const ownerUid = String(uid || owner?.uid || "").trim();
+  if (!ownerUid) {
+    return { ownerUid: "", ownerName: "" };
+  }
+  return {
+    ownerUid,
+    ownerName: String(owner?.name || fallback.ownerName || fallback.owner || "").trim(),
+  };
+}
+
+function getAllAssignableOwners() {
+  return uniqueOwners([
+    ...assignableOwners,
+    currentProfile,
+  ].filter(Boolean));
+}
+
+function getDefaultAssignableOwners() {
+  return uniqueOwners(getAllAssignableOwners().filter((owner) => {
+    return owner.uid === currentProfile?.uid || owner.role === "admin";
+  }));
+}
+
+function renderOwnerOptions(owners, selectedUid = "", fallback = {}) {
+  const normalizedSelectedUid = String(selectedUid || "").trim();
+  const rows = uniqueOwners([
+    ...(owners || []),
+    getOwnerFromEntity(fallback),
+  ].filter(Boolean));
+  const options = rows.map((owner) => {
+    const selected = owner.uid === normalizedSelectedUid;
+    const label = getOwnerDisplayName(owner);
+    return `<option value="${escapeHtml(owner.uid)}" ${selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  });
+
+  if (!normalizedSelectedUid) {
+    options.unshift(`<option value="" selected>請選擇負責人</option>`);
+  }
+
+  return options.length ? options.join("") : `<option value="">沒有可指派帳號</option>`;
+}
+
+function ownerSelectValue(select, fallback = {}) {
+  return select?.value || fallback.ownerUid || currentProfile?.uid || "";
+}
+
+function isAdminProfile() {
+  return currentProfile?.role === "admin" && currentProfile?.status === "active";
+}
+
+function isCurrentSystemOwner(systemOrId) {
+  const system = typeof systemOrId === "string" ? getSystem(systemOrId) : systemOrId;
+  return Boolean(system?.ownerUid && system.ownerUid === currentProfile?.uid);
+}
+
+function isCurrentProjectOwner(projectOrId) {
+  const project = typeof projectOrId === "string" ? getProject(projectOrId) : projectOrId;
+  return Boolean(project?.ownerUid && project.ownerUid === currentProfile?.uid);
+}
+
+function canEditSystem(system) {
+  return !system || isAdminProfile() || isCurrentSystemOwner(system);
+}
+
+function canAssignSystemOwner(system) {
+  return isAdminProfile() || !system?.id;
+}
+
+function canAssignProjectOwner(project, systemId) {
+  const targetSystemId = systemId || project?.systemId || "";
+  return isAdminProfile() || isCurrentSystemOwner(targetSystemId);
+}
+
+function canAssignTaskOwner(task = null, scopeValues = null) {
+  const scope = scopeValues?.scope || getTaskScope(task || {});
+  const systemId = scopeValues?.systemId ?? task?.systemId ?? "";
+  const projectId = scopeValues?.projectId ?? task?.projectId ?? "";
+
+  if (isAdminProfile()) return true;
+  if (scope === "system") return isCurrentSystemOwner(systemId);
+  if (scope === "project") {
+    const project = getProject(projectId);
+    return isCurrentSystemOwner(systemId || project?.systemId) || isCurrentProjectOwner(project);
+  }
+  return !task?.id;
+}
+
+function getSystemOwnerChoices(system = null) {
+  if (canAssignSystemOwner(system)) {
+    return system?.id && isAdminProfile() ? getAllAssignableOwners() : getDefaultAssignableOwners();
+  }
+  return uniqueOwners([getOwnerFromEntity(system)].filter(Boolean));
+}
+
+function getProjectOwnerChoices(project = null, systemId = "") {
+  if (canAssignProjectOwner(project, systemId)) return getAllAssignableOwners();
+  if (project?.id) return uniqueOwners([getOwnerFromEntity(project)].filter(Boolean));
+  return getDefaultAssignableOwners();
+}
+
+function getTaskOwnerChoices(task = null, scopeValues = null) {
+  if (canAssignTaskOwner(task, scopeValues)) return getAllAssignableOwners();
+  if (task?.id) return uniqueOwners([getOwnerFromEntity(task)].filter(Boolean));
+  return getDefaultAssignableOwners();
+}
+
+function normalizeVisibleToUids(value) {
+  return uniqueUids(Array.isArray(value) ? value : []);
+}
+
+function uniqueUids(values = []) {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))].sort();
+}
+
 function updateAccountUi() {
   const isAdmin = currentProfile?.role === "admin" && currentProfile?.status === "active";
-  els.accountName && (els.accountName.textContent = currentProfile?.name || currentProfile?.email || "使用者");
   els.accountRole && (els.accountRole.textContent = previewMode ? "本機預覽" : isAdmin ? "管理員" : "一般使用者");
   els.signOutButton && (els.signOutButton.textContent = previewMode ? "離開預覽" : "登出");
+  const displayName = currentProfile?.displayName || currentProfile?.name || currentSafeUser.displayName;
+  const emailMasked = currentProfile?.emailMasked || currentSafeUser.emailMasked;
+  if (els.accountName) els.accountName.textContent = displayName || emailMasked || "使用者";
   els.adminButton?.classList.toggle("hidden", !isAdmin);
 }
 
@@ -1898,7 +2409,7 @@ async function handleProfileSubmit(event) {
     els.profileDialog.close();
     showToast("名稱已更新。");
   } catch (error) {
-    console.error(error);
+    logSafeError("profile.update", error);
     alert(`名稱儲存失敗：${getReadableError(error)}`);
   }
 }
@@ -1933,12 +2444,17 @@ function startAdminListeners() {
     renderAdminPage();
   }, handleAdminReadError);
 
+  const requestUnsubscribe = db.collection("accountRequests").orderBy("requestedAt", "desc").onSnapshot((snapshot) => {
+    adminAccountRequests = snapshot.docs.map((doc) => normalizeAccountRequest({ uid: doc.id, ...doc.data() }));
+    renderAdminPage();
+  }, handleAdminReadError);
+
   const auditUnsubscribe = db.collection("auditLogs").orderBy("createdAt", "desc").limit(100).onSnapshot((snapshot) => {
     adminAuditLogs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderAuditLogs();
   }, handleAdminReadError);
 
-  adminUnsubscribes = [userUnsubscribe, allowedUnsubscribe, auditUnsubscribe];
+  adminUnsubscribes = [userUnsubscribe, allowedUnsubscribe, requestUnsubscribe, auditUnsubscribe];
 }
 
 function cleanupAdminSubscriptions() {
@@ -1947,7 +2463,7 @@ function cleanupAdminSubscriptions() {
 }
 
 function handleAdminReadError(error) {
-  console.error(error);
+  logSafeError("admin.read", error);
   showToast(`後台資料讀取失敗：${getReadableError(error)}`);
 }
 
@@ -2005,12 +2521,14 @@ function renderAdminPage() {
   const activeUsers = rows.filter((row) => row.status === "active").length;
   const admins = rows.filter((row) => row.role === "admin" && row.status === "active").length;
   const disabled = rows.filter((row) => row.status === "disabled").length;
+  const pendingRequests = adminAccountRequests.filter((request) => request.status === "pending").length;
 
   els.adminMetrics.innerHTML = [
     ["使用者", rows.length],
     ["管理員", admins],
     ["啟用帳號", activeUsers],
     ["停用帳號", disabled],
+    ["待審申請", pendingRequests],
   ].map(([label, value]) => `
     <article class="admin-metric">
       <span>${label}</span>
@@ -2018,8 +2536,65 @@ function renderAdminPage() {
     </article>
   `).join("");
 
+  renderAccountRequests();
   renderAdminUsers(rows);
   renderAuditLogs();
+}
+
+function renderAccountRequests() {
+  if (!els.adminAccountRequestsTable) return;
+  const rows = adminAccountRequests
+    .filter((request) => request.status !== "approved")
+    .sort((a, b) => {
+      const statusDiff = (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1);
+      if (statusDiff) return statusDiff;
+      return getSortableTimestamp(b.requestedAt || b.updatedAt) - getSortableTimestamp(a.requestedAt || a.updatedAt);
+    });
+
+  if (!rows.length) {
+    els.adminAccountRequestsTable.innerHTML = `<p class="empty-state">目前沒有待審帳號申請。</p>`;
+    return;
+  }
+
+  els.adminAccountRequestsTable.innerHTML = `
+    <table class="admin-table account-requests-table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>名稱</th>
+          <th>狀態</th>
+          <th>申請時間</th>
+          <th>角色</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr data-account-request-row data-uid="${escapeHtml(row.uid)}">
+            <td>
+              <strong>${escapeHtml(row.email)}</strong>
+              ${row.reviewedByEmail ? `<small>審核者：${escapeHtml(row.reviewedByEmail)}</small>` : ""}
+            </td>
+            <td>${escapeHtml(row.name || "尚未填寫")}</td>
+            <td><span class="status-pill ${row.status === "rejected" ? "disabled" : "pending"}">${row.status === "rejected" ? "已拒絕" : "待審"}</span></td>
+            <td>${formatDateTime(row.requestedAt || row.updatedAt)}</td>
+            <td>
+              <select data-account-request-role>
+                <option value="user" ${row.role === "user" ? "selected" : ""}>一般使用者</option>
+                <option value="admin" ${row.role === "admin" ? "selected" : ""}>管理員</option>
+              </select>
+            </td>
+            <td>
+              <div class="admin-row-actions">
+                <button class="primary-button" type="button" data-approve-account-request>核准</button>
+                <button class="secondary-button" type="button" data-reject-account-request ${row.status === "rejected" ? "disabled" : ""}>拒絕</button>
+              </div>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
 }
 
 function renderAdminUsers(rows = getAdminAccountRows()) {
@@ -2121,8 +2696,37 @@ async function handleAdminUserCreate(event) {
     els.adminUserForm.reset();
     showToast("使用者帳號已建立。");
   } catch (error) {
-    console.error(error);
+    logSafeError("admin.createAllowedUser", error);
     alert(`建立帳號失敗：${getReadableError(error)}`);
+  }
+}
+
+async function handleAccountRequestReview(event) {
+  const approveButton = event.target.closest("[data-approve-account-request]");
+  const rejectButton = event.target.closest("[data-reject-account-request]");
+  if (!approveButton && !rejectButton) return;
+
+  const row = event.target.closest("[data-account-request-row]");
+  const uid = row?.dataset.uid || "";
+  const role = row?.querySelector("[data-account-request-role]")?.value === "admin" ? "admin" : "user";
+  if (!uid) return;
+
+  row.querySelectorAll("button").forEach((button) => {
+    button.disabled = true;
+  });
+
+  try {
+    if (approveButton) {
+      await callFunction("approveAccountRequest", { uid, role });
+      showToast("帳號申請已核准。");
+    } else {
+      await callFunction("rejectAccountRequest", { uid });
+      showToast("帳號申請已拒絕。");
+    }
+  } catch (error) {
+    logSafeError("admin.accountRequestReview", error);
+    alert(`帳號申請審核失敗：${getReadableError(error)}`);
+    renderAccountRequests();
   }
 }
 
@@ -2138,7 +2742,7 @@ async function handleAdminTableChange(event) {
     });
     showToast("角色已更新。");
   } catch (error) {
-    console.error(error);
+    logSafeError("admin.roleUpdate", error);
     alert(`角色更新失敗：${getReadableError(error)}`);
     renderAdminUsers();
   }
@@ -2157,7 +2761,7 @@ async function handleAdminTableClick(event) {
     });
     showToast(nextStatus === "active" ? "帳號已啟用。" : "帳號已停用。");
   } catch (error) {
-    console.error(error);
+    logSafeError("admin.statusUpdate", error);
     alert(`狀態更新失敗：${getReadableError(error)}`);
   }
 }
@@ -2169,9 +2773,9 @@ function exportProjectDataJson() {
 function exportProjectDataCsv() {
   const rows = [
     ["type", "system", "project", "title", "status", "owner", "executionDate", "deadline"],
-    ...state.systems.map((system) => ["system", system.name, "", "", "", "", "", ""]),
-    ...state.projects.map((project) => [project.category || "project", getSystem(project.systemId)?.name || "", project.name, "", project.phase || "", "", project.plannedStart || "", project.plannedEnd || ""]),
-    ...state.tasks.map((task) => ["task", getSystem(task.systemId)?.name || "", getProject(task.projectId)?.name || "", task.title, task.status, task.owner, task.executionDate, task.deadline]),
+    ...state.systems.map((system) => ["system", system.name, "", "", "", getOwnerDisplayName(system), "", ""]),
+    ...state.projects.map((project) => [project.category || "project", getSystem(project.systemId)?.name || "", project.name, "", project.phase || "", getOwnerDisplayName(project), project.plannedStart || "", project.plannedEnd || ""]),
+    ...state.tasks.map((task) => ["task", getSystem(task.systemId)?.name || "", getProject(task.projectId)?.name || "", task.title, task.status, getOwnerDisplayName(task), task.executionDate, task.deadline]),
   ];
   const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
   downloadTextFile(`project-desk-${todayString()}.csv`, csv, "text/csv;charset=utf-8");
@@ -2204,6 +2808,9 @@ function getAuditActionLabel(action = "") {
     "account.create": "建立帳號",
     "account.role": "調整角色",
     "account.status": "調整狀態",
+    "account.request.submit": "送出帳號申請",
+    "account.request.approve": "核准帳號申請",
+    "account.request.reject": "拒絕帳號申請",
     "profile.update": "修改名稱",
     "data.create": "新增資料",
     "data.update": "更新資料",
@@ -2239,9 +2846,68 @@ function normalizeEmail(email = "") {
   return String(email).trim().toLowerCase();
 }
 
+function maskEmail(email = "") {
+  const normalized = normalizeEmail(email);
+  const atIndex = normalized.indexOf("@");
+  if (atIndex <= 0) return normalized ? "***" : "";
+  const local = normalized.slice(0, atIndex);
+  const domain = normalized.slice(atIndex + 1);
+  const visible = local.slice(0, 1);
+  const stars = "*".repeat(Math.max(3, local.length - 1));
+  return `${visible}${stars}@${domain}`;
+}
+
+function getSafePhotoURL(photoURL = "") {
+  return photoURL ? "available" : "";
+}
+
+function sanitizeUser(user) {
+  const email = normalizeEmail(user?.email || "");
+  return {
+    uid: String(user?.uid || "").trim(),
+    displayName: String(user?.displayName || "").trim(),
+    emailMasked: maskEmail(email),
+    emailVerified: Boolean(user?.emailVerified),
+    photoURL: getSafePhotoURL(user?.photoURL || ""),
+  };
+}
+
+function getSensitiveAuthFields() {
+  return [
+    "idToken",
+    "refreshToken",
+    "oauthAccessToken",
+    "stsTokenManager",
+    "accessToken",
+    "apiKey",
+    "federatedId",
+    "providerUserInfo",
+    "rawUserInfo",
+  ];
+}
+
+function redactSensitiveText(value = "") {
+  return String(value)
+    .replace(new RegExp(`\\b(${getSensitiveAuthFields().join("|")})\\b\\s*[:=]\\s*("[^"]*"|'[^']*'|[^\\s,}]+)`, "gi"), "$1: [redacted]")
+    .replace(/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[redacted-token]")
+    .replace(/[A-Za-z0-9_/-]{120,}={0,2}/g, "[redacted-token]");
+}
+
+function sanitizeAuthError(error = {}) {
+  return {
+    name: String(error.name || "Error"),
+    code: String(error.code || ""),
+    message: redactSensitiveText(error.message || ""),
+  };
+}
+
+function logSafeError(context, error = {}) {
+  console.error(`[${context}]`, sanitizeAuthError(error));
+}
+
 function getReadableError(error = {}) {
   const code = error.code || "";
-  const message = error.message || "";
+  const message = redactSensitiveText(error.message || "");
   if (code.includes("permission-denied")) return "權限不足或帳號未被授權。";
   if (code.includes("unauthenticated")) return "登入狀態已失效，請重新登入。";
   if (code.includes("already-exists")) return "此帳號已存在。";
@@ -2308,12 +2974,13 @@ function renderSystems() {
       const projectCount = state.projects.filter((project) => project.systemId === system.id).length;
       const taskCount = state.tasks.filter((task) => taskMatchesSystemScope(task, system.id)).length;
       const shortLabel = getSystemShortLabel(system.name);
+      const ownerLabel = getOwnerDisplayName(system);
 
       return `
         <button class="system-item ${selectedSystemId === system.id ? "active" : ""}" type="button" data-system-id="${system.id}" title="${escapeHtml(system.name)}">
           <strong class="system-name-full">${escapeHtml(system.name)}</strong>
           <strong class="system-name-short">${escapeHtml(shortLabel)}</strong>
-          <span>${projectCount} 個專案・${taskCount} 個任務</span>
+          <span>${projectCount} 個專案・${taskCount} 個任務・${escapeHtml(ownerLabel)}</span>
         </button>
       `;
     }),
@@ -2353,13 +3020,16 @@ function getSystemShortLabel(name = "") {
 }
 
 function renderHeader() {
+  const selectedSystem = getSystem(selectedSystemId);
+  els.editSystemButton?.classList.toggle("hidden", !selectedSystem || !canEditSystem(selectedSystem));
+
   if (selectedScopeIsGeneral()) {
     els.pageTitle.textContent = "一般工作";
     els.pageSubtitle.textContent = "管理不屬於特定系統或專案的任務與待辦事項。";
     return;
   }
 
-  const system = getSystem(selectedSystemId);
+  const system = selectedSystem;
   els.pageTitle.textContent = system ? system.name : "全部系統";
   els.pageSubtitle.textContent = system?.description || "依系統管理專案，再由專案掌握任務與實際時程。";
 }
@@ -2768,7 +3438,7 @@ function getGanttGroups() {
 
   const systems = selectedSystemId
     ? state.systems.filter((system) => system.id === selectedSystemId)
-    : state.systems;
+    : getProjectGroupSystems(projects, visibleTasks);
 
   systems.forEach((system) => {
     const systemProjects = projects
@@ -3658,6 +4328,7 @@ function taskMatchesTodoQuery(task, query) {
     task.title,
     task.description,
     task.owner,
+    task.ownerName,
     (task.stakeholders || []).join(" "),
     task.completedDate,
     getStatusLabel(task.status),
@@ -3674,6 +4345,7 @@ function taskMatchesTodoQuery(task, query) {
     system?.name,
     project?.name,
     project?.description,
+    project?.ownerName,
     getProjectCategoryLabel(project?.category),
     project?.requirementRequest,
     project?.phaseChangedAt,
@@ -3975,10 +4647,20 @@ function renderTodoDrawer() {
     if (!isDone) form.elements.completedDate.value = "";
   };
 
-  form.elements.scope.addEventListener("change", () => syncDrawerScopeFields(form));
+  form.elements.scope.addEventListener("change", () => {
+    syncDrawerScopeFields(form);
+    syncDrawerOwnerOptions(form, task);
+    syncDrawerTaskPermissions(form, task);
+  });
   form.elements.systemId.addEventListener("change", () => {
     form.elements.projectId.innerHTML = renderProjectOptionsForSystem(form.elements.systemId.value, "");
     syncDrawerScopeFields(form, false);
+    syncDrawerOwnerOptions(form, task);
+    syncDrawerTaskPermissions(form, task);
+  });
+  form.elements.projectId.addEventListener("change", () => {
+    syncDrawerOwnerOptions(form, task);
+    syncDrawerTaskPermissions(form, task);
   });
   form.elements.status.addEventListener("change", syncDrawerCompletedDate);
   drawerFields.rangeStart.addEventListener("change", () => updateDrawerDates(true));
@@ -3987,6 +4669,8 @@ function renderTodoDrawer() {
   drawerFields.deadline.addEventListener("change", () => updateDrawerDates(false));
   form.addEventListener("submit", handleDrawerTaskSubmit);
   syncDrawerScopeFields(form, false);
+  syncDrawerOwnerOptions(form, task);
+  syncDrawerTaskPermissions(form, task);
   syncDrawerCompletedDate();
   updateDrawerDates(false);
 }
@@ -4174,7 +4858,13 @@ function renderTodoDrawerEdit(task) {
       <div class="drawer-edit-grid">
         <label>
           負責人
-          <input name="owner" maxlength="30" value="${escapeHtml(task.owner || "")}" />
+          <select name="owner" required>
+            ${renderOwnerOptions(getTaskOwnerChoices(task, {
+              scope: getTaskScope(task),
+              systemId: task.systemId,
+              projectId: task.projectId,
+            }), task.ownerUid, task)}
+          </select>
         </label>
         <label>
           標籤
@@ -4391,11 +5081,7 @@ function handleDrawerTaskSubmit(event) {
 
   const existingTask = getProjectTask(selectedTodoTaskId);
   if (!existingTask) return;
-  const scopeValues = {
-    scope: form.elements.scope.value,
-    systemId: form.elements.scope.value === "general" ? "" : form.elements.systemId.value,
-    projectId: form.elements.scope.value === "project" ? form.elements.projectId.value : "",
-  };
+  const scopeValues = getTaskScopeValuesFromForm(form);
   if (!validateTaskScopeValues(scopeValues)) return;
 
   const status = normalizeTaskStatus(form.elements.status.value);
@@ -4405,17 +5091,19 @@ function handleDrawerTaskSubmit(event) {
   }
 
   const requestedCompletedDate = status === "done" ? form.elements.completedDate.value || todayString() : "";
+  const owner = getOwnerPayload(ownerSelectValue(form.elements.owner, existingTask), existingTask || {});
 
   const updatedTask = applyTaskStatusSideEffects({
     ...existingTask,
     scope: scopeValues.scope,
     systemId: scopeValues.systemId,
     projectId: scopeValues.projectId,
+    ...owner,
     title: form.elements.title.value.trim() || "未命名任務",
     description: form.elements.description.value.trim(),
     status,
     priority: form.elements.priority.value,
-    owner: form.elements.owner.value.trim(),
+    owner: owner.ownerName,
     rangeStart,
     rangeEnd,
     executionDate,
@@ -4474,6 +5162,18 @@ function syncTaskScopeFields(fields, clearProject = true) {
   }
 }
 
+function syncTaskOwnerOptions(fields, task = null) {
+  const scopeValues = getTaskScopeFormValues(fields);
+  const existingTask = task || (fields.id?.value ? getProjectTask(fields.id.value) : null);
+  const selectedOwnerUid = existingTask?.ownerUid || currentProfile?.uid || "";
+  fields.owner.innerHTML = renderOwnerOptions(
+    getTaskOwnerChoices(existingTask, scopeValues),
+    selectedOwnerUid,
+    existingTask || {},
+  );
+  fields.owner.disabled = Boolean(existingTask?.id && !canAssignTaskOwner(existingTask, scopeValues));
+}
+
 function syncDrawerScopeFields(form, clearProject = true) {
   const scope = form.elements.scope.value;
   const isGeneral = scope === "general";
@@ -4501,6 +5201,34 @@ function syncDrawerScopeFields(form, clearProject = true) {
   } else {
     form.elements.projectId.value = "";
   }
+}
+
+function getTaskScopeValuesFromForm(form) {
+  const scope = form.elements.scope?.value || "project";
+  return {
+    scope,
+    systemId: scope === "general" ? "" : form.elements.systemId.value,
+    projectId: scope === "project" ? form.elements.projectId.value : "",
+  };
+}
+
+function syncDrawerOwnerOptions(form, task) {
+  const ownerSelect = form.elements.owner;
+  if (!ownerSelect) return;
+  const scopeValues = getTaskScopeValuesFromForm(form);
+  ownerSelect.innerHTML = renderOwnerOptions(
+    getTaskOwnerChoices(task, scopeValues),
+    task?.ownerUid || currentProfile?.uid || "",
+    task || {},
+  );
+  ownerSelect.disabled = Boolean(task?.id && !canAssignTaskOwner(task, scopeValues));
+}
+
+function syncDrawerTaskPermissions(form, task) {
+  const locked = Boolean(task?.id && !canAssignTaskOwner(task, getTaskScopeValuesFromForm(form)));
+  form.elements.scope.disabled = locked;
+  form.elements.systemId.disabled = locked;
+  form.elements.projectId.disabled = locked;
 }
 
 function populateProjectSelectForField(select, systemId, preferredProjectId = "") {
@@ -4596,17 +5324,19 @@ function handleTodoQuickSubmit(event) {
   }
 
   const requestedCompletedDate = status === "done" ? todoAddFields.completedDate.value || todayString() : "";
+  const owner = getOwnerPayload(ownerSelectValue(todoAddFields.owner, existingTask), existingTask || {});
 
   const task = applyTaskStatusSideEffects({
     id: todoAddFields.mode.value === "existing" ? todoAddFields.existingTaskId.value : createId(),
     scope,
     systemId,
     projectId,
+    ...owner,
     title: todoAddFields.title.value.trim(),
     description: todoAddFields.description.value.trim(),
     status,
     priority: todoAddFields.priority.value,
-    owner: todoAddFields.owner.value.trim(),
+    owner: owner.ownerName,
     rangeStart,
     rangeEnd,
     executionDate,
@@ -4644,7 +5374,8 @@ function resetTodoAddForm(collapse = true) {
   els.todoQuickForm.reset();
   todoAddFields.mode.value = "new";
   const defaultScope = getDefaultTaskScope();
-  const defaultSystemId = defaultScope === "general" ? "" : selectedSystemId || state.systems[0]?.id || "";
+  const selectedProject = selectedProjectId === "all" ? null : getProject(selectedProjectId);
+  const defaultSystemId = defaultScope === "general" ? "" : selectedProject?.systemId || selectedSystemId || state.systems[0]?.id || "";
   todoAddFields.scope.value = defaultScope;
   todoAddFields.systemId.innerHTML = renderSystemOptions(defaultSystemId);
   populateTodoProjectSelect(todoAddFields.systemId.value, defaultScope === "project" ? selectedProjectId : "");
@@ -4660,6 +5391,7 @@ function resetTodoAddForm(collapse = true) {
   renderEmailRows(todoAddFields.relatedEmails, []);
   renderLinkRows(todoAddFields.relatedLinks, []);
   syncTaskScopeFields(todoAddFields, false);
+  syncTaskOwnerOptions(todoAddFields);
   syncTaskCompletedField(todoAddFields);
   updateTaskDateConstraints(todoAddFields);
   updateTodoAddMode();
@@ -4727,7 +5459,7 @@ function fillTodoAddFromExistingTask() {
   todoAddFields.description.value = task.description || "";
   todoAddFields.status.value = normalizeTaskStatus(task.status);
   todoAddFields.priority.value = task.priority || "medium";
-  todoAddFields.owner.value = task.owner || "";
+  syncTaskOwnerOptions(todoAddFields, task);
   todoAddFields.rangeStart.value = task.rangeStart || task.startDate || getDefaultTodoDateForView(activeTodoView);
   todoAddFields.rangeEnd.value = task.rangeEnd || task.endDate || todoAddFields.rangeStart.value;
   todoAddFields.executionDate.value = task.executionDate || task.startDate || todoAddFields.rangeStart.value;
@@ -4777,7 +5509,7 @@ function renderProjects() {
     ? []
     : selectedSystemId
       ? state.systems.filter((system) => system.id === selectedSystemId)
-      : state.systems;
+      : getProjectGroupSystems(projects);
 
   els.projectList.classList.add("project-group-list");
 
@@ -4796,6 +5528,9 @@ function renderProjects() {
     const projectCards = systemProjects.length
       ? systemProjects.map(renderProjectCard).join("")
       : `<p class="empty-state">這個系統目前沒有符合條件的專案。</p>`;
+    const addProjectButton = !system.missing && canAssignProjectOwner(null, system.id)
+      ? `<button class="secondary-button" type="button" data-add-project-for-system="${system.id}">新增專案</button>`
+      : "";
 
     return `
       <section class="project-system-group">
@@ -4804,7 +5539,7 @@ function renderProjects() {
             <h3>${escapeHtml(system.name)}</h3>
             <p>${escapeHtml(system.description || "未設定描述")}</p>
           </div>
-          <button class="secondary-button" type="button" data-add-project-for-system="${system.id}">新增專案</button>
+          ${addProjectButton}
         </div>
         <div class="project-system-projects">
           ${projectCards}
@@ -4868,8 +5603,25 @@ function renderProjects() {
   });
 }
 
+function getProjectGroupSystems(projects = [], tasks = []) {
+  const systems = [...state.systems];
+  const knownSystemIds = new Set(systems.map((system) => system.id));
+  [...projects, ...tasks].forEach((item) => {
+    if (!item.systemId || knownSystemIds.has(item.systemId)) return;
+    knownSystemIds.add(item.systemId);
+    systems.push({
+      id: item.systemId,
+      name: "未顯示系統",
+      description: "你可以看到這個專案，但系統資料未在目前權限範圍內。",
+      missing: true,
+    });
+  });
+  return systems;
+}
+
 function renderProjectCard(project) {
   const system = getSystem(project.systemId);
+  const ownerLabel = getOwnerDisplayName(project);
   const isDevelopmentProject = project.category !== "general";
   const actualRange = getProjectActualRange(project.id);
   const plannedRange = isDevelopmentProject ? getProjectPlannedRange(project) : "";
@@ -4918,7 +5670,7 @@ function renderProjectCard(project) {
       <div class="project-card-header">
         <div>
           <h3>${escapeHtml(project.name)}</h3>
-          <div class="project-system">${escapeHtml(system?.name || "未指定系統")}・${getProjectCategoryLabel(project.category)}</div>
+          <div class="project-system">${escapeHtml(system?.name || "未指定系統")}・${getProjectCategoryLabel(project.category)}・負責人 ${escapeHtml(ownerLabel)}</div>
         </div>
         <span class="status-badge ${closed ? "closed" : ""}">${isDevelopmentProject ? (closed ? "已結案" : "進行中") : "一般"}</span>
       </div>
@@ -5167,12 +5919,14 @@ function projectMatchesSearch(project, system, query) {
   const haystack = [
     project.name,
     project.description,
+    project.ownerName,
     getProjectCategoryLabel(project.category),
     project.requirementRequest,
     project.phaseChangedAt,
     (project.relatedEmails || []).join(" "),
     (project.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
     system?.name,
+    system?.ownerName,
     getPhaseLabel(project.phase),
   ]
     .join(" ")
@@ -5202,6 +5956,7 @@ function getVisibleTasks(options = {}) {
       task.title,
       task.description,
       task.owner,
+      task.ownerName,
       (task.stakeholders || []).join(" "),
       task.priority,
       task.status,
@@ -5216,8 +5971,10 @@ function getVisibleTasks(options = {}) {
       (task.relatedEmails || []).join(" "),
       (task.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
       system?.name,
+      system?.ownerName,
       project?.name,
       project?.description,
+      project?.ownerName,
       getProjectCategoryLabel(project?.category),
       project?.requirementRequest,
       project?.phaseChangedAt,
@@ -5232,9 +5989,18 @@ function getVisibleTasks(options = {}) {
   });
 }
 
-function openSystemDialog() {
+function openSystemDialog(system = null) {
   els.systemForm.reset();
-  systemFields.id.value = "";
+  document.querySelector("#systemDialogTitle").textContent = system ? "設定系統" : "新增系統";
+  systemFields.id.value = system?.id || "";
+  systemFields.name.value = system?.name || "";
+  systemFields.description.value = system?.description || "";
+  systemFields.owner.innerHTML = renderOwnerOptions(
+    getSystemOwnerChoices(system),
+    system?.ownerUid || currentProfile?.uid || "",
+    system || {},
+  );
+  systemFields.owner.disabled = Boolean(system?.id && !canAssignSystemOwner(system));
   els.systemDialog.showModal();
 }
 
@@ -5243,11 +6009,16 @@ function handleSystemSubmit(event) {
 
   const system = {
     id: systemFields.id.value || createId(),
+    ...getOwnerPayload(ownerSelectValue(systemFields.owner, getSystem(systemFields.id.value)), getSystem(systemFields.id.value)),
     name: systemFields.name.value.trim(),
     description: systemFields.description.value.trim(),
   };
 
-  state.systems = [system, ...state.systems];
+  if (systemFields.id.value) {
+    state.systems = state.systems.map((item) => (item.id === system.id ? { ...item, ...system } : item));
+  } else {
+    state.systems = [system, ...state.systems];
+  }
   selectedSystemId = system.id;
   selectedProjectId = "all";
   saveState();
@@ -5266,6 +6037,8 @@ function openProjectDialog(project = null, defaults = {}) {
   els.projectForm.reset();
   projectFields.id.value = project?.id || "";
   projectFields.systemId.innerHTML = renderSystemOptions(defaultSystemId);
+  projectFields.systemId.disabled = Boolean(project?.id && !isAdminProfile());
+  syncProjectOwnerOptions(project, defaultSystemId);
   projectFields.category.value = normalizeProjectCategory(project?.category);
   projectFields.name.value = project?.name || "";
   projectFields.description.value = project?.description || "";
@@ -5308,10 +6081,17 @@ function handleProjectSubmit(event) {
   const previousProject = getProject(projectFields.id.value);
   const phase = isDevelopmentProject ? projectFields.phase.value : "deal";
   const isClosed = isDevelopmentProject && phase === "closed";
+  const owner = getOwnerPayload(ownerSelectValue(projectFields.owner, previousProject), previousProject || {});
+
+  if (!previousProject && !canAssignProjectOwner(null, projectFields.systemId.value)) {
+    alert("只有系統負責人或管理員可以在這個系統下新增專案。");
+    return;
+  }
 
   const project = {
     id: projectFields.id.value || createId(),
     systemId: projectFields.systemId.value,
+    ...owner,
     category,
     name: projectFields.name.value.trim(),
     description: projectFields.description.value.trim(),
@@ -5351,6 +6131,16 @@ function syncProjectCategoryFields() {
   projectFields.phaseScheduleSection.classList.toggle("hidden", !isDevelopmentProject);
   projectFields.phase.required = isDevelopmentProject;
   projectFields.phaseChangedAt.required = isDevelopmentProject;
+}
+
+function syncProjectOwnerOptions(project = getProject(projectFields.id.value), systemId = projectFields.systemId.value) {
+  const selectedOwnerUid = project?.ownerUid || currentProfile?.uid || "";
+  projectFields.owner.innerHTML = renderOwnerOptions(
+    getProjectOwnerChoices(project, systemId),
+    selectedOwnerUid,
+    project || {},
+  );
+  projectFields.owner.disabled = Boolean(project?.id && !canAssignProjectOwner(project, systemId));
 }
 
 function attachProjectScheduleHandlers() {
@@ -5408,8 +6198,12 @@ function openTaskDialog(task = null, defaults = {}) {
   els.deleteTaskButton.hidden = !task;
 
   const defaultScope = task ? getTaskScope(task) : getDefaultTaskScope(defaults);
-  const defaultSystemId = defaultScope === "general" ? "" : task?.systemId || defaults.systemId || (selectedScopeIsGeneral() ? "" : selectedSystemId) || state.systems[0]?.id || "";
-  const defaultProjectId = defaultScope === "project" ? task?.projectId || defaults.projectId || (selectedProjectId === "all" ? "" : selectedProjectId) : "";
+  const preferredProjectId = task?.projectId || defaults.projectId || (selectedProjectId === "all" ? "" : selectedProjectId);
+  const preferredProject = getProject(preferredProjectId);
+  const defaultSystemId = defaultScope === "general"
+    ? ""
+    : task?.systemId || defaults.systemId || preferredProject?.systemId || (selectedScopeIsGeneral() ? "" : selectedSystemId) || state.systems[0]?.id || "";
+  const defaultProjectId = defaultScope === "project" ? preferredProjectId : "";
   taskFields.id.value = task?.id || "";
   taskFields.scope.value = defaultScope;
   taskFields.systemId.innerHTML = renderSystemOptions(defaultSystemId);
@@ -5423,13 +6217,21 @@ function openTaskDialog(task = null, defaults = {}) {
   taskFields.executionDate.value = task?.executionDate || task?.startDate || taskFields.rangeStart.value;
   taskFields.deadline.value = task?.deadline || taskFields.rangeEnd.value;
   taskFields.completedDate.value = task?.completedDate || "";
-  taskFields.owner.value = task?.owner || "";
   taskFields.tags.value = task?.tags?.join(", ") || "";
   taskFields.stakeholders.value = task?.stakeholders?.join(", ") || "";
   renderEmailRows(taskFields.relatedEmails, task?.relatedEmails || []);
   renderLinkRows(taskFields.relatedLinks, task?.relatedLinks || []);
 
   syncTaskScopeFields(taskFields, false);
+  syncTaskOwnerOptions(taskFields, task);
+  const lockTaskScope = Boolean(task && !canAssignTaskOwner(task, {
+    scope: defaultScope,
+    systemId: defaultSystemId,
+    projectId: defaultProjectId,
+  }));
+  taskFields.scope.disabled = lockTaskScope;
+  taskFields.systemId.disabled = lockTaskScope;
+  taskFields.projectId.disabled = lockTaskScope;
   syncTaskCompletedField(taskFields);
   updateTaskDateConstraints(taskFields);
   els.taskDialog.showModal();
@@ -5460,17 +6262,19 @@ function handleTaskSubmit(event) {
   }
 
   const requestedCompletedDate = status === "done" ? taskFields.completedDate.value || todayString() : "";
+  const owner = getOwnerPayload(ownerSelectValue(taskFields.owner, existingTask), existingTask || {});
 
   const task = applyTaskStatusSideEffects({
     id: taskFields.id.value || createId(),
     scope,
     systemId,
     projectId,
+    ...owner,
     title: taskFields.title.value.trim(),
     description: taskFields.description.value.trim(),
     status,
     priority: taskFields.priority.value,
-    owner: taskFields.owner.value.trim(),
+    owner: owner.ownerName,
     rangeStart,
     rangeEnd,
     executionDate,
@@ -5660,7 +6464,15 @@ function collectLinkRows(container) {
 }
 
 function renderSystemOptions(selectedId) {
-  return state.systems
+  const systems = [...state.systems];
+  if (selectedId && !systems.some((system) => system.id === selectedId)) {
+    systems.push({
+      id: selectedId,
+      name: "未顯示系統",
+    });
+  }
+
+  return systems
     .map((system) => {
       return `<option value="${system.id}" ${system.id === selectedId ? "selected" : ""}>${escapeHtml(system.name)}</option>`;
     })

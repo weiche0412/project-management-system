@@ -13,9 +13,23 @@
         <p class="eyebrow">Project Desk Cloud</p>
         <h1>專案管理系統</h1>
         <p id="authStatusText">請使用 Google 帳號登入。管理員需先在後台建立使用者帳號。</p>
-        <div class="auth-actions">
+        <div class="auth-actions" id="authActions">
           <button class="primary-button" id="googleSignInButton" type="button">使用 Google 登入</button>
           <button class="secondary-button" id="previewModeButton" type="button">預覽操作介面</button>
+        </div>
+        <div class="account-request-panel hidden" id="accountRequestPanel">
+          <p class="account-request-email" id="accountRequestEmail"></p>
+          <form class="account-request-form" id="accountRequestForm">
+            <label class="field">
+              顯示名稱
+              <input id="accountRequestName" type="text" maxlength="40" required placeholder="請輸入你的名稱" />
+            </label>
+            <div class="account-request-actions">
+              <button class="primary-button" id="accountRequestSubmitButton" type="submit">送出帳號申請</button>
+              <button class="secondary-button" id="accountRequestCheckButton" type="button">重新檢查</button>
+              <button class="secondary-button" id="accountRequestSignOutButton" type="button">登出</button>
+            </div>
+          </form>
         </div>
         <p class="auth-help" id="authHelpText">若尚未被授權，請聯絡系統管理員開通帳號。</p>
       </div>
@@ -51,6 +65,7 @@
           <div class="topbar-actions">
             <button class="secondary-button hidden" id="adminButton" type="button">後台</button>
             <button class="secondary-button" id="addSystemButton" type="button">新增系統</button>
+            <button class="secondary-button hidden" id="editSystemButton" type="button">編輯系統</button>
             <button class="secondary-button" id="addProjectButton" type="button">新增專案</button>
             <button class="secondary-button" id="openGanttPageButton" type="button">甘特圖</button>
             <button class="primary-button" id="addTaskButton" type="button">新增任務</button>
@@ -144,7 +159,7 @@
     <dialog id="systemDialog">
       <form class="entity-form" id="systemForm">
         <header>
-          <h2>新增系統</h2>
+          <h2 id="systemDialogTitle">新增系統</h2>
           <button class="icon-button" type="button" data-close-dialog="systemDialog" aria-label="關閉">×</button>
         </header>
 
@@ -153,6 +168,11 @@
         <label class="field">
           系統名稱
           <input id="systemName" required maxlength="50" placeholder="例如：CRM 客戶管理系統" />
+        </label>
+
+        <label class="field">
+          負責人
+          <select id="systemOwner" required></select>
         </label>
 
         <label class="field">
@@ -198,6 +218,11 @@
         <label class="field">
           所屬系統
           <select id="projectSystem" required></select>
+        </label>
+
+        <label class="field">
+          負責人
+          <select id="projectOwner" required></select>
         </label>
 
         <label class="field">
@@ -381,7 +406,7 @@
         <div class="form-grid">
           <label class="field">
             負責人
-            <input id="taskOwner" required maxlength="30" />
+            <select id="taskOwner" required></select>
           </label>
 
           <label class="field">
@@ -546,7 +571,7 @@
 
               <label>
                 負責人
-                <input id="todoAddOwner" maxlength="30" required />
+                <select id="todoAddOwner" required></select>
               </label>
             </div>
 
@@ -654,6 +679,16 @@
             </label>
             <button class="primary-button" type="submit">建立帳號</button>
           </form>
+        </section>
+
+        <section class="admin-panel" aria-labelledby="account-requests-title">
+          <div class="section-header">
+            <div>
+              <h2 id="account-requests-title">待審帳號申請</h2>
+              <p>審核使用者自行送出的 Google 帳號申請，核准後即可登入系統。</p>
+            </div>
+          </div>
+          <div class="admin-table-wrap" id="adminAccountRequestsTable"></div>
         </section>
 
         <section class="admin-panel" aria-labelledby="users-title">

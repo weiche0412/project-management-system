@@ -10,9 +10,19 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function userDocByUid(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function userExists(uid) {
+      return uid is string
+        && uid != ""
+        && exists(/databases/$(database)/documents/users/$(uid));
+    }
+
     function isActiveUser() {
       return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userExists(request.auth.uid)
         && userDoc().data.status == "active";
     }
 
@@ -20,20 +30,212 @@ service cloud.firestore {
       return isActiveUser() && request.auth.token.admin == true;
     }
 
+    function activeOwner(uid) {
+      return userExists(uid) && userDocByUid(uid).data.status == "active";
+    }
+
+    function ownerIsAdmin(uid) {
+      return activeOwner(uid) && userDocByUid(uid).data.role == "admin";
+    }
+
+    function validOwnerFields(data) {
+      return activeOwner(data.ownerUid)
+        && data.ownerName is string;
+    }
+
+    function visibleListIs(data, expectedUids) {
+      return data.visibleToUids is list
+        && data.visibleToUids.hasAll(expectedUids)
+        && data.visibleToUids.hasOnly(expectedUids);
+    }
+
+    function visibleToCurrentUser() {
+      return isActiveUser()
+        && resource.data.visibleToUids is list
+        && request.auth.uid in resource.data.visibleToUids;
+    }
+
+    function systemExists(systemId) {
+      return systemId is string
+        && systemId != ""
+        && exists(/databases/$(database)/documents/systems/$(systemId));
+    }
+
+    function systemData(systemId) {
+      return get(/databases/$(database)/documents/systems/$(systemId)).data;
+    }
+
+    function projectExists(projectId) {
+      return projectId is string
+        && projectId != ""
+        && exists(/databases/$(database)/documents/projects/$(projectId));
+    }
+
+    function projectData(projectId) {
+      return get(/databases/$(database)/documents/projects/$(projectId)).data;
+    }
+
+    function isSystemOwner(systemId) {
+      return systemExists(systemId)
+        && systemData(systemId).ownerUid == request.auth.uid;
+    }
+
+    function isProjectOwner(projectId) {
+      return projectExists(projectId)
+        && projectData(projectId).ownerUid == request.auth.uid;
+    }
+
+    function ownerIdentityUnchanged() {
+      return request.resource.data.ownerUid == resource.data.ownerUid;
+    }
+
+    function projectScopeUnchanged() {
+      return request.resource.data.systemId == resource.data.systemId;
+    }
+
+    function taskScopeUnchanged() {
+      return request.resource.data.scope == resource.data.scope
+        && request.resource.data.systemId == resource.data.systemId
+        && request.resource.data.projectId == resource.data.projectId;
+    }
+
+    function validSystem(data) {
+      return validOwnerFields(data)
+        && visibleListIs(data, [data.ownerUid]);
+    }
+
+    function validProject(data) {
+      return validOwnerFields(data)
+        && systemExists(data.systemId)
+        && visibleListIs(data, [systemData(data.systemId).ownerUid, data.ownerUid]);
+    }
+
+    function validGeneralTask(data) {
+      return data.scope == "general"
+        && validOwnerFields(data)
+        && visibleListIs(data, [data.ownerUid]);
+    }
+
+    function validSystemTask(data) {
+      return data.scope == "system"
+        && validOwnerFields(data)
+        && systemExists(data.systemId)
+        && data.projectId == ""
+        && visibleListIs(data, [systemData(data.systemId).ownerUid, data.ownerUid]);
+    }
+
+    function validProjectTask(data) {
+      return data.scope == "project"
+        && validOwnerFields(data)
+        && projectExists(data.projectId)
+        && systemExists(projectData(data.projectId).systemId)
+        && data.systemId == projectData(data.projectId).systemId
+        && visibleListIs(data, [
+          systemData(projectData(data.projectId).systemId).ownerUid,
+          projectData(data.projectId).ownerUid,
+          data.ownerUid
+        ]);
+    }
+
+    function validTask(data) {
+      return validGeneralTask(data)
+        || validSystemTask(data)
+        || validProjectTask(data);
+    }
+
+    function canCreateSystem(data) {
+      return validSystem(data)
+        && (data.ownerUid == request.auth.uid || ownerIsAdmin(data.ownerUid));
+    }
+
+    function canUpdateSystem() {
+      return resource.data.ownerUid == request.auth.uid
+        && ownerIdentityUnchanged()
+        && validSystem(request.resource.data);
+    }
+
+    function canCreateProject(data) {
+      return validProject(data) && isSystemOwner(data.systemId);
+    }
+
+    function canUpdateProject() {
+      return validProject(request.resource.data)
+        && projectScopeUnchanged()
+        && (
+          isSystemOwner(resource.data.systemId)
+          || (
+            resource.data.ownerUid == request.auth.uid
+            && ownerIdentityUnchanged()
+          )
+        );
+    }
+
+    function canCreateTask(data) {
+      return validTask(data)
+        && (
+          (data.scope == "general" && (data.ownerUid == request.auth.uid || ownerIsAdmin(data.ownerUid)))
+          || (data.scope == "system" && isSystemOwner(data.systemId))
+          || (
+            data.scope == "project"
+            && (
+              isSystemOwner(projectData(data.projectId).systemId)
+              || isProjectOwner(data.projectId)
+            )
+          )
+        );
+    }
+
+    function canAssignTaskInScope(data) {
+      return (
+        data.scope == "system"
+        && isSystemOwner(data.systemId)
+      ) || (
+        data.scope == "project"
+        && (
+          isSystemOwner(projectData(data.projectId).systemId)
+          || isProjectOwner(data.projectId)
+        )
+      );
+    }
+
+    function canUpdateTask() {
+      return validTask(request.resource.data)
+        && (
+          (
+            visibleToCurrentUser()
+            && ownerIdentityUnchanged()
+            && taskScopeUnchanged()
+          )
+          || (
+            canAssignTaskInScope(resource.data)
+            && canAssignTaskInScope(request.resource.data)
+          )
+        );
+    }
+
     function onlyAdminBackendWrites() {
       return false;
     }
 
     match /systems/{systemId} {
-      allow read, write: if isActiveUser();
+      allow read: if isAdmin() || visibleToCurrentUser();
+      allow create: if isAdmin() || (isActiveUser() && canCreateSystem(request.resource.data));
+      allow update: if isAdmin() || (isActiveUser() && canUpdateSystem());
+      allow delete: if isAdmin();
     }
 
     match /projects/{projectId} {
-      allow read, write: if isActiveUser();
+      allow read: if isAdmin() || visibleToCurrentUser();
+      allow create: if isAdmin() || (isActiveUser() && canCreateProject(request.resource.data));
+      allow update: if isAdmin() || (isActiveUser() && canUpdateProject());
+      allow delete: if isAdmin() || (isActiveUser() && isSystemOwner(resource.data.systemId));
     }
 
     match /tasks/{taskId} {
-      allow read, write: if isActiveUser();
+      allow read: if isAdmin() || visibleToCurrentUser();
+      allow create: if isAdmin() || (isActiveUser() && canCreateTask(request.resource.data));
+      allow update: if isAdmin() || (isActiveUser() && canUpdateTask());
+      allow delete: if isAdmin() || (isActiveUser() && visibleToCurrentUser());
     }
 
     match /users/{userId} {
@@ -43,6 +245,11 @@ service cloud.firestore {
 
     match /allowedUsers/{emailKey} {
       allow read: if isAdmin();
+      allow create, update, delete: if onlyAdminBackendWrites();
+    }
+
+    match /accountRequests/{userId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
       allow create, update, delete: if onlyAdminBackendWrites();
     }
 

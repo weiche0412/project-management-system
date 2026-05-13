@@ -85,6 +85,27 @@ body {
   font-size: 13px;
 }
 
+.account-request-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.account-request-email {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.account-request-form,
+.account-request-actions {
+  display: grid;
+  gap: 10px;
+}
+
 button,
 input,
 select,
@@ -1267,7 +1288,7 @@ h1 {
 
 .admin-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
@@ -1342,6 +1363,18 @@ h1 {
   padding: 0 8px;
 }
 
+.admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-row-actions .primary-button,
+.admin-row-actions .secondary-button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -1352,6 +1385,11 @@ h1 {
   color: var(--good);
   font-size: 12px;
   font-weight: 800;
+}
+
+.status-pill.pending {
+  background: #fff7e8;
+  color: var(--warn);
 }
 
 .status-pill.disabled {
