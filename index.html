@@ -118,6 +118,14 @@
             <input id="searchInput" type="search" placeholder="系統、專案、任務、負責人、關係人、標籤" />
           </label>
           <label class="field">
+            內部負責人
+            <select id="ownerFilter" multiple size="3"></select>
+          </label>
+          <label class="field">
+            協作對象
+            <select id="collaborationFilter" multiple size="3"></select>
+          </label>
+          <label class="field">
             專案階段
             <select id="phaseFilter">
               <option value="all">全部階段</option>
@@ -131,6 +139,7 @@
           </label>
         </section>
         <div class="tag-filter-bar hidden" id="tagFilterBar"></div>
+        <section class="project-summary-cards hidden" id="projectSummaryCards" aria-label="全部系統專案摘要"></section>
 
         <section class="project-section" aria-labelledby="project-section-title">
           <div class="section-header">
@@ -171,8 +180,18 @@
         </label>
 
         <label class="field">
-          負責人
-          <select id="systemOwner" required></select>
+          內部負責人
+          <select id="systemOwner" multiple size="4" required></select>
+        </label>
+
+        <label class="field">
+          協作對象
+          <input id="systemCollaborationTags" placeholder="用逗號分隔，例如 精藤資訊, Tappay" maxlength="160" />
+        </label>
+
+        <label class="field">
+          標籤
+          <input id="systemTags" placeholder="用逗號分隔，例如 核心, 對外服務" maxlength="120" />
         </label>
 
         <label class="field">
@@ -181,8 +200,11 @@
         </label>
 
         <footer>
-          <button class="secondary-button" type="button" data-close-dialog="systemDialog">取消</button>
-          <button class="primary-button" type="submit">儲存系統</button>
+          <button class="ghost-button" id="deleteSystemButton" type="button">刪除系統</button>
+          <div>
+            <button class="secondary-button" type="button" data-close-dialog="systemDialog">取消</button>
+            <button class="primary-button" type="submit">儲存系統</button>
+          </div>
         </footer>
       </form>
     </dialog>
@@ -221,8 +243,8 @@
         </label>
 
         <label class="field">
-          負責人
-          <select id="projectOwner" required></select>
+          內部負責人
+          <select id="projectOwner" multiple size="4" required></select>
         </label>
 
         <label class="field">
@@ -242,6 +264,18 @@
           描述
           <textarea id="projectDescription" rows="3" maxlength="220" placeholder="補充專案背景、目標或注意事項"></textarea>
         </label>
+
+        <div class="form-grid">
+          <label class="field">
+            協作對象
+            <input id="projectCollaborationTags" placeholder="用逗號分隔，例如 全家資訊, 宅配通" maxlength="160" />
+          </label>
+
+          <label class="field">
+            標籤
+            <input id="projectTags" placeholder="用逗號分隔，例如 付款, 儀表板" maxlength="120" />
+          </label>
+        </div>
 
         <div class="form-grid" id="projectPhaseFields">
         <label class="field">
@@ -308,8 +342,11 @@
         </section>
 
         <footer>
-          <button class="secondary-button" type="button" data-close-dialog="projectDialog">取消</button>
-          <button class="primary-button" type="submit">儲存專案</button>
+          <button class="ghost-button" id="deleteProjectButton" type="button">刪除專案</button>
+          <div>
+            <button class="secondary-button" type="button" data-close-dialog="projectDialog">取消</button>
+            <button class="primary-button" type="submit">儲存專案</button>
+          </div>
         </footer>
       </form>
     </dialog>
@@ -344,6 +381,18 @@
           </label>
         </div>
 
+        <div class="form-grid">
+          <label class="field" id="taskStageField">
+            專案階段
+            <select id="taskStage"></select>
+          </label>
+
+          <label class="field" id="taskParentField">
+            母任務
+            <select id="taskParent"></select>
+          </label>
+        </div>
+
         <label class="field">
           任務名稱
           <input id="taskTitle" required maxlength="80" />
@@ -360,6 +409,7 @@
             <select id="taskStatus">
               <option value="not_started">未開始</option>
               <option value="doing">進行中</option>
+              <option value="paused">暫停</option>
               <option value="done">已完成</option>
             </select>
           </label>
@@ -377,24 +427,24 @@
         <div class="form-grid">
           <label class="field">
             執行區間開始
-            <input id="taskRangeStart" type="date" required />
+            <input id="taskRangeStart" type="date" />
           </label>
 
           <label class="field">
             執行區間結束
-            <input id="taskRangeEnd" type="date" required />
+            <input id="taskRangeEnd" type="date" />
           </label>
         </div>
 
         <div class="form-grid">
           <label class="field">
             執行日期
-            <input id="taskExecutionDate" type="date" required />
+            <input id="taskExecutionDate" type="date" />
           </label>
 
           <label class="field">
             最後期限
-            <input id="taskDeadline" type="date" required />
+            <input id="taskDeadline" type="date" />
           </label>
         </div>
 
@@ -405,8 +455,8 @@
 
         <div class="form-grid">
           <label class="field">
-            負責人
-            <select id="taskOwner" required></select>
+            內部負責人
+            <select id="taskOwner" multiple size="4" required></select>
           </label>
 
           <label class="field">
@@ -416,9 +466,35 @@
         </div>
 
         <label class="field">
-          關係人
-          <input id="taskStakeholders" placeholder="用逗號分隔，例如 王小明, 李小華" maxlength="120" />
+          協作對象
+          <input id="taskStakeholders" placeholder="用逗號分隔，例如 精藤資訊, Tappay" maxlength="160" />
         </label>
+
+        <section class="phase-schedule-editor" aria-labelledby="task-recurrence-title">
+          <div>
+            <h3 id="task-recurrence-title">週期性任務</h3>
+            <p>週期任務只會在實際執行日出現在待辦。</p>
+          </div>
+          <label class="checkbox-field">
+            <input id="taskIsRecurring" type="checkbox" />
+            啟用週期設定
+          </label>
+          <div class="form-grid">
+            <label class="field">
+              週期類型
+              <select id="taskRecurrenceType">
+                <option value="">不設定</option>
+                <option value="weekly">每週</option>
+                <option value="monthly">每月</option>
+                <option value="custom">定期執行</option>
+              </select>
+            </label>
+            <label class="field">
+              定期間隔天數
+              <input id="taskRecurrenceInterval" type="number" min="1" max="365" placeholder="例如 14" />
+            </label>
+          </div>
+        </section>
 
         <section class="related-section" aria-label="關聯信件">
           <div class="related-section-header">
@@ -556,6 +632,7 @@
                 <select id="todoAddStatus">
                   <option value="not_started">未開始</option>
                   <option value="doing">進行中</option>
+                  <option value="paused">暫停</option>
                   <option value="done">已完成</option>
                 </select>
               </label>
@@ -571,29 +648,29 @@
 
               <label>
                 負責人
-                <select id="todoAddOwner" required></select>
+                <select id="todoAddOwner" multiple size="3" required></select>
               </label>
             </div>
 
             <div class="todo-add-grid">
               <label>
                 執行區間開始
-                <input id="todoAddRangeStart" type="date" required />
+                <input id="todoAddRangeStart" type="date" />
               </label>
 
               <label>
                 執行區間結束
-                <input id="todoAddRangeEnd" type="date" required />
+                <input id="todoAddRangeEnd" type="date" />
               </label>
 
               <label>
                 執行日期
-                <input id="todoAddExecutionDate" type="date" required />
+                <input id="todoAddExecutionDate" type="date" />
               </label>
 
               <label>
                 最後期限
-                <input id="todoAddDeadline" type="date" required />
+                <input id="todoAddDeadline" type="date" />
               </label>
             </div>
 
@@ -608,8 +685,8 @@
             </label>
 
             <label>
-              關係人
-              <input id="todoAddStakeholders" placeholder="用逗號分隔，例如 王小明, 李小華" maxlength="120" />
+              協作對象
+              <input id="todoAddStakeholders" placeholder="用逗號分隔，例如 精藤資訊, Tappay" maxlength="160" />
             </label>
 
             <section class="related-section" aria-label="待辦關聯信件">
@@ -732,6 +809,17 @@
       </main>
     </section>
 
+    <section class="todo-page project-detail-page hidden" id="projectDetailPage" aria-hidden="true">
+      <header class="todo-page-topbar">
+        <div class="todo-page-brand">
+          <span class="app-launcher">PM</span>
+          <strong>專案檢視</strong>
+        </div>
+        <button class="todo-page-close" id="closeProjectDetailButton" type="button">返回專案管理</button>
+      </header>
+      <main class="project-detail-main" id="projectDetailContent"></main>
+    </section>
+
     <section class="gantt-page hidden" id="ganttPage" aria-hidden="true">
       <header class="todo-page-topbar gantt-page-topbar">
         <div class="todo-page-brand">
@@ -752,8 +840,27 @@
             </select>
           </label>
           <label class="todo-sort-control">
+            <span>系統</span>
+            <select id="ganttSystemFilter"></select>
+          </label>
+          <label class="todo-sort-control">
             <span>專案</span>
             <select id="ganttProjectFilter"></select>
+          </label>
+          <label class="todo-sort-control">
+            <span>負責人</span>
+            <select id="ganttOwnerFilter" multiple size="2"></select>
+          </label>
+          <label class="todo-sort-control">
+            <span>協作</span>
+            <select id="ganttCollaborationFilter" multiple size="2"></select>
+          </label>
+          <label class="todo-sort-control">
+            <span>排序</span>
+            <select id="ganttSortMode">
+              <option value="manual">手動排序</option>
+              <option value="startDate">開始時間</option>
+            </select>
           </label>
           <button class="todo-page-close" id="closeGanttPageButton" type="button">返回專案管理</button>
         </div>

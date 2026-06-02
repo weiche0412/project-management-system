@@ -9,6 +9,7 @@ setGlobalOptions({ region: "asia-east1", maxInstances: 10 });
 
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
+const WORKSPACE_COLLECTIONS = ["systems", "projects", "projectStages", "tasks"];
 
 exports.bootstrapCurrentUser = onCall(async (request) => {
   const auth = requireAuth(request);
@@ -477,6 +478,26 @@ exports.listAssignableOwners = onCall(async (request) => {
   };
 });
 
+exports.loadVisibleWorkspace = onCall(async (request) => {
+  const auth = requireAuth(request);
+  const profile = await requireActiveUser(auth.uid);
+  const includeAll = profile.role === "admin";
+  const entries = await Promise.all(WORKSPACE_COLLECTIONS.map(async (collectionName) => {
+    let query = db.collection(collectionName);
+    if (!includeAll) {
+      query = query.where("visibleToUids", "array-contains", auth.uid);
+    }
+
+    const snapshot = await query.get();
+    return [
+      collectionName,
+      snapshot.docs.map((doc) => serializeWorkspaceValue({ id: doc.id, ...doc.data() })),
+    ];
+  }));
+
+  return { state: Object.fromEntries(entries) };
+});
+
 exports.auditSystemChanges = onDocumentWritten("systems/{docId}", (event) => auditDataChange(event, "systems"));
 exports.auditProjectChanges = onDocumentWritten("projects/{docId}", (event) => auditDataChange(event, "projects"));
 exports.auditTaskChanges = onDocumentWritten("tasks/{docId}", (event) => auditDataChange(event, "tasks"));
@@ -599,11 +620,13 @@ async function assertNotLastActiveAdmin(uid, nextRole, nextStatus) {
 }
 
 async function userHasDelegationScope(uid) {
-  const [systemSnap, projectSnap] = await Promise.all([
+  const [systemSnap, legacySystemSnap, projectSnap, legacyProjectSnap] = await Promise.all([
+    db.collection("systems").where("internalOwnerIds", "array-contains", uid).limit(1).get(),
     db.collection("systems").where("ownerUid", "==", uid).limit(1).get(),
+    db.collection("projects").where("internalOwnerIds", "array-contains", uid).limit(1).get(),
     db.collection("projects").where("ownerUid", "==", uid).limit(1).get(),
   ]);
-  return !systemSnap.empty || !projectSnap.empty;
+  return !systemSnap.empty || !legacySystemSnap.empty || !projectSnap.empty || !legacyProjectSnap.empty;
 }
 
 async function setClaims(uid, role, status) {
@@ -647,6 +670,25 @@ async function auditDataChange(event, collection) {
     docId: event.params.docId,
     createdAt: FieldValue.serverTimestamp(),
   });
+}
+
+function serializeWorkspaceValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(serializeWorkspaceValue);
+  }
+
+  if (value && typeof value.toMillis === "function") {
+    return { __pmTimestampMillis: value.toMillis() };
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value).reduce((result, [key, item]) => {
+      result[key] = serializeWorkspaceValue(item);
+      return result;
+    }, {});
+  }
+
+  return value;
 }
 
 function normalizeEmail(email = "") {
