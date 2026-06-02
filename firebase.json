@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "project-management-syste-73486",
     "public": ".",
     "ignore": [
       "firebase.json",
@@ -22,6 +23,7 @@
       "server.err.txt",
       "server.out.txt",
       "deploy-firebase.cmd",
+      "firebase-reauth-deploy.cmd",
       "login-firebase.cmd",
       "project-management-system.html",
       "**/.*"

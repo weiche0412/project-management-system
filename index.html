@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>專案管理系統</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260602-gantt-filters2" />
   </head>
   <body>
     <section class="auth-screen" id="authScreen" aria-live="polite">
@@ -68,6 +68,7 @@
             <button class="secondary-button hidden" id="editSystemButton" type="button">編輯系統</button>
             <button class="secondary-button" id="addProjectButton" type="button">新增專案</button>
             <button class="secondary-button" id="openGanttPageButton" type="button">甘特圖</button>
+            <button class="secondary-button" id="openTodoWorkbenchButton" type="button">待辦工作台</button>
             <button class="primary-button" id="addTaskButton" type="button">新增任務</button>
             <div class="account-panel">
               <button class="account-button" id="accountButton" type="button" aria-expanded="false">
@@ -112,32 +113,53 @@
           <div class="todo-dashboard" id="todoDashboard"></div>
         </section>
 
-        <section class="control-strip" aria-label="篩選">
+        <section class="control-strip project-filter-strip" aria-label="專案篩選">
           <label class="field">
             搜尋
-            <input id="searchInput" type="search" placeholder="系統、專案、任務、負責人、關係人、標籤" />
+            <input id="searchInput" type="search" placeholder="搜尋專案、任務、階段、負責人或關鍵字" />
           </label>
+          <div class="field">
+            <span>內部負責人</span>
+            <div id="ownerFilter" class="search-multi-select" data-summary-unit="人"></div>
+          </div>
+          <div class="field">
+            <span>協作對象</span>
+            <div id="collaborationFilter" class="search-multi-select" data-summary-unit="組"></div>
+          </div>
+          <div class="field">
+            <span>專案階段</span>
+            <div id="phaseFilter" class="search-multi-select" data-summary-unit="階段"></div>
+          </div>
+          <div class="field">
+            <span>狀態</span>
+            <div id="projectStatusFilter" class="search-multi-select" data-summary-unit="項"></div>
+          </div>
+          <div class="field">
+            <span>優先級</span>
+            <div id="projectPriorityFilter" class="search-multi-select" data-summary-unit="項"></div>
+          </div>
+          <div class="field">
+            <span>時程狀態</span>
+            <div id="projectScheduleFilter" class="search-multi-select" data-summary-unit="項"></div>
+          </div>
           <label class="field">
-            內部負責人
-            <select id="ownerFilter" multiple size="3"></select>
+            日期
+            <select id="projectDateFilter"></select>
           </label>
-          <label class="field">
-            協作對象
-            <select id="collaborationFilter" multiple size="3"></select>
+          <label class="field filter-date-range hidden" aria-label="專案自訂開始日期">
+            起日
+            <input id="projectDateStart" type="date" />
           </label>
-          <label class="field">
-            專案階段
-            <select id="phaseFilter">
-              <option value="all">全部階段</option>
-              <option value="deal">商談</option>
-              <option value="planning">規劃</option>
-              <option value="development">開發</option>
-              <option value="testing">測試</option>
-              <option value="launch">版更</option>
-              <option value="closed">結案</option>
-            </select>
+          <label class="field filter-date-range hidden" aria-label="專案自訂結束日期">
+            迄日
+            <input id="projectDateEnd" type="date" />
           </label>
+          <div class="field">
+            <span>更多篩選</span>
+            <div id="projectMoreFilter" class="search-multi-select" data-summary-unit="項"></div>
+          </div>
         </section>
+        <div class="active-filter-chips" id="projectActiveFilters"></div>
         <div class="tag-filter-bar hidden" id="tagFilterBar"></div>
         <section class="project-summary-cards hidden" id="projectSummaryCards" aria-label="全部系統專案摘要"></section>
 
@@ -157,8 +179,69 @@
               <h2 id="task-section-title">任務</h2>
               <p id="taskScopeLabel">顯示目前篩選範圍內的任務。</p>
             </div>
+            <div class="section-header-actions">
+              <div class="segmented-control" id="taskViewToggle" role="group" aria-label="任務視圖">
+                <button class="active" type="button" data-task-view="board" aria-pressed="true">看板</button>
+                <button type="button" data-task-view="list" aria-pressed="false">清單</button>
+              </div>
+              <div class="segmented-control" id="taskGroupToggle" role="group" aria-label="任務分組">
+                <button class="active" type="button" data-task-group="status" aria-pressed="true">依狀態</button>
+                <button type="button" data-task-group="phase" aria-pressed="false">依階段</button>
+              </div>
+            </div>
           </div>
-          <div class="project-tabs" id="projectTabs" aria-label="專案任務篩選"></div>
+          <section class="control-strip task-filter-strip" aria-label="任務篩選">
+            <label class="field">
+              搜尋
+              <input id="taskSearchInput" type="search" placeholder="搜尋任務、階段、負責人、協作對象或關鍵字" />
+            </label>
+            <div class="field">
+              <span>專案</span>
+              <div id="taskProjectFilter" class="search-multi-select" data-summary-unit="個"></div>
+            </div>
+            <div class="field">
+              <span>專案階段</span>
+              <div id="taskPhaseFilter" class="search-multi-select" data-summary-unit="階段"></div>
+            </div>
+            <div class="field">
+              <span>任務狀態</span>
+              <div id="taskStatusFilter" class="search-multi-select" data-summary-unit="項"></div>
+            </div>
+            <div class="field">
+              <span>負責人</span>
+              <div id="taskOwnerFilter" class="search-multi-select" data-summary-unit="人"></div>
+            </div>
+            <div class="field">
+              <span>協作對象</span>
+              <div id="taskCollaborationFilter" class="search-multi-select" data-summary-unit="組"></div>
+            </div>
+            <div class="field">
+              <span>優先級</span>
+              <div id="taskPriorityFilter" class="search-multi-select" data-summary-unit="項"></div>
+            </div>
+            <div class="field">
+              <span>到期狀態</span>
+              <div id="taskDueFilter" class="search-multi-select" data-summary-unit="項"></div>
+            </div>
+            <label class="field">
+              日期區間
+              <select id="taskDateFilter"></select>
+            </label>
+            <label class="field filter-date-range hidden" aria-label="任務自訂開始日期">
+              起日
+              <input id="taskDateStart" type="date" />
+            </label>
+            <label class="field filter-date-range hidden" aria-label="任務自訂結束日期">
+              迄日
+              <input id="taskDateEnd" type="date" />
+            </label>
+            <div class="field">
+              <span>更多篩選</span>
+              <div id="taskMoreFilter" class="search-multi-select" data-summary-unit="項"></div>
+            </div>
+          </section>
+          <div class="active-filter-chips" id="taskActiveFilters"></div>
+          <div class="project-tabs hidden" id="projectTabs" aria-label="專案任務篩選"></div>
           <div class="board" id="board" aria-label="任務看板"></div>
         </section>
       </main>
@@ -179,10 +262,10 @@
           <input id="systemName" required maxlength="50" placeholder="例如：CRM 客戶管理系統" />
         </label>
 
-        <label class="field">
-          內部負責人
-          <select id="systemOwner" multiple size="4" required></select>
-        </label>
+        <div class="field">
+          <span>內部負責人</span>
+          <div id="systemOwner" class="search-multi-select" data-summary-unit="人"></div>
+        </div>
 
         <label class="field">
           協作對象
@@ -242,10 +325,10 @@
           <select id="projectSystem" required></select>
         </label>
 
-        <label class="field">
-          內部負責人
-          <select id="projectOwner" multiple size="4" required></select>
-        </label>
+        <div class="field">
+          <span>內部負責人</span>
+          <div id="projectOwner" class="search-multi-select" data-summary-unit="人"></div>
+        </div>
 
         <label class="field">
           專案分類
@@ -254,6 +337,29 @@
             <option value="general">一般</option>
           </select>
         </label>
+
+        <div class="form-grid">
+          <label class="field">
+            專案狀態
+            <select id="projectStatus">
+              <option value="not_started">未開始</option>
+              <option value="doing">進行中</option>
+              <option value="review">待確認</option>
+              <option value="paused">暫停</option>
+              <option value="done">已完成</option>
+              <option value="closed">已結案</option>
+            </select>
+          </label>
+
+          <label class="field">
+            優先級
+            <select id="projectPriority">
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select>
+          </label>
+        </div>
 
         <label class="field">
           專案名稱
@@ -366,7 +472,7 @@
             <select id="taskScope" required>
               <option value="project">專案任務</option>
               <option value="system">系統任務</option>
-              <option value="general">一般任務</option>
+              <option value="general">一般工作</option>
             </select>
           </label>
 
@@ -385,6 +491,11 @@
           <label class="field" id="taskStageField">
             專案階段
             <select id="taskStage"></select>
+          </label>
+
+          <label class="field" id="taskTypeField">
+            任務層級
+            <select id="taskType"></select>
           </label>
 
           <label class="field" id="taskParentField">
@@ -454,10 +565,10 @@
         </label>
 
         <div class="form-grid">
-          <label class="field">
-            內部負責人
-            <select id="taskOwner" multiple size="4" required></select>
-          </label>
+          <div class="field">
+            <span>內部負責人</span>
+            <div id="taskOwner" class="search-multi-select" data-summary-unit="人"></div>
+          </div>
 
           <label class="field">
             標籤
@@ -470,7 +581,7 @@
           <input id="taskStakeholders" placeholder="用逗號分隔，例如 精藤資訊, Tappay" maxlength="160" />
         </label>
 
-        <section class="phase-schedule-editor" aria-labelledby="task-recurrence-title">
+        <section class="phase-schedule-editor recurrence-editor" aria-labelledby="task-recurrence-title">
           <div>
             <h3 id="task-recurrence-title">週期性任務</h3>
             <p>週期任務只會在實際執行日出現在待辦。</p>
@@ -479,20 +590,185 @@
             <input id="taskIsRecurring" type="checkbox" />
             啟用週期設定
           </label>
-          <div class="form-grid">
-            <label class="field">
-              週期類型
-              <select id="taskRecurrenceType">
-                <option value="">不設定</option>
-                <option value="weekly">每週</option>
-                <option value="monthly">每月</option>
-                <option value="custom">定期執行</option>
-              </select>
-            </label>
-            <label class="field">
-              定期間隔天數
-              <input id="taskRecurrenceInterval" type="number" min="1" max="365" placeholder="例如 14" />
-            </label>
+          <div class="recurrence-rule-panel hidden" id="taskRecurrenceRulePanel">
+            <section class="recurrence-editor-section" aria-label="每次任務時間">
+              <h4>每次任務時間</h4>
+              <div class="form-grid">
+                <label class="field">
+                  開始時間
+                  <input id="taskRecurrenceStartTime" type="time" />
+                </label>
+                <label class="field">
+                  結束時間
+                  <input id="taskRecurrenceEndTime" type="time" />
+                </label>
+                <label class="field">
+                  執行期間（分鐘）
+                  <input id="taskRecurrenceDuration" type="number" min="0" max="1439" readonly />
+                </label>
+              </div>
+            </section>
+
+            <section class="recurrence-editor-section" aria-label="重複規則">
+              <h4>重複規則</h4>
+              <div class="form-grid">
+                <label class="field">
+                  週期類型
+                  <select id="taskRecurrenceType">
+                    <option value="">不設定</option>
+                    <option value="daily">每日</option>
+                    <option value="weekly">每週</option>
+                    <option value="monthly">每月</option>
+                    <option value="yearly">每年</option>
+                  </select>
+                </label>
+                <label class="field" id="taskRecurrenceIntervalField">
+                  <span id="taskRecurrenceIntervalLabel">每隔</span>
+                  <span class="inline-number-field">
+                    <input id="taskRecurrenceInterval" type="number" min="1" max="365" placeholder="1" />
+                    <span id="taskRecurrenceIntervalUnit">天</span>
+                  </span>
+                </label>
+              </div>
+
+              <div class="recurrence-pattern-section hidden" id="taskRecurrenceDailyField">
+                <label class="field">
+                  每日規則
+                  <select id="taskRecurrenceDailyMode">
+                    <option value="interval">每隔 N 天</option>
+                    <option value="weekday">每個工作日</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="recurrence-weekday-field hidden" id="taskRecurrenceWeekdayField">
+                <span>重複於星期</span>
+                <div class="weekday-picker">
+                  <label><input type="checkbox" name="taskRecurrenceWeekday" value="0" />日</label>
+                  <label><input type="checkbox" name="taskRecurrenceWeekday" value="1" />一</label>
+                  <label><input type="checkbox" name="taskRecurrenceWeekday" value="2" />二</label>
+                  <label><input type="checkbox" name="taskRecurrenceWeekday" value="3" />三</label>
+                  <label><input type="checkbox" name="taskRecurrenceWeekday" value="4" />四</label>
+                  <label><input type="checkbox" name="taskRecurrenceWeekday" value="5" />五</label>
+                  <label><input type="checkbox" name="taskRecurrenceWeekday" value="6" />六</label>
+                </div>
+              </div>
+
+              <div class="recurrence-pattern-section hidden" id="taskRecurrenceMonthlyField">
+                <div class="form-grid">
+                  <label class="field">
+                    每月設定
+                    <select id="taskRecurrenceMonthlyMode">
+                      <option value="dayOfMonth">固定日期</option>
+                      <option value="nthWeekday">星期規則</option>
+                    </select>
+                  </label>
+                  <label class="field" id="taskRecurrenceMonthDayField">
+                    日期
+                    <input id="taskRecurrenceMonthDay" type="number" min="1" max="31" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="recurrence-pattern-section hidden" id="taskRecurrenceYearlyField">
+                <div class="form-grid">
+                  <label class="field">
+                    每年設定
+                    <select id="taskRecurrenceYearlyMode">
+                      <option value="date">固定日期</option>
+                      <option value="nthWeekday">星期規則</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    月份
+                    <input id="taskRecurrenceYearlyMonth" type="number" min="1" max="12" />
+                  </label>
+                  <label class="field" id="taskRecurrenceYearlyDayField">
+                    日期
+                    <input id="taskRecurrenceYearlyDay" type="number" min="1" max="31" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-grid hidden" id="taskRecurrenceNthWeekdayField">
+                <label class="field">
+                  第幾個
+                  <select id="taskRecurrenceWeekOrder">
+                    <option value="1">第 1 個</option>
+                    <option value="2">第 2 個</option>
+                    <option value="3">第 3 個</option>
+                    <option value="4">第 4 個</option>
+                    <option value="-1">最後一個</option>
+                  </select>
+                </label>
+                <label class="field">
+                  星期
+                  <select id="taskRecurrenceWeekday">
+                    <option value="0">星期日</option>
+                    <option value="1">星期一</option>
+                    <option value="2">星期二</option>
+                    <option value="3">星期三</option>
+                    <option value="4">星期四</option>
+                    <option value="5">星期五</option>
+                    <option value="6">星期六</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section class="recurrence-editor-section" aria-label="週期有效期間">
+              <h4>週期有效期間</h4>
+              <div class="form-grid">
+                <label class="field">
+                  開始日期
+                  <input id="taskRecurrenceStartDate" type="date" />
+                </label>
+                <label class="field">
+                  結束條件
+                  <select id="taskRecurrenceEndMode">
+                    <option value="none">沒有結束日期</option>
+                    <option value="date">結束於指定日期</option>
+                    <option value="count">反覆 N 次之後結束</option>
+                  </select>
+                </label>
+              </div>
+              <div class="form-grid">
+                <label class="field hidden" id="taskRecurrenceEndDateField">
+                  結束日期
+                  <input id="taskRecurrenceEndDate" type="date" />
+                </label>
+                <label class="field hidden" id="taskRecurrenceCountField">
+                  次數
+                  <input id="taskRecurrenceCount" type="number" min="1" max="999" />
+                </label>
+              </div>
+            </section>
+
+            <section class="recurrence-editor-section" aria-label="每次任務期限規則">
+              <h4>每次任務期限規則</h4>
+              <div class="form-grid">
+                <label class="field">
+                  期限規則
+                  <select id="taskDueRuleType">
+                    <option value="sameDay">當天完成</option>
+                    <option value="afterDays">執行日後 N 天</option>
+                    <option value="manual">產生後手動設定</option>
+                  </select>
+                </label>
+                <label class="field hidden" id="taskDueRuleDaysField">
+                  執行日後
+                  <span class="inline-number-field">
+                    <input id="taskDueRuleDays" type="number" min="0" max="365" placeholder="1" />
+                    <span>天</span>
+                  </span>
+                </label>
+              </div>
+            </section>
+
+            <section class="recurrence-editor-section" aria-label="未來執行預覽">
+              <h4>未來 5 次執行預覽</h4>
+              <ol class="recurrence-preview-list" id="taskRecurrencePreviewList"></ol>
+            </section>
           </div>
         </section>
 
@@ -547,6 +823,7 @@
               <label class="todo-sort-control">
                 <span>排序</span>
                 <select id="todoSortSelect">
+                  <option value="manual">手動順序</option>
                   <option value="title">任務名稱</option>
                   <option value="executionDate" selected>執行日期</option>
                   <option value="systemProject">系統專案</option>
@@ -562,6 +839,10 @@
                   <option value="desc">由高到低</option>
                 </select>
               </label>
+              <div class="todo-sort-control">
+                <span>負責人</span>
+                <div id="todoOwnerFilter" class="search-multi-select compact" data-summary-unit="人"></div>
+              </div>
               <button id="todoGroupSystemButton" type="button">系統</button>
               <button type="button">建議</button>
             </div>
@@ -596,7 +877,7 @@
                 <select id="todoAddScope">
                   <option value="project">專案任務</option>
                   <option value="system">系統任務</option>
-                  <option value="general">一般任務</option>
+                  <option value="general">一般工作</option>
                 </select>
               </label>
 
@@ -646,10 +927,10 @@
                 </select>
               </label>
 
-              <label>
-                負責人
-                <select id="todoAddOwner" multiple size="3" required></select>
-              </label>
+              <div class="todo-add-field">
+                <span>負責人</span>
+                <div id="todoAddOwner" class="search-multi-select" data-summary-unit="人"></div>
+              </div>
             </div>
 
             <div class="todo-add-grid">
@@ -821,15 +1102,18 @@
     </section>
 
     <section class="gantt-page hidden" id="ganttPage" aria-hidden="true">
-      <header class="todo-page-topbar gantt-page-topbar">
-        <div class="todo-page-brand">
-          <span class="app-launcher">PM</span>
-          <strong>甘特圖</strong>
+      <header class="gantt-page-topbar">
+        <div class="gantt-topbar-main">
+          <div class="todo-page-brand">
+            <span class="app-launcher">PM</span>
+            <strong>甘特圖</strong>
+          </div>
+          <label class="todo-page-search">
+            <span>搜尋</span>
+            <input id="ganttSearchInput" type="search" placeholder="搜尋系統、專案、任務、關係人" />
+          </label>
+          <button class="todo-page-close" id="closeGanttPageButton" type="button">返回專案管理</button>
         </div>
-        <label class="todo-page-search">
-          <span>搜尋</span>
-          <input id="ganttSearchInput" type="search" placeholder="搜尋系統、專案、任務、關係人" />
-        </label>
         <div class="gantt-topbar-actions">
           <label class="todo-sort-control">
             <span>尺度</span>
@@ -840,21 +1124,52 @@
             </select>
           </label>
           <label class="todo-sort-control">
+            <span>期間</span>
+            <select id="ganttPeriodFilter">
+              <option value="all">全部期間</option>
+              <option value="year">今年</option>
+              <option value="firstHalf">上半年</option>
+              <option value="secondHalf">下半年</option>
+              <option value="q1">第 1 季</option>
+              <option value="q2">第 2 季</option>
+              <option value="q3">第 3 季</option>
+              <option value="q4">第 4 季</option>
+              <option value="custom">自訂區間</option>
+            </select>
+          </label>
+          <div class="todo-sort-control gantt-period-custom" data-gantt-period-custom hidden>
+            <span>區間</span>
+            <div class="gantt-period-date-range">
+              <label>
+                <span>起日</span>
+                <input id="ganttPeriodStart" type="date" />
+              </label>
+              <label>
+                <span>迄日</span>
+                <input id="ganttPeriodEnd" type="date" />
+              </label>
+            </div>
+          </div>
+          <div class="todo-sort-control">
             <span>系統</span>
-            <select id="ganttSystemFilter"></select>
-          </label>
-          <label class="todo-sort-control">
+            <div id="ganttSystemFilter" class="search-multi-select compact" data-multi-select="search" data-summary-unit="個系統"></div>
+          </div>
+          <div class="todo-sort-control">
             <span>專案</span>
-            <select id="ganttProjectFilter"></select>
-          </label>
-          <label class="todo-sort-control">
+            <div id="ganttProjectFilter" class="search-multi-select compact" data-multi-select="search" data-summary-unit="個專案"></div>
+          </div>
+          <div class="todo-sort-control">
             <span>負責人</span>
-            <select id="ganttOwnerFilter" multiple size="2"></select>
-          </label>
-          <label class="todo-sort-control">
+            <div id="ganttOwnerFilter" class="search-multi-select compact" data-multi-select="search" data-summary-unit="人"></div>
+          </div>
+          <div class="todo-sort-control">
             <span>協作</span>
-            <select id="ganttCollaborationFilter" multiple size="2"></select>
-          </label>
+            <div id="ganttCollaborationFilter" class="search-multi-select compact" data-multi-select="search" data-summary-unit="個協作"></div>
+          </div>
+          <div class="todo-sort-control">
+            <span>階段</span>
+            <div id="ganttPhaseFilter" class="search-multi-select compact" data-multi-select="search" data-summary-unit="個階段"></div>
+          </div>
           <label class="todo-sort-control">
             <span>排序</span>
             <select id="ganttSortMode">
@@ -862,7 +1177,21 @@
               <option value="startDate">開始時間</option>
             </select>
           </label>
-          <button class="todo-page-close" id="closeGanttPageButton" type="button">返回專案管理</button>
+          <label class="todo-sort-control checkbox-control">
+            <span>週期</span>
+            <input id="ganttShowRecurring" type="checkbox" />
+            <strong>顯示週期任務</strong>
+          </label>
+          <label class="todo-sort-control checkbox-control">
+            <span>階段</span>
+            <input id="ganttShowUndatedPhases" type="checkbox" />
+            <strong>顯示無日期階段</strong>
+          </label>
+          <label class="todo-sort-control checkbox-control">
+            <span>項目</span>
+            <input id="ganttShowUndatedItems" type="checkbox" />
+            <strong>顯示無日期項目</strong>
+          </label>
         </div>
       </header>
 
@@ -877,6 +1206,7 @@
               <span><i class="gantt-legend-swatch project"></i>專案</span>
               <span><i class="gantt-legend-swatch phase"></i>階段</span>
               <span><i class="gantt-legend-swatch task"></i>任務</span>
+              <span><i class="gantt-legend-swatch recurring"></i>週期任務</span>
               <span><i class="gantt-legend-marker"></i>截止日</span>
             </div>
           </div>
@@ -894,6 +1224,6 @@
     <script src="/__/firebase/10.12.5/firebase-firestore-compat.js"></script>
     <script src="/__/firebase/10.12.5/firebase-functions-compat.js"></script>
     <script src="/__/firebase/init.js"></script>
-    <script src="app.js"></script>
+    <script src="app.js?v=20260602-task-labels"></script>
   </body>
 </html>

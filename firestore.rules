@@ -31,7 +31,12 @@ service cloud.firestore {
     }
 
     function activeOwner(uid) {
-      return userExists(uid) && userDocByUid(uid).data.status == "active";
+      return uid is string
+        && uid != ""
+        && (
+          (signedIn() && uid == request.auth.uid)
+          || (userExists(uid) && userDocByUid(uid).data.status == "active")
+        );
     }
 
     function ownerIsAdmin(uid) {
@@ -57,10 +62,27 @@ service cloud.firestore {
         && data.visibleToUids.hasOnly(expectedUids);
     }
 
+    function visibleListIsUnion(data, firstUids, secondUids) {
+      return data.visibleToUids is list
+        && data.visibleToUids.toSet().hasAll(firstUids)
+        && data.visibleToUids.toSet().hasAll(secondUids)
+        && data.visibleToUids.toSet().hasOnly(firstUids.toSet().union(secondUids.toSet()));
+    }
+
+    function visibleIds(data) {
+      return data.visibleToUids is list && data.visibleToUids.size() > 0
+        ? data.visibleToUids
+        : ownerIds(data);
+    }
+
     function visibleToCurrentUser() {
       return isActiveUser()
         && resource.data.visibleToUids is list
         && resource.data.visibleToUids.hasAny([request.auth.uid]);
+    }
+
+    function documentIdMatches(data, documentId) {
+      return data.id is string && data.id == documentId;
     }
 
     function systemExists(systemId) {
@@ -108,6 +130,16 @@ service cloud.firestore {
         && ownerIds(projectAfterData(projectId)).hasAny([request.auth.uid]);
     }
 
+    function canSeeSystem(systemId) {
+      return systemExists(systemId)
+        && visibleIds(systemData(systemId)).hasAny([request.auth.uid]);
+    }
+
+    function canSeeProject(projectId) {
+      return projectExists(projectId)
+        && visibleIds(projectData(projectId)).hasAny([request.auth.uid]);
+    }
+
     function ownerIdentityUnchanged() {
       return request.resource.data.ownerUid == resource.data.ownerUid
         && ownerIds(request.resource.data).hasAll(ownerIds(resource.data))
@@ -132,19 +164,26 @@ service cloud.firestore {
     function validProject(data) {
       return validOwnerFields(data)
         && systemExists(data.systemId)
-        && visibleListIs(data, ownerIds(systemData(data.systemId)) + ownerIds(data));
+        && visibleListIsUnion(data, visibleIds(systemData(data.systemId)), ownerIds(data));
+    }
+
+    function validOwnProjectFields(data) {
+      return data.ownerUid is string
+        && data.ownerUid == request.auth.uid
+        && data.ownerName is string
+        && ownerIds(data).hasAny([request.auth.uid]);
     }
 
     function validProjectStage(data) {
       return projectExists(data.projectId)
         && data.name is string
-        && visibleListIs(data, ownerIds(projectData(data.projectId)) + ownerIds(systemData(projectData(data.projectId).systemId)));
+        && visibleListIs(data, visibleIds(projectData(data.projectId)));
     }
 
     function validProjectStageAfter(data) {
       return projectExistsAfter(data.projectId)
         && data.name is string
-        && visibleListIs(data, ownerIds(projectAfterData(data.projectId)) + ownerIds(systemData(projectAfterData(data.projectId).systemId)));
+        && visibleListIs(data, visibleIds(projectAfterData(data.projectId)));
     }
 
     function validGeneralTask(data) {
@@ -158,7 +197,7 @@ service cloud.firestore {
         && validOwnerFields(data)
         && systemExists(data.systemId)
         && data.projectId == ""
-        && visibleListIs(data, ownerIds(systemData(data.systemId)) + ownerIds(data));
+        && visibleListIsUnion(data, visibleIds(systemData(data.systemId)), ownerIds(data));
     }
 
     function validProjectTask(data) {
@@ -167,7 +206,7 @@ service cloud.firestore {
         && projectExists(data.projectId)
         && systemExists(projectData(data.projectId).systemId)
         && data.systemId == projectData(data.projectId).systemId
-        && visibleListIs(data, ownerIds(systemData(projectData(data.projectId).systemId)) + ownerIds(projectData(data.projectId)) + ownerIds(data));
+        && visibleListIsUnion(data, visibleIds(projectData(data.projectId)), ownerIds(data));
     }
 
     function validTask(data) {
@@ -188,7 +227,15 @@ service cloud.firestore {
     }
 
     function canCreateProject(data) {
-      return validProject(data) && isSystemOwner(data.systemId);
+      return validProject(data)
+        && ownerIds(systemData(data.systemId)).hasAny([request.auth.uid]);
+    }
+
+    function canCreateOwnProject(data) {
+      return validOwnProjectFields(data)
+        && systemExists(data.systemId)
+        && ownerIds(systemData(data.systemId)).hasAny([request.auth.uid])
+        && visibleListIsUnion(data, visibleIds(systemData(data.systemId)), ownerIds(data));
     }
 
     function canUpdateProject() {
@@ -203,17 +250,39 @@ service cloud.firestore {
         );
     }
 
+    function canCreateProjectStage(data) {
+      return (
+        validProjectStage(data)
+        && (
+          isProjectOwner(data.projectId)
+          || isSystemOwner(projectData(data.projectId).systemId)
+        )
+      ) || (
+        validProjectStageAfter(data)
+        && (
+          isProjectOwnerAfter(data.projectId)
+          || isSystemOwner(projectAfterData(data.projectId).systemId)
+        )
+      );
+    }
+
+    function canUpdateProjectStage() {
+      return validProjectStage(request.resource.data)
+        && request.resource.data.projectId == resource.data.projectId
+        && (
+          isProjectOwner(resource.data.projectId)
+          || isSystemOwner(projectData(resource.data.projectId).systemId)
+        );
+    }
+
     function canCreateTask(data) {
       return validTask(data)
         && (
           (data.scope == "general" && (ownerIds(data).hasAny([request.auth.uid]) || ownerIsAdmin(data.ownerUid)))
-          || (data.scope == "system" && isSystemOwner(data.systemId))
+          || (data.scope == "system" && canSeeSystem(data.systemId))
           || (
             data.scope == "project"
-            && (
-              isSystemOwner(projectData(data.projectId).systemId)
-              || isProjectOwner(data.projectId)
-            )
+            && canSeeProject(data.projectId)
           )
         );
     }
@@ -261,7 +330,13 @@ service cloud.firestore {
     match /projects/{projectId} {
       allow get: if isAdmin() || visibleToCurrentUser();
       allow list: if isAdmin();
-      allow create: if isAdmin() || (isActiveUser() && canCreateProject(request.resource.data));
+      allow create: if documentIdMatches(request.resource.data, projectId)
+        && isActiveUser()
+        && (
+          request.auth.token.admin == true
+          || canCreateOwnProject(request.resource.data)
+          || canCreateProject(request.resource.data)
+        );
       allow update: if isAdmin() || (isActiveUser() && canUpdateProject());
       allow delete: if isAdmin() || (isActiveUser() && isSystemOwner(resource.data.systemId));
     }
@@ -269,8 +344,8 @@ service cloud.firestore {
     match /projectStages/{stageId} {
       allow get: if isAdmin() || visibleToCurrentUser();
       allow list: if isAdmin();
-      allow create: if isAdmin() || (isActiveUser() && validProjectStageAfter(request.resource.data) && (isProjectOwnerAfter(request.resource.data.projectId) || isSystemOwner(projectAfterData(request.resource.data.projectId).systemId)));
-      allow update: if isAdmin() || (isActiveUser() && validProjectStage(request.resource.data) && request.resource.data.projectId == resource.data.projectId && (isProjectOwner(resource.data.projectId) || isSystemOwner(projectData(resource.data.projectId).systemId)));
+      allow create: if isAdmin() || (isActiveUser() && canCreateProjectStage(request.resource.data));
+      allow update: if isAdmin() || (isActiveUser() && canUpdateProjectStage());
       allow delete: if isAdmin() || (isActiveUser() && (isProjectOwner(resource.data.projectId) || isSystemOwner(projectData(resource.data.projectId).systemId)));
     }
 

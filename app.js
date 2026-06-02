@@ -19,6 +19,67 @@ const taskColumns = [
   { id: "done", title: "已完成" },
 ];
 
+const projectStatusOptions = [
+  { id: "not_started", label: "未開始" },
+  { id: "doing", label: "進行中" },
+  { id: "review", label: "待確認" },
+  { id: "paused", label: "暫停" },
+  { id: "done", label: "已完成" },
+  { id: "closed", label: "已結案" },
+];
+
+const priorityOptions = [
+  { id: "high", label: "高" },
+  { id: "medium", label: "中" },
+  { id: "low", label: "低" },
+];
+
+const scheduleStatusOptions = [
+  { id: "all", label: "全部" },
+  { id: "unset", label: "未設定" },
+  { id: "not_started", label: "未開始" },
+  { id: "doing", label: "進行中" },
+  { id: "delay", label: "延遲" },
+  { id: "overdue", label: "逾期" },
+  { id: "this_week", label: "本週到期" },
+  { id: "this_month", label: "本月到期" },
+];
+
+const dueStatusOptions = [
+  { id: "all", label: "全部" },
+  { id: "unset", label: "未設定" },
+  { id: "today", label: "今日到期" },
+  { id: "this_week", label: "本週到期" },
+  { id: "overdue", label: "已逾期" },
+  { id: "delay", label: "延遲" },
+  { id: "no_deadline", label: "無期限" },
+];
+
+const dateFilterOptions = [
+  { id: "all", label: "全部" },
+  { id: "this_week", label: "本週" },
+  { id: "this_month", label: "本月" },
+  { id: "custom", label: "自訂區間" },
+];
+
+const projectMoreFilterOptions = [
+  { value: "has_tasks", label: "有任務" },
+  { value: "no_tasks", label: "無任務" },
+  { value: "has_delay", label: "有延遲" },
+  { value: "has_overdue", label: "有逾期" },
+  { value: "my_owner", label: "只有我負責" },
+  { value: "my_collab", label: "只有我協作" },
+];
+
+const taskMoreFilterOptions = [
+  { value: "has_project", label: "有專案" },
+  { value: "no_stage", label: "未設定階段" },
+  { value: "has_delay", label: "有延遲" },
+  { value: "has_overdue", label: "有逾期" },
+  { value: "my_owner", label: "只有我負責" },
+  { value: "my_collab", label: "只有我協作" },
+];
+
 const todoViews = [
   { id: "incomplete", title: "未完成任務", icon: "☰" },
   { id: "today", title: "今日待辦事項", icon: "☼" },
@@ -28,22 +89,98 @@ const todoViews = [
 ];
 
 const generalWorkScopeId = "__general_work__";
+const taskNoProjectFilterValue = "__no_project__";
 const taskScopeOptions = [
   { id: "project", label: "專案任務" },
   { id: "system", label: "系統任務" },
-  { id: "general", label: "一般任務" },
+  { id: "general", label: "一般工作" },
 ];
 
+const taskTypeOptions = [
+  { id: "normal", label: "獨立任務" },
+  { id: "parent", label: "母任務" },
+  { id: "child", label: "子任務" },
+];
+
+function normalizeFilterValues(values = []) {
+  const source = Array.isArray(values) ? values : [values];
+  return [...new Set(source.map((value) => String(value || "").trim()).filter((value) => value && value !== "all"))];
+}
+
+function filterIncludesValue(values = [], value = "") {
+  const selectedValues = normalizeFilterValues(values);
+  if (!selectedValues.length) return true;
+  return selectedValues.includes(String(value || "").trim());
+}
+
+function filterMatchesAny(values = [], matcher = () => false) {
+  const selectedValues = normalizeFilterValues(values);
+  if (!selectedValues.length) return true;
+  return selectedValues.some(matcher);
+}
+
+function getFilterOptionValue(option = {}) {
+  return String(option.value ?? option.id ?? "").trim();
+}
+
+function getMultiFilterOptions(options = []) {
+  return options
+    .map((option) => ({ value: getFilterOptionValue(option), label: option.label ?? getFilterOptionValue(option) }))
+    .filter((option) => option.value && option.value !== "all");
+}
+
+const ganttPeriodOptions = [
+  { value: "all", label: "全部期間" },
+  { value: "year", label: "今年" },
+  { value: "firstHalf", label: "上半年" },
+  { value: "secondHalf", label: "下半年" },
+  { value: "q1", label: "第 1 季" },
+  { value: "q2", label: "第 2 季" },
+  { value: "q3", label: "第 3 季" },
+  { value: "q4", label: "第 4 季" },
+  { value: "custom", label: "自訂區間" },
+];
+
+function normalizeGanttPeriodFilter(value = "all") {
+  return ganttPeriodOptions.some((option) => option.value === value) ? value : "all";
+}
+
 const preferencesKey = "project-desk-preferences-v1";
+const projectListSortDefault = { key: "schedule", direction: "asc" };
+const taskListSortDefault = { key: "deadline", direction: "asc" };
+const projectListSortColumns = [
+  { key: "name", label: "專案名稱", defaultDirection: "asc" },
+  { key: "stage", label: "目前階段", defaultDirection: "asc" },
+  { key: "status", label: "狀態", defaultDirection: "asc" },
+  { key: "priority", label: "優先級", defaultDirection: "desc" },
+  { key: "schedule", label: "時程", defaultDirection: "asc" },
+  { key: "owner", label: "負責人", defaultDirection: "asc" },
+  { key: "collaboration", label: "協作對象", defaultDirection: "asc" },
+  { key: "taskStats", label: "任務統計", defaultDirection: "desc" },
+];
+const taskListSortColumns = [
+  { key: "title", label: "任務名稱", defaultDirection: "asc" },
+  { key: "project", label: "所屬專案", defaultDirection: "asc" },
+  { key: "stage", label: "所屬階段", defaultDirection: "asc" },
+  { key: "status", label: "狀態", defaultDirection: "asc" },
+  { key: "priority", label: "優先級", defaultDirection: "desc" },
+  { key: "deadline", label: "期限", defaultDirection: "asc" },
+  { key: "owner", label: "負責人", defaultDirection: "asc" },
+  { key: "collaboration", label: "協作對象", defaultDirection: "asc" },
+];
+const ganttUndatedPhasePreferenceVersion = 2;
 const previewStorageKey = "project-desk-preview-v1";
 let state = createEmptyState();
 let preferences = loadPreferences();
 let selectedSystemId = null;
 let selectedProjectId = "all";
+let mainProjectDisplayMode = preferences.mainProjectDisplayMode === "detailed" ? "detailed" : "compact";
+let mainTaskDisplayMode = preferences.mainTaskDisplayMode === "detailed" ? "detailed" : "compact";
 let activeTodoView = preferences.activeTodoView || "today";
 let todoSortKey = preferences.todoSortKey || "executionDate";
 let todoSortDirection = preferences.todoSortDirection || "asc";
 let todoGroupBySystem = Boolean(preferences.todoGroupBySystem);
+let todoOwnerFilterIds = Array.isArray(preferences.todoOwnerFilterIds) ? normalizeFilterValues(preferences.todoOwnerFilterIds) : [];
 let todoFocusSection = "";
 let sidebarCollapsed = Boolean(preferences.sidebarCollapsed);
 let todoSectionCollapsed = {
@@ -54,23 +191,85 @@ let todoSectionCollapsed = {
   ...(preferences.todoSectionCollapsed || {}),
 };
 let ganttScale = preferences.ganttScale || "week";
-let ganttProjectFilter = preferences.ganttProjectFilter || "all";
-let ganttSystemFilter = preferences.ganttSystemFilter || "all";
+let ganttSystemFilterIds = Array.isArray(preferences.ganttSystemFilterIds)
+  ? normalizeFilterValues(preferences.ganttSystemFilterIds)
+  : normalizeFilterValues(preferences.ganttSystemFilter);
+let ganttProjectFilterIds = Array.isArray(preferences.ganttProjectFilterIds)
+  ? normalizeFilterValues(preferences.ganttProjectFilterIds)
+  : normalizeFilterValues(preferences.ganttProjectFilter);
+let ganttPhaseFilterIds = normalizeFilterValues(preferences.ganttPhaseFilterIds);
+let ganttSystemFilter = ganttSystemFilterIds[0] || "all";
+let ganttProjectFilter = ganttProjectFilterIds[0] || "all";
+let ganttPeriodFilter = normalizeGanttPeriodFilter(preferences.ganttPeriodFilter || "all");
+let ganttPeriodStart = preferences.ganttPeriodStart || "";
+let ganttPeriodEnd = preferences.ganttPeriodEnd || "";
 let ganttSortMode = preferences.ganttSortMode || "manual";
+let ganttShowRecurring = Boolean(preferences.ganttShowRecurring);
+let ganttShowUndatedPhases = preferences.ganttUndatedPhasePreferenceVersion === ganttUndatedPhasePreferenceVersion
+  ? Boolean(preferences.ganttShowUndatedPhases)
+  : false;
+let ganttShowUndatedItems = Boolean(preferences.ganttShowUndatedItems);
 let projectOwnerFilterIds = Array.isArray(preferences.projectOwnerFilterIds) ? preferences.projectOwnerFilterIds : [];
 let projectCollaborationFilters = Array.isArray(preferences.projectCollaborationFilters) ? preferences.projectCollaborationFilters : [];
+let projectFilters = {
+  phase: normalizeFilterValues(preferences.projectFilters?.phase),
+  status: normalizeFilterValues(preferences.projectFilters?.status),
+  priority: normalizeFilterValues(preferences.projectFilters?.priority),
+  schedule: normalizeFilterValues(preferences.projectFilters?.schedule),
+  date: preferences.projectFilters?.date || "all",
+  dateStart: preferences.projectFilters?.dateStart || "",
+  dateEnd: preferences.projectFilters?.dateEnd || "",
+  more: Array.isArray(preferences.projectFilters?.more) ? preferences.projectFilters.more : [],
+};
+let taskFilters = {
+  query: preferences.taskFilters?.query || "",
+  projectIds: normalizeFilterValues(preferences.taskFilters?.projectIds ?? preferences.taskFilters?.projectId),
+  phase: normalizeFilterValues(preferences.taskFilters?.phase),
+  status: normalizeFilterValues(preferences.taskFilters?.status),
+  ownerIds: Array.isArray(preferences.taskFilters?.ownerIds) ? preferences.taskFilters.ownerIds : [],
+  collaborationTags: Array.isArray(preferences.taskFilters?.collaborationTags) ? preferences.taskFilters.collaborationTags : [],
+  priority: normalizeFilterValues(preferences.taskFilters?.priority),
+  due: normalizeFilterValues(preferences.taskFilters?.due),
+  date: preferences.taskFilters?.date || "all",
+  dateStart: preferences.taskFilters?.dateStart || "",
+  dateEnd: preferences.taskFilters?.dateEnd || "",
+  more: Array.isArray(preferences.taskFilters?.more) ? preferences.taskFilters.more : [],
+};
+let projectListSort = normalizeListSort(preferences.projectListSort, projectListSortDefault, projectListSortColumns);
+let taskListSort = normalizeListSort(preferences.taskListSort, taskListSortDefault, taskListSortColumns);
+let taskViewMode = preferences.taskViewMode === "list" ? "list" : "board";
+let taskGroupMode = preferences.taskGroupMode === "phase" ? "phase" : "status";
 let ganttOwnerFilterIds = Array.isArray(preferences.ganttOwnerFilterIds) ? preferences.ganttOwnerFilterIds : [];
 let ganttCollaborationFilters = Array.isArray(preferences.ganttCollaborationFilters) ? preferences.ganttCollaborationFilters : [];
 let selectedTagFilter = "";
 let activeProjectDetailId = getProjectIdFromPath();
+let taskTreeExpanded = {
+  taskList: {},
+  projectStage: {},
+  projectDetail: {},
+};
+let expandedProjectIds = new Set(Array.isArray(preferences.expandedProjectIds) ? preferences.expandedProjectIds : []);
+let selectedProjectStageIds = {};
+let searchRenderTimer = null;
 let ganttCollapsed = {
   systems: {},
   projects: {},
+  phaseGroups: {},
+  stages: {},
   taskGroups: {},
   ...(preferences.ganttCollapsed || {}),
 };
+ganttCollapsed.systems ||= {};
+ganttCollapsed.projects ||= {};
+ganttCollapsed.phaseGroups ||= {};
+ganttCollapsed.stages ||= {};
+ganttCollapsed.taskGroups ||= {};
+let projectGroupCollapsed = preferences.projectGroupCollapsed && typeof preferences.projectGroupCollapsed === "object"
+  ? { ...preferences.projectGroupCollapsed }
+  : {};
 let selectedTodoTaskId = null;
 let drawerMode = "view";
+let activeTaskDrawerTab = "summary";
 let toastTimer = null;
 let completionAudioContext = null;
 let auth = null;
@@ -81,8 +280,16 @@ let currentSafeUser = sanitizeUser(null);
 let currentProfile = null;
 let cloudReady = false;
 let previewMode = false;
-let cloudSaveTimer = null;
+let cloudTaskSaveTimer = null;
+let cloudProjectSaveTimer = null;
+let cloudFullSaveTimer = null;
 let cloudSaveChain = Promise.resolve();
+let pendingTaskCloudWriteScope = null;
+let pendingProjectCloudWriteScope = null;
+let pendingFullCloudSave = false;
+let pendingRecurringOccurrenceCleanupTaskIds = [];
+let pendingRecurringOccurrenceUpdateTaskIds = [];
+let deferredProjectStageIdsByProject = new Map();
 let profileDialogRequired = false;
 let authSessionVersion = 0;
 let profileUnsubscribe = null;
@@ -139,10 +346,36 @@ const els = {
   ownerFilter: document.querySelector("#ownerFilter"),
   collaborationFilter: document.querySelector("#collaborationFilter"),
   phaseFilter: document.querySelector("#phaseFilter"),
+  projectStatusFilter: document.querySelector("#projectStatusFilter"),
+  projectPriorityFilter: document.querySelector("#projectPriorityFilter"),
+  projectScheduleFilter: document.querySelector("#projectScheduleFilter"),
+  projectDateFilter: document.querySelector("#projectDateFilter"),
+  projectDateStart: document.querySelector("#projectDateStart"),
+  projectDateEnd: document.querySelector("#projectDateEnd"),
+  projectMoreFilter: document.querySelector("#projectMoreFilter"),
+  projectActiveFilters: document.querySelector("#projectActiveFilters"),
   tagFilterBar: document.querySelector("#tagFilterBar"),
   projectSummaryCards: document.querySelector("#projectSummaryCards"),
+  projectDisplayToggle: document.querySelector("#projectDisplayToggle"),
+  taskDisplayToggle: document.querySelector("#taskDisplayToggle"),
+  taskSearchInput: document.querySelector("#taskSearchInput"),
+  taskProjectFilter: document.querySelector("#taskProjectFilter"),
+  taskPhaseFilter: document.querySelector("#taskPhaseFilter"),
+  taskStatusFilter: document.querySelector("#taskStatusFilter"),
+  taskOwnerFilter: document.querySelector("#taskOwnerFilter"),
+  taskCollaborationFilter: document.querySelector("#taskCollaborationFilter"),
+  taskPriorityFilter: document.querySelector("#taskPriorityFilter"),
+  taskDueFilter: document.querySelector("#taskDueFilter"),
+  taskDateFilter: document.querySelector("#taskDateFilter"),
+  taskDateStart: document.querySelector("#taskDateStart"),
+  taskDateEnd: document.querySelector("#taskDateEnd"),
+  taskMoreFilter: document.querySelector("#taskMoreFilter"),
+  taskActiveFilters: document.querySelector("#taskActiveFilters"),
+  taskViewToggle: document.querySelector("#taskViewToggle"),
+  taskGroupToggle: document.querySelector("#taskGroupToggle"),
   todoDashboard: document.querySelector("#todoDashboard"),
   openTodoPageButton: document.querySelector("#openTodoPageButton"),
+  openTodoWorkbenchButton: document.querySelector("#openTodoWorkbenchButton"),
   openGanttPageButton: document.querySelector("#openGanttPageButton"),
   todoPage: document.querySelector("#todoPage"),
   closeTodoPageButton: document.querySelector("#closeTodoPageButton"),
@@ -153,6 +386,7 @@ const els = {
   todoSystemTabs: document.querySelector("#todoSystemTabs"),
   todoSortSelect: document.querySelector("#todoSortSelect"),
   todoSortDirectionSelect: document.querySelector("#todoSortDirectionSelect"),
+  todoOwnerFilter: document.querySelector("#todoOwnerFilter"),
   todoGroupSystemButton: document.querySelector("#todoGroupSystemButton"),
   todoGroupIndicator: document.querySelector("#todoGroupIndicator"),
   todoClearGroupButton: document.querySelector("#todoClearGroupButton"),
@@ -165,11 +399,18 @@ const els = {
   closeGanttPageButton: document.querySelector("#closeGanttPageButton"),
   ganttSearchInput: document.querySelector("#ganttSearchInput"),
   ganttScaleSelect: document.querySelector("#ganttScaleSelect"),
+  ganttPeriodFilter: document.querySelector("#ganttPeriodFilter"),
+  ganttPeriodStart: document.querySelector("#ganttPeriodStart"),
+  ganttPeriodEnd: document.querySelector("#ganttPeriodEnd"),
   ganttSystemFilter: document.querySelector("#ganttSystemFilter"),
   ganttProjectFilter: document.querySelector("#ganttProjectFilter"),
   ganttOwnerFilter: document.querySelector("#ganttOwnerFilter"),
   ganttCollaborationFilter: document.querySelector("#ganttCollaborationFilter"),
+  ganttPhaseFilter: document.querySelector("#ganttPhaseFilter"),
   ganttSortMode: document.querySelector("#ganttSortMode"),
+  ganttShowRecurring: document.querySelector("#ganttShowRecurring"),
+  ganttShowUndatedPhases: document.querySelector("#ganttShowUndatedPhases"),
+  ganttShowUndatedItems: document.querySelector("#ganttShowUndatedItems"),
   ganttRangeLabel: document.querySelector("#ganttRangeLabel"),
   ganttChart: document.querySelector("#ganttChart"),
   ganttTaskDrawer: document.querySelector("#ganttTaskDrawer"),
@@ -237,6 +478,8 @@ const projectFields = {
   systemId: document.querySelector("#projectSystem"),
   owner: document.querySelector("#projectOwner"),
   category: document.querySelector("#projectCategory"),
+  status: document.querySelector("#projectStatus"),
+  priority: document.querySelector("#projectPriority"),
   name: document.querySelector("#projectName"),
   description: document.querySelector("#projectDescription"),
   tags: document.querySelector("#projectTags"),
@@ -264,15 +507,21 @@ const taskFields = {
   projectId: document.querySelector("#taskProject"),
   stageField: document.querySelector("#taskStageField"),
   stageId: document.querySelector("#taskStage"),
+  typeField: document.querySelector("#taskTypeField"),
+  taskType: document.querySelector("#taskType"),
   parentField: document.querySelector("#taskParentField"),
   parentTaskId: document.querySelector("#taskParent"),
   title: document.querySelector("#taskTitle"),
   description: document.querySelector("#taskDescription"),
   status: document.querySelector("#taskStatus"),
   priority: document.querySelector("#taskPriority"),
+  rangeStartField: document.querySelector("#taskRangeStart")?.closest(".field"),
   rangeStart: document.querySelector("#taskRangeStart"),
+  rangeEndField: document.querySelector("#taskRangeEnd")?.closest(".field"),
   rangeEnd: document.querySelector("#taskRangeEnd"),
+  executionDateField: document.querySelector("#taskExecutionDate")?.closest(".field"),
   executionDate: document.querySelector("#taskExecutionDate"),
+  deadlineField: document.querySelector("#taskDeadline")?.closest(".field"),
   deadline: document.querySelector("#taskDeadline"),
   completedDateField: document.querySelector("#taskCompletedDateField"),
   completedDate: document.querySelector("#taskCompletedDate"),
@@ -281,7 +530,40 @@ const taskFields = {
   stakeholders: document.querySelector("#taskStakeholders"),
   isRecurring: document.querySelector("#taskIsRecurring"),
   recurrenceType: document.querySelector("#taskRecurrenceType"),
+  recurrenceDailyField: document.querySelector("#taskRecurrenceDailyField"),
+  recurrenceDailyMode: document.querySelector("#taskRecurrenceDailyMode"),
+  recurrenceIntervalField: document.querySelector("#taskRecurrenceIntervalField"),
+  recurrenceIntervalLabel: document.querySelector("#taskRecurrenceIntervalLabel"),
   recurrenceInterval: document.querySelector("#taskRecurrenceInterval"),
+  recurrenceIntervalUnit: document.querySelector("#taskRecurrenceIntervalUnit"),
+  recurrenceRulePanel: document.querySelector("#taskRecurrenceRulePanel"),
+  recurrenceStartDate: document.querySelector("#taskRecurrenceStartDate"),
+  recurrenceEndMode: document.querySelector("#taskRecurrenceEndMode"),
+  recurrenceEndDateField: document.querySelector("#taskRecurrenceEndDateField"),
+  recurrenceEndDate: document.querySelector("#taskRecurrenceEndDate"),
+  recurrenceCountField: document.querySelector("#taskRecurrenceCountField"),
+  recurrenceCount: document.querySelector("#taskRecurrenceCount"),
+  recurrenceWeekdayField: document.querySelector("#taskRecurrenceWeekdayField"),
+  recurrenceWeekdays: document.querySelectorAll('[name="taskRecurrenceWeekday"]'),
+  recurrenceMonthlyField: document.querySelector("#taskRecurrenceMonthlyField"),
+  recurrenceMonthlyMode: document.querySelector("#taskRecurrenceMonthlyMode"),
+  recurrenceMonthDayField: document.querySelector("#taskRecurrenceMonthDayField"),
+  recurrenceMonthDay: document.querySelector("#taskRecurrenceMonthDay"),
+  recurrenceYearlyField: document.querySelector("#taskRecurrenceYearlyField"),
+  recurrenceYearlyMode: document.querySelector("#taskRecurrenceYearlyMode"),
+  recurrenceYearlyMonth: document.querySelector("#taskRecurrenceYearlyMonth"),
+  recurrenceYearlyDayField: document.querySelector("#taskRecurrenceYearlyDayField"),
+  recurrenceYearlyDay: document.querySelector("#taskRecurrenceYearlyDay"),
+  recurrenceNthWeekdayField: document.querySelector("#taskRecurrenceNthWeekdayField"),
+  recurrenceWeekOrder: document.querySelector("#taskRecurrenceWeekOrder"),
+  recurrenceWeekday: document.querySelector("#taskRecurrenceWeekday"),
+  recurrenceStartTime: document.querySelector("#taskRecurrenceStartTime"),
+  recurrenceEndTime: document.querySelector("#taskRecurrenceEndTime"),
+  recurrenceDuration: document.querySelector("#taskRecurrenceDuration"),
+  dueRuleType: document.querySelector("#taskDueRuleType"),
+  dueRuleDaysField: document.querySelector("#taskDueRuleDaysField"),
+  dueRuleDays: document.querySelector("#taskDueRuleDays"),
+  recurrencePreviewList: document.querySelector("#taskRecurrencePreviewList"),
   relatedEmails: document.querySelector("#taskRelatedEmails"),
   relatedLinks: document.querySelector("#taskRelatedLinks"),
 };
@@ -357,7 +639,10 @@ els.sidebarToggle.addEventListener("click", () => {
   syncSidebarCollapsed();
   persistViewPreferences();
 });
+els.projectDisplayToggle?.addEventListener("click", handleMainDisplayModeToggle);
+els.taskDisplayToggle?.addEventListener("click", handleMainDisplayModeToggle);
 els.openTodoPageButton.addEventListener("click", () => openTodoPage("today"));
+els.openTodoWorkbenchButton?.addEventListener("click", () => openTodoPage("today"));
 els.openGanttPageButton.addEventListener("click", openGanttPage);
 els.closeTodoPageButton.addEventListener("click", closeTodoPage);
 els.closeGanttPageButton.addEventListener("click", closeGanttPage);
@@ -371,14 +656,33 @@ els.ganttScaleSelect.addEventListener("change", () => {
   persistViewPreferences();
   renderGanttPage();
 });
-els.ganttSystemFilter?.addEventListener("change", () => {
-  ganttSystemFilter = els.ganttSystemFilter.value;
-  ganttProjectFilter = "all";
+els.ganttPeriodFilter?.addEventListener("change", () => {
+  ganttPeriodFilter = normalizeGanttPeriodFilter(els.ganttPeriodFilter.value);
+  syncGanttPeriodControls({ updatePresetDates: true });
   persistViewPreferences();
   renderGanttPage();
 });
-els.ganttProjectFilter.addEventListener("change", () => {
-  ganttProjectFilter = els.ganttProjectFilter.value;
+els.ganttPeriodStart?.addEventListener("change", () => {
+  ganttPeriodStart = els.ganttPeriodStart.value;
+  persistViewPreferences();
+  renderGanttPage();
+});
+els.ganttPeriodEnd?.addEventListener("change", () => {
+  ganttPeriodEnd = els.ganttPeriodEnd.value;
+  persistViewPreferences();
+  renderGanttPage();
+});
+els.ganttSystemFilter?.addEventListener("change", () => {
+  ganttSystemFilterIds = getSelectedValues(els.ganttSystemFilter);
+  ganttSystemFilter = ganttSystemFilterIds[0] || "all";
+  ganttProjectFilterIds = filterGanttProjectFiltersBySystem(ganttProjectFilterIds);
+  ganttProjectFilter = ganttProjectFilterIds[0] || "all";
+  persistViewPreferences();
+  renderGanttPage();
+});
+els.ganttProjectFilter?.addEventListener("change", () => {
+  ganttProjectFilterIds = getSelectedValues(els.ganttProjectFilter);
+  ganttProjectFilter = ganttProjectFilterIds[0] || "all";
   persistViewPreferences();
   renderGanttPage();
 });
@@ -392,8 +696,28 @@ els.ganttCollaborationFilter?.addEventListener("change", () => {
   persistViewPreferences();
   renderGanttPage();
 });
+els.ganttPhaseFilter?.addEventListener("change", () => {
+  ganttPhaseFilterIds = getSelectedValues(els.ganttPhaseFilter);
+  persistViewPreferences();
+  renderGanttPage();
+});
 els.ganttSortMode?.addEventListener("change", () => {
   ganttSortMode = els.ganttSortMode.value;
+  persistViewPreferences();
+  renderGanttPage();
+});
+els.ganttShowRecurring?.addEventListener("change", () => {
+  ganttShowRecurring = Boolean(els.ganttShowRecurring.checked);
+  persistViewPreferences();
+  renderGanttPage();
+});
+els.ganttShowUndatedPhases?.addEventListener("change", () => {
+  ganttShowUndatedPhases = Boolean(els.ganttShowUndatedPhases.checked);
+  persistViewPreferences();
+  renderGanttPage();
+});
+els.ganttShowUndatedItems?.addEventListener("change", () => {
+  ganttShowUndatedItems = Boolean(els.ganttShowUndatedItems.checked);
   persistViewPreferences();
   renderGanttPage();
 });
@@ -405,6 +729,12 @@ els.todoSortSelect.addEventListener("change", () => {
 els.todoSortDirectionSelect.addEventListener("change", () => {
   todoSortDirection = els.todoSortDirectionSelect.value;
   persistViewPreferences();
+  renderTodoPage();
+});
+els.todoOwnerFilter?.addEventListener("change", () => {
+  todoOwnerFilterIds = getSelectedValues(els.todoOwnerFilter);
+  persistViewPreferences();
+  closeTodoDrawer();
   renderTodoPage();
 });
 els.todoGroupSystemButton.addEventListener("click", () => {
@@ -421,7 +751,7 @@ els.todoAddTrigger.addEventListener("click", () => openTodoAddDetails());
 els.todoQuickForm.addEventListener("submit", handleTodoQuickSubmit);
 els.todoAddReset.addEventListener("click", () => resetTodoAddForm(false));
 els.todoAddCancel.addEventListener("click", () => resetTodoAddForm(true));
-els.searchInput.addEventListener("input", render);
+els.searchInput.addEventListener("input", scheduleRender);
 els.ownerFilter?.addEventListener("change", () => {
   projectOwnerFilterIds = getSelectedValues(els.ownerFilter);
   selectedProjectId = "all";
@@ -437,8 +767,111 @@ els.collaborationFilter?.addEventListener("change", () => {
 els.phaseFilter.addEventListener("change", () => {
   selectedTagFilter = "";
   selectedProjectId = "all";
+  projectFilters.phase = getSelectedValues(els.phaseFilter);
+  persistViewPreferences();
   render();
 });
+els.projectStatusFilter?.addEventListener("change", () => {
+  projectFilters.status = getSelectedValues(els.projectStatusFilter);
+  selectedProjectId = "all";
+  persistViewPreferences();
+  render();
+});
+els.projectPriorityFilter?.addEventListener("change", () => {
+  projectFilters.priority = getSelectedValues(els.projectPriorityFilter);
+  selectedProjectId = "all";
+  persistViewPreferences();
+  render();
+});
+els.projectScheduleFilter?.addEventListener("change", () => {
+  projectFilters.schedule = getSelectedValues(els.projectScheduleFilter);
+  selectedProjectId = "all";
+  persistViewPreferences();
+  render();
+});
+els.projectDateFilter?.addEventListener("change", () => {
+  projectFilters.date = els.projectDateFilter.value;
+  syncDateRangeVisibility();
+  selectedProjectId = "all";
+  persistViewPreferences();
+  render();
+});
+els.projectDateStart?.addEventListener("change", () => {
+  projectFilters.dateStart = els.projectDateStart.value;
+  render();
+});
+els.projectDateEnd?.addEventListener("change", () => {
+  projectFilters.dateEnd = els.projectDateEnd.value;
+  render();
+});
+els.projectMoreFilter?.addEventListener("change", () => {
+  projectFilters.more = getSelectedValues(els.projectMoreFilter);
+  selectedProjectId = "all";
+  persistViewPreferences();
+  render();
+});
+els.projectActiveFilters?.addEventListener("click", handleProjectFilterChipClick);
+els.taskSearchInput?.addEventListener("input", () => {
+  taskFilters.query = els.taskSearchInput.value.trim();
+  scheduleRender();
+});
+els.taskProjectFilter?.addEventListener("change", () => {
+  taskFilters.projectIds = getSelectedValues(els.taskProjectFilter);
+  persistViewPreferences();
+  render();
+});
+els.taskPhaseFilter?.addEventListener("change", () => {
+  taskFilters.phase = getSelectedValues(els.taskPhaseFilter);
+  persistViewPreferences();
+  render();
+});
+els.taskStatusFilter?.addEventListener("change", () => {
+  taskFilters.status = getSelectedValues(els.taskStatusFilter);
+  persistViewPreferences();
+  render();
+});
+els.taskOwnerFilter?.addEventListener("change", () => {
+  taskFilters.ownerIds = getSelectedValues(els.taskOwnerFilter);
+  persistViewPreferences();
+  render();
+});
+els.taskCollaborationFilter?.addEventListener("change", () => {
+  taskFilters.collaborationTags = getSelectedValues(els.taskCollaborationFilter);
+  persistViewPreferences();
+  render();
+});
+els.taskPriorityFilter?.addEventListener("change", () => {
+  taskFilters.priority = getSelectedValues(els.taskPriorityFilter);
+  persistViewPreferences();
+  render();
+});
+els.taskDueFilter?.addEventListener("change", () => {
+  taskFilters.due = getSelectedValues(els.taskDueFilter);
+  persistViewPreferences();
+  render();
+});
+els.taskDateFilter?.addEventListener("change", () => {
+  taskFilters.date = els.taskDateFilter.value;
+  syncDateRangeVisibility();
+  persistViewPreferences();
+  render();
+});
+els.taskDateStart?.addEventListener("change", () => {
+  taskFilters.dateStart = els.taskDateStart.value;
+  render();
+});
+els.taskDateEnd?.addEventListener("change", () => {
+  taskFilters.dateEnd = els.taskDateEnd.value;
+  render();
+});
+els.taskMoreFilter?.addEventListener("change", () => {
+  taskFilters.more = getSelectedValues(els.taskMoreFilter);
+  persistViewPreferences();
+  render();
+});
+els.taskActiveFilters?.addEventListener("click", handleTaskFilterChipClick);
+els.taskViewToggle?.addEventListener("click", handleTaskViewToggle);
+els.taskGroupToggle?.addEventListener("click", handleTaskGroupToggle);
 els.systemForm.addEventListener("submit", handleSystemSubmit);
 els.projectForm.addEventListener("submit", handleProjectSubmit);
 els.taskForm.addEventListener("submit", handleTaskSubmit);
@@ -455,6 +888,7 @@ projectFields.category.addEventListener("change", () => syncProjectCategoryField
 projectFields.systemId.addEventListener("change", () => syncProjectOwnerOptions());
 projectFields.phase.addEventListener("change", () => {
   projectFields.phaseChangedAt.value = todayString();
+  if (projectFields.phase.value === "closed" && projectFields.status) projectFields.status.value = "closed";
 });
 taskFields.scope.addEventListener("change", () => {
   syncTaskScopeFields(taskFields);
@@ -471,6 +905,7 @@ taskFields.projectId.addEventListener("change", () => {
   syncTaskOwnerOptions(taskFields);
   syncTaskStageAndParentOptions(taskFields);
 });
+taskFields.taskType?.addEventListener("change", () => syncTaskStageAndParentOptions(taskFields));
 taskFields.status.addEventListener("change", () => syncTaskCompletedField(taskFields));
 taskFields.rangeStart.addEventListener("change", () => updateTaskDateConstraints(taskFields));
 taskFields.rangeEnd.addEventListener("change", () => updateTaskDateConstraints(taskFields));
@@ -478,6 +913,30 @@ taskFields.executionDate.addEventListener("change", () => updateTaskDateConstrai
 taskFields.deadline.addEventListener("change", () => updateTaskDateConstraints(taskFields, false));
 taskFields.isRecurring?.addEventListener("change", () => syncTaskRecurrenceFields(taskFields));
 taskFields.recurrenceType?.addEventListener("change", () => syncTaskRecurrenceFields(taskFields));
+taskFields.recurrenceDailyMode?.addEventListener("change", () => syncTaskRecurrenceFields(taskFields));
+taskFields.recurrenceMonthlyMode?.addEventListener("change", () => syncTaskRecurrenceFields(taskFields));
+taskFields.recurrenceYearlyMode?.addEventListener("change", () => syncTaskRecurrenceFields(taskFields));
+taskFields.recurrenceEndMode?.addEventListener("change", () => syncTaskRecurrenceFields(taskFields));
+taskFields.recurrenceStartDate?.addEventListener("change", () => syncTaskRecurrenceFields(taskFields));
+taskFields.recurrenceStartTime?.addEventListener("change", () => handleRecurrenceTimeInput(taskFields, "start"));
+taskFields.recurrenceEndTime?.addEventListener("change", () => handleRecurrenceTimeInput(taskFields, "end"));
+taskFields.recurrenceDuration?.addEventListener("input", () => handleRecurrenceTimeInput(taskFields, "duration"));
+[
+  taskFields.recurrenceInterval,
+  taskFields.recurrenceEndDate,
+  taskFields.recurrenceCount,
+  taskFields.recurrenceMonthDay,
+  taskFields.recurrenceYearlyMonth,
+  taskFields.recurrenceYearlyDay,
+  taskFields.recurrenceWeekOrder,
+  taskFields.recurrenceWeekday,
+  taskFields.dueRuleType,
+  taskFields.dueRuleDays,
+  ...taskFields.recurrenceWeekdays,
+].filter(Boolean).forEach((field) => {
+  field.addEventListener("input", () => syncTaskRecurrenceFields(taskFields));
+  field.addEventListener("change", () => syncTaskRecurrenceFields(taskFields));
+});
 todoAddFields.mode.addEventListener("change", updateTodoAddMode);
 todoAddFields.scope.addEventListener("change", () => {
   syncTaskScopeFields(todoAddFields);
@@ -517,7 +976,20 @@ document.addEventListener("click", (event) => {
     els.accountMenu?.classList.add("hidden");
     els.accountButton?.setAttribute("aria-expanded", "false");
   }
+  const clickedMultiSelect = event.composedPath?.().some((item) => item.classList?.contains("search-multi-select"))
+    || event.target.closest(".search-multi-select");
+  const clickedMultiSelectLayer = event.target.closest(".search-multi-select-layer");
+  if (!clickedMultiSelect && !clickedMultiSelectLayer) {
+    closeOpenSearchMultiSelects();
+  }
 });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeOpenSearchMultiSelects();
+  }
+});
+window.addEventListener("resize", closeOpenSearchMultiSelects);
+document.addEventListener("scroll", repositionOpenSearchMultiSelect, true);
 
 document.querySelectorAll("[data-close-dialog]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -1343,22 +1815,216 @@ function loadPreferences() {
 function persistViewPreferences() {
   const nextPreferences = {
     activeTodoView,
+    mainProjectDisplayMode,
+    mainTaskDisplayMode,
     todoSortKey,
     todoSortDirection,
     todoGroupBySystem,
+    todoOwnerFilterIds,
     sidebarCollapsed,
     todoSectionCollapsed,
     ganttScale,
+    ganttSystemFilterIds,
+    ganttProjectFilterIds,
+    ganttPhaseFilterIds,
     ganttSystemFilter,
     ganttProjectFilter,
+    ganttPeriodFilter,
+    ganttPeriodStart,
+    ganttPeriodEnd,
     ganttSortMode,
+    ganttShowRecurring,
+    ganttShowUndatedPhases,
+    ganttShowUndatedItems,
+    ganttUndatedPhasePreferenceVersion,
     projectOwnerFilterIds,
     projectCollaborationFilters,
+    projectFilters,
+    taskFilters,
+    projectListSort,
+    taskListSort,
+    taskViewMode,
+    taskGroupMode,
     ganttOwnerFilterIds,
     ganttCollaborationFilters,
     ganttCollapsed,
+    projectGroupCollapsed,
+    expandedProjectIds: [...expandedProjectIds],
   };
   localStorage.setItem(preferencesKey, JSON.stringify(nextPreferences));
+}
+
+function normalizeListSort(value = {}, defaultSort = {}, columns = []) {
+  const fallbackColumn = getListSortColumn(columns, defaultSort.key) || columns[0] || { key: "", defaultDirection: "asc" };
+  const column = getListSortColumn(columns, value?.key) || fallbackColumn;
+  const direction = value?.direction === "desc" || value?.direction === "asc"
+    ? value.direction
+    : column.defaultDirection || defaultSort.direction || "asc";
+  return { key: column.key, direction };
+}
+
+function getListSortColumn(columns = [], key = "") {
+  return columns.find((column) => column.key === key) || null;
+}
+
+function renderProjectListHeader() {
+  return `
+    <div class="project-list-header">
+      ${projectListSortColumns.map((column) => renderListSortButton("project", column)).join("")}
+      <span class="table-header-static">操作</span>
+    </div>
+  `;
+}
+
+function renderTaskListHeader() {
+  return `
+    <div class="task-table-header">
+      ${taskListSortColumns.map((column) => renderListSortButton("task", column)).join("")}
+      <span class="table-header-static">操作</span>
+    </div>
+  `;
+}
+
+function renderListSortButton(scope, column) {
+  const sortState = scope === "project" ? projectListSort : taskListSort;
+  const active = sortState.key === column.key;
+  const direction = active ? sortState.direction : column.defaultDirection || "asc";
+  const sortAttr = scope === "project" ? "data-project-list-sort" : "data-task-list-sort";
+  const icon = active ? (direction === "desc" ? "↓" : "↑") : "↕";
+  const directionLabel = direction === "desc" ? "降冪" : "升冪";
+  const activeLabel = active ? `目前${directionLabel}` : `點選後${directionLabel}`;
+  return `
+    <button class="table-sort-button ${active ? "active" : ""}" type="button" ${sortAttr}="${escapeHtml(column.key)}" aria-pressed="${String(active)}" aria-label="${escapeHtml(column.label)}排序，${activeLabel}">
+      <span class="table-sort-label">${escapeHtml(column.label)}</span>
+      <span class="table-sort-icon" aria-hidden="true">${icon}</span>
+    </button>
+  `;
+}
+
+function attachProjectListSortHandlers() {
+  els.projectList.querySelectorAll("[data-project-list-sort]").forEach((button) => {
+    button.addEventListener("click", () => {
+      projectListSort = getNextListSort(projectListSort, button.dataset.projectListSort, projectListSortColumns, projectListSortDefault);
+      persistViewPreferences();
+      renderProjects();
+    });
+  });
+}
+
+function attachTaskListSortHandlers() {
+  els.board.querySelectorAll("[data-task-list-sort]").forEach((button) => {
+    button.addEventListener("click", () => {
+      taskListSort = getNextListSort(taskListSort, button.dataset.taskListSort, taskListSortColumns, taskListSortDefault);
+      persistViewPreferences();
+      renderBoard();
+    });
+  });
+}
+
+function getNextListSort(currentSort = {}, key = "", columns = [], defaultSort = {}) {
+  const column = getListSortColumn(columns, key) || getListSortColumn(columns, defaultSort.key);
+  if (!column) return normalizeListSort(currentSort, defaultSort, columns);
+  const direction = currentSort.key === column.key
+    ? currentSort.direction === "desc" ? "asc" : "desc"
+    : column.defaultDirection || defaultSort.direction || "asc";
+  return normalizeListSort({ key: column.key, direction }, defaultSort, columns);
+}
+
+function compareProjectsForList(a, b) {
+  return compareListItemsBySort(a, b, projectListSort, getProjectListSortValue);
+}
+
+function compareTasksForList(a, b) {
+  return compareListItemsBySort(a, b, taskListSort, getTaskListSortValue);
+}
+
+function compareListItemsBySort(a, b, sortState, valueGetter) {
+  const first = valueGetter(a, sortState.key);
+  const second = valueGetter(b, sortState.key);
+  const sortOrder = compareListSortValues(first, second, sortState.direction);
+  return sortOrder || compareManualThenName(a, b);
+}
+
+function compareListSortValues(first = {}, second = {}, direction = "asc") {
+  if (first.missing && !second.missing) return 1;
+  if (!first.missing && second.missing) return -1;
+  const firstValue = first.value ?? "";
+  const secondValue = second.value ?? "";
+  const firstType = first.type || second.type || "string";
+  let result = 0;
+  if (firstType === "number") {
+    result = Number(firstValue || 0) - Number(secondValue || 0);
+  } else {
+    result = String(firstValue).localeCompare(String(secondValue), "zh-Hant", { numeric: true, sensitivity: "base" });
+  }
+  return direction === "desc" ? -result : result;
+}
+
+function makeListSortValue(value, options = {}) {
+  return {
+    value,
+    type: options.type || (typeof value === "number" ? "number" : "string"),
+    missing: Boolean(options.missing),
+  };
+}
+
+function getProjectListSortValue(project = {}, key = "") {
+  if (key === "name") return makeListSortValue(project.name || "");
+  if (key === "stage") {
+    const currentStage = getProjectCurrentStageInfo(project);
+    const phaseRank = currentStage.phaseId ? getOptionRank(phases, currentStage.phaseId) : phases.length;
+    return makeListSortValue(`${String(phaseRank).padStart(2, "0")}-${String(currentStage.index || 0).padStart(3, "0")}-${currentStage.label || ""}`);
+  }
+  if (key === "status") return makeListSortValue(getOptionRank(projectStatusOptions, getProjectStatus(project)), { type: "number" });
+  if (key === "priority") return makeListSortValue(getPrioritySortRank(project.priority), { type: "number" });
+  if (key === "schedule") {
+    const date = getProjectListScheduleSortDate(project);
+    return makeListSortValue(date, { missing: !date });
+  }
+  if (key === "owner") return makeListSortValue(getOwnerDisplayName(project));
+  if (key === "collaboration") return makeListSortValue((project.collaborationTags || []).join(" "));
+  if (key === "taskStats") return makeListSortValue(getProjectTaskStats(project.id).total, { type: "number" });
+  return makeListSortValue(project.name || "");
+}
+
+function getTaskListSortValue(task = {}, key = "") {
+  if (key === "title") return makeListSortValue(task.title || "");
+  if (key === "project") {
+    const project = getProject(task.projectId);
+    return makeListSortValue(project?.name || getTaskScopeLabel(getTaskScope(task)));
+  }
+  if (key === "stage") {
+    const stage = getTaskStage(task);
+    const stageOrder = stage ? Number(stage.sortOrder) || 0 : Number.MAX_SAFE_INTEGER;
+    return makeListSortValue(`${String(stageOrder).padStart(6, "0")}-${stage?.name || getTaskStageLabel(task)}`);
+  }
+  if (key === "status") return makeListSortValue(getOptionRank(taskColumns, task.status), { type: "number" });
+  if (key === "priority") return makeListSortValue(getPrioritySortRank(task.priority), { type: "number" });
+  if (key === "deadline") {
+    const date = getTaskListDeadlineSortDate(task);
+    return makeListSortValue(date, { missing: !date });
+  }
+  if (key === "owner") return makeListSortValue(task.owner || task.ownerName || "");
+  if (key === "collaboration") return makeListSortValue((task.collaborationTags || task.stakeholders || []).join(" "));
+  return makeListSortValue(task.title || "");
+}
+
+function getProjectListScheduleSortDate(project = {}) {
+  const range = getProjectScheduleDates(project);
+  return range.start || range.end || "";
+}
+
+function getTaskListDeadlineSortDate(task = {}) {
+  return task.deadline || task.executionDate || "";
+}
+
+function getOptionRank(options = [], value = "") {
+  const index = options.findIndex((option) => String(option.id ?? option.value ?? "") === String(value || ""));
+  return index === -1 ? options.length : index;
+}
+
+function getPrioritySortRank(priority = "medium") {
+  return { high: 3, medium: 2, low: 1 }[normalizePriority(priority)] || 2;
 }
 
 function normalizeState(rawState = {}) {
@@ -1366,14 +2032,19 @@ function normalizeState(rawState = {}) {
   const projects = Array.isArray(rawState.projects) ? rawState.projects.map(normalizeProject) : [];
   const rawStages = Array.isArray(rawState.projectStages) ? rawState.projectStages.map(normalizeProjectStage) : [];
   const projectStages = ensureProjectStages(projects, rawStages).map(normalizeProjectStage);
-  const tasks = Array.isArray(rawState.tasks) ? rawState.tasks.map(normalizeTask) : [];
+  const normalizedTasks = Array.isArray(rawState.tasks) ? rawState.tasks.map(normalizeTask) : [];
+  const migratedTasks = migrateLegacyCompletedOccurrences(normalizedTasks);
+  const recurrenceRepair = repairDuplicateRecurringOccurrences(migratedTasks);
+  pendingRecurringOccurrenceCleanupTaskIds = recurrenceRepair.removedIds;
+  pendingRecurringOccurrenceUpdateTaskIds = recurrenceRepair.updatedIds;
+  const tasks = recurrenceRepair.tasks;
   return normalizeDerivedScheduling({ systems, projects, projectStages, tasks });
 }
 
 function normalizeSystem(system = {}) {
   const { ownerEmail, createdAt, createdBy, createdByEmail, updatedAt, updatedBy, updatedByEmail, ...baseSystem } = system;
   const ownerIds = normalizeOwnerIds(system.internalOwnerIds, system);
-  const owner = getOwnerPayload(ownerIds[0], system);
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, system), system);
   return {
     ...baseSystem,
     description: system.description || "",
@@ -1386,7 +2057,7 @@ function normalizeSystem(system = {}) {
   };
 }
 
-function normalizeTask(task) {
+function normalizeTask(task = {}) {
   const { ownerEmail, createdAt, createdBy, createdByEmail, updatedAt, updatedBy, updatedByEmail, ...baseTask } = task;
   const rangeStart = task.startDate || task.rangeStart || task.dueDate || "";
   const rangeEnd = task.endDate || task.rangeEnd || task.startDate || task.dueDate || "";
@@ -1394,8 +2065,27 @@ function normalizeTask(task) {
   const deadline = task.deadline || "";
   const scope = normalizeTaskScope(task);
   const ownerIds = normalizeOwnerIds(task.internalOwnerIds, task);
-  const owner = getOwnerPayload(ownerIds[0], task);
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, task), task);
   const collaborationTags = normalizeTextList(task.collaborationTags?.length ? task.collaborationTags : task.stakeholders);
+  const recurrenceRule = normalizeRecurrenceRule(task.recurrenceRule, task);
+  const isRecurringOccurrence = Boolean(task.isRecurringOccurrence || (task.templateTaskId && task.occurrenceDate));
+  const isRecurringTemplate = !isRecurringOccurrence
+    && Boolean(task.isRecurringTemplate || task.recurrenceEnabled || (task.isRecurring && recurrenceRule.type));
+  const isDeleted = Boolean(task.isDeleted);
+  const recurrenceEnabled = Boolean(isRecurringTemplate && !isDeleted && task.recurrenceEnabled !== false);
+  const templateStartDate = isRecurringTemplate ? recurrenceRule.startDate || rangeStart : rangeStart;
+  const templateEndDate = isRecurringTemplate
+    ? recurrenceRule.endMode === "date"
+      ? recurrenceRule.endDate || templateStartDate
+      : templateStartDate
+    : rangeEnd;
+  const startTime = normalizeTimeValue(task.startTime || task.time?.startTime || recurrenceRule.startTime || "");
+  const endTime = normalizeTimeValue(task.endTime || task.time?.endTime || recurrenceRule.endTime || "");
+  const durationMinutes = clampInteger(
+    task.durationMinutes || task.time?.durationMinutes || recurrenceRule.durationMinutes || getTimeDurationMinutes(startTime, endTime),
+    0,
+    1440,
+  );
 
   return {
     ...baseTask,
@@ -1404,24 +2094,39 @@ function normalizeTask(task) {
     projectId: scope === "project" ? task.projectId || "" : "",
     stageId: scope === "project" ? task.stageId || "" : "",
     parentTaskId: task.parentTaskId || "",
+    taskType: normalizeTaskType(task),
     internalOwnerIds: ownerIds,
     ...owner,
     ownerName: getOwnerNames(ownerIds, task),
     owner: getOwnerNames(ownerIds, task) || task.owner || "",
     visibleToUids: normalizeVisibleToUids(task.visibleToUids),
     status: normalizeTaskStatus(task.status),
+    priority: normalizePriority(task.priority),
     tags: Array.isArray(task.tags) ? task.tags : [],
     collaborationTags,
     stakeholders: collaborationTags,
-    startDate: rangeStart,
-    endDate: rangeEnd,
-    rangeStart,
-    rangeEnd,
-    executionDate,
-    deadline,
-    isRecurring: Boolean(task.isRecurring),
-    recurrenceType: normalizeRecurrenceType(task.recurrenceType),
-    recurrenceRule: normalizeRecurrenceRule(task.recurrenceRule, task),
+    startDate: templateStartDate,
+    endDate: templateEndDate,
+    rangeStart: templateStartDate,
+    rangeEnd: templateEndDate,
+    executionDate: isRecurringTemplate ? "" : executionDate,
+    executionStartDate: task.executionStartDate || (isRecurringOccurrence ? templateStartDate : ""),
+    executionEndDate: task.executionEndDate || (isRecurringOccurrence ? templateEndDate : ""),
+    deadline: isRecurringTemplate ? "" : deadline,
+    dueDate: isRecurringTemplate ? "" : task.dueDate || deadline || "",
+    startTime,
+    endTime,
+    durationMinutes,
+    isRecurring: isRecurringTemplate,
+    recurrenceEnabled,
+    isRecurringTemplate,
+    isRecurringOccurrence,
+    templateTaskId: isRecurringOccurrence ? task.templateTaskId || "" : "",
+    occurrenceDate: isRecurringOccurrence ? task.occurrenceDate || executionDate || rangeStart || "" : "",
+    recurringLabel: task.recurringLabel || "",
+    recurrenceType: isRecurringTemplate ? recurrenceRule.type : "",
+    recurrenceRule: isRecurringTemplate ? recurrenceRule : {},
+    dueRule: normalizeDueRule(task.dueRule),
     completedOccurrences: normalizeTextList(task.completedOccurrences),
     sortOrder: Number.isFinite(Number(task.sortOrder)) ? Number(task.sortOrder) : 0,
     relatedEmails: normalizeEmailList(task.relatedEmails),
@@ -1432,6 +2137,12 @@ function normalizeTask(task) {
     files: normalizeTaskFiles(task.files),
     notes: task.notes || "",
     history: normalizeTaskHistory(task.history),
+    isDeleted,
+    deletedAt: task.deletedAt || "",
+    deletedBy: task.deletedBy || "",
+    deletedReason: task.deletedReason || "",
+    templateDeleted: Boolean(task.templateDeleted),
+    templateDeletedAt: task.templateDeletedAt || "",
   };
 }
 
@@ -1446,6 +2157,24 @@ function normalizeTaskScope(task = {}) {
 
 function getTaskScope(task = {}) {
   return normalizeTaskScope(task);
+}
+
+function normalizeTaskTypeValue(value = "") {
+  return taskTypeOptions.some((option) => option.id === value) ? value : "normal";
+}
+
+function normalizeTaskType(task = {}) {
+  if (task.parentTaskId) return "child";
+  const taskType = normalizeTaskTypeValue(task.taskType);
+  return taskType === "child" ? "normal" : taskType;
+}
+
+function getTaskType(task = {}) {
+  return normalizeTaskType(task);
+}
+
+function getTaskTypeLabel(taskType = "normal") {
+  return taskTypeOptions.find((option) => option.id === taskType)?.label || "獨立任務";
 }
 
 function getTaskScopeLabel(scope) {
@@ -1474,15 +2203,21 @@ function taskMatchesSystemScope(task, systemId = selectedSystemId) {
   return scope !== "general" && task.systemId === systemId;
 }
 
-function taskMatchesProjectScope(task, projectId = selectedProjectId) {
-  if (projectId === "all") return true;
-  return getTaskScope(task) === "project" && task.projectId === projectId;
+function taskMatchesProjectScope(task, projectIds = selectedProjectId) {
+  const selectedProjectIds = normalizeFilterValues(projectIds);
+  if (!selectedProjectIds.length) return true;
+  const scope = getTaskScope(task);
+  const matchesNoProject = selectedProjectIds.includes(taskNoProjectFilterValue) && (scope === "system" || scope === "general");
+  const matchesProject = scope === "project" && selectedProjectIds.includes(task.projectId);
+  return matchesNoProject || matchesProject;
 }
 
-function taskMatchesPhaseScope(task, phaseProjectIds, phase = els.phaseFilter.value) {
-  if (phase === "all") return true;
+function taskMatchesPhaseScope(task, phaseProjectIds, phases = projectFilters.phase) {
+  const selectedPhases = normalizeFilterValues(phases);
+  if (!selectedPhases.length) return true;
   const stage = task.stageId ? state.projectStages.find((item) => item.id === task.stageId) : null;
-  if (stage) return (stage.phaseId || getPhaseIdByLabel(stage.name)) === phase;
+  if (selectedPhases.includes("unset") && !stage) return true;
+  if (stage) return selectedPhases.includes(stage.phaseId || getPhaseIdByLabel(stage.name));
   return getTaskScope(task) === "project" && phaseProjectIds.includes(task.projectId);
 }
 
@@ -1516,22 +2251,277 @@ function normalizeTaskStatus(status) {
   return "not_started";
 }
 
+function normalizeProjectStatus(status) {
+  return projectStatusOptions.some((option) => option.id === status) ? status : "doing";
+}
+
+function normalizePriority(priority) {
+  return priorityOptions.some((option) => option.id === priority) ? priority : "medium";
+}
+
+function inferProjectStatusFromDates(project = {}) {
+  if (project.closed || project.phase === "closed") return "closed";
+  const start = project.plannedStart || project.startDate || "";
+  if (start && start > todayString()) return "not_started";
+  return "doing";
+}
+
 function normalizeProjectCategory(category) {
   return category === "general" ? "general" : "development";
 }
 
 function normalizeRecurrenceType(type = "") {
-  return ["weekly", "monthly", "custom"].includes(type) ? type : "";
+  if (type === "custom") return "daily";
+  return ["daily", "weekly", "monthly", "yearly"].includes(type) ? type : "";
 }
 
 function normalizeRecurrenceRule(rule = {}, task = {}) {
-  const type = normalizeRecurrenceType(task.recurrenceType || rule.type);
+  const dailyRule = rule.daily || {};
+  const weeklyRule = rule.weekly || {};
+  const monthlyRule = rule.monthly || {};
+  const yearlyRule = rule.yearly || {};
+  const rangeRule = rule.range || {};
+  const timeRule = rule.time || task.time || {};
+  const rawType = task.recurrenceType || rule.type || rule.frequency;
+  const type = normalizeRecurrenceType(rawType);
   if (!type) return {};
-  const intervalDays = Number(rule.intervalDays || task.recurrenceInterval || task.recurrenceIntervalDays || 0);
+  const startDate = rangeRule.startDate || rule.startDate || task.recurrenceStartDate || task.executionDate || task.rangeStart || task.startDate || "";
+  const interval = clampInteger(
+    rule.interval || rule.intervalDays || rule.intervalWeeks || rule.intervalMonths || rule.intervalYears || task.recurrenceInterval || task.recurrenceIntervalDays || 1,
+    1,
+    365,
+  );
+  const anchorDate = startDate ? parseDateString(startDate) : null;
+  const anchorWeekday = anchorDate ? anchorDate.getDay() : todayDate().getDay();
+  const anchorMonthDay = anchorDate ? anchorDate.getDate() : todayDate().getDate();
+  const anchorMonth = anchorDate ? anchorDate.getMonth() + 1 : todayDate().getMonth() + 1;
+  const dailyMode = normalizeDailyMode(rule.dailyMode || dailyRule.mode);
+  const monthlyMode = normalizeMonthlyMode(
+    rule.monthlyMode || monthlyRule.mode,
+    ["dayOfMonth", "nthWeekday"],
+    rule.weekOrder && rule.weekday !== undefined ? "nthWeekday" : "dayOfMonth",
+  );
+  const yearlyMode = normalizeYearlyMode(
+    rule.yearlyMode || yearlyRule.mode,
+    ["date", "nthWeekday"],
+    rule.weekOrder && rule.weekday !== undefined && !rule.yearlyDay ? "nthWeekday" : "date",
+  );
+  const rawWeekDays = rule.weekDays || rule.daysOfWeek || weeklyRule.daysOfWeek;
+  const weekDays = Array.isArray(rawWeekDays)
+    ? normalizeWeekDays(rawWeekDays)
+    : type === "weekly"
+      ? [anchorWeekday]
+      : [];
+  const monthDay = clampInteger(rule.monthDay || rule.dayOfMonth || monthlyRule.dayOfMonth || anchorMonthDay, 1, 31);
+  const yearlyMonth = clampInteger(rule.yearlyMonth || rule.month || yearlyRule.month || anchorMonth, 1, 12);
+  const yearlyDay = clampInteger(rule.yearlyDay || yearlyRule.dayOfMonth || yearlyRule.day || monthDay, 1, 31);
+  const weekOrder = normalizeWeekOrder(rule.weekOrder ?? rule.weekOrdinal ?? monthlyRule.weekOrdinal ?? yearlyRule.weekOrdinal);
+  const weekday = normalizeWeekdayValue(rule.weekday ?? monthlyRule.weekday ?? yearlyRule.weekday, anchorWeekday);
+  const occurrenceCount = clampInteger(rule.occurrenceCount || rule.count || rangeRule.count || 0, 0, 999);
+  const rawEndMode = rule.endMode || rangeRule.endType || rangeRule.endMode;
+  const rawEndDate = rule.endDate || rangeRule.endDate || "";
+  const endMode = ["date", "count", "none"].includes(rawEndMode)
+    ? rawEndMode
+    : rawEndDate
+      ? "date"
+      : occurrenceCount
+        ? "count"
+        : "none";
+  const startTime = normalizeTimeValue(rule.startTime || timeRule.startTime);
+  const endTime = normalizeTimeValue(rule.endTime || timeRule.endTime);
+  const durationMinutes = clampInteger(rule.durationMinutes || timeRule.durationMinutes || getTimeDurationMinutes(startTime, endTime), 0, 1440);
+
   return {
     type,
-    intervalDays: type === "custom" && intervalDays > 0 ? intervalDays : 0,
+    startDate,
+    interval,
+    dailyMode: type === "daily" ? dailyMode : "interval",
+    weekDays,
+    monthlyMode: type === "monthly" ? monthlyMode : "dayOfMonth",
+    monthDay,
+    yearlyMode: type === "yearly" ? yearlyMode : "date",
+    yearlyMonth,
+    yearlyDay,
+    weekOrder,
+    weekday,
+    endMode,
+    endDate: endMode === "date" ? rawEndDate : "",
+    occurrenceCount: endMode === "count" ? occurrenceCount : 0,
+    startTime,
+    endTime,
+    durationMinutes,
   };
+}
+
+function normalizeDailyMode(value = "") {
+  if (value === "weekday" || value === "weekdays") return "weekday";
+  if (value === "everyNDays") return "interval";
+  return normalizeRecurrenceMode(value, ["interval", "weekday"], "interval");
+}
+
+function normalizeMonthlyMode(value = "", allowed = [], fallback = "") {
+  if (value === "nthWeekdayOfMonth") return "nthWeekday";
+  return normalizeRecurrenceMode(value, allowed, fallback);
+}
+
+function normalizeYearlyMode(value = "", allowed = [], fallback = "") {
+  if (value === "monthDay") return "date";
+  if (value === "nthWeekdayOfMonth") return "nthWeekday";
+  return normalizeRecurrenceMode(value, allowed, fallback);
+}
+
+function normalizeDueRule(rule = {}) {
+  const type = ["sameDay", "afterDays", "manual"].includes(rule?.type) ? rule.type : "sameDay";
+  return {
+    type,
+    daysAfterOccurrence: type === "afterDays" ? clampInteger(rule?.daysAfterOccurrence || 0, 0, 365) : 0,
+  };
+}
+
+function normalizeRecurrenceMode(value = "", allowed = [], fallback = "") {
+  return allowed.includes(value) ? value : fallback;
+}
+
+function normalizeWeekOrder(value = 1) {
+  const aliases = {
+    first: 1,
+    second: 2,
+    third: 3,
+    fourth: 4,
+    last: -1,
+  };
+  if (Object.prototype.hasOwnProperty.call(aliases, value)) return aliases[value];
+  const number = Number(value);
+  return [1, 2, 3, 4, -1].includes(number) ? number : 1;
+}
+
+function normalizeWeekdayValue(value = 0, fallback = 0) {
+  const aliases = {
+    SUN: 0,
+    MON: 1,
+    TUE: 2,
+    WED: 3,
+    THU: 4,
+    FRI: 5,
+    SAT: 6,
+  };
+  const textValue = String(value || "").toUpperCase();
+  if (Object.prototype.hasOwnProperty.call(aliases, textValue)) return aliases[textValue];
+  const number = Number(value);
+  if (Number.isInteger(number) && number >= 0 && number <= 6) return number;
+  return normalizeWeekdayValue(fallback, 0);
+}
+
+function clampInteger(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  return Math.min(max, Math.max(min, Math.floor(number)));
+}
+
+function normalizeWeekDays(values = []) {
+  return [...new Set(values.map((value) => normalizeWeekdayValue(value, -1)).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6))]
+    .sort((a, b) => a - b);
+}
+
+function normalizeTimeValue(value = "") {
+  const text = String(value || "").trim();
+  return /^\d{2}:\d{2}$/.test(text) ? text : "";
+}
+
+function getTimeDurationMinutes(startTime = "", endTime = "") {
+  const startMinutes = getTimeMinutes(startTime);
+  const endMinutes = getTimeMinutes(endTime);
+  if (startMinutes === null || endMinutes === null) return 0;
+  const diff = endMinutes - startMinutes;
+  return diff >= 0 ? diff : 0;
+}
+
+function getTimeMinutes(time = "") {
+  const normalized = normalizeTimeValue(time);
+  if (!normalized) return null;
+  const [hour, minute] = normalized.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function formatTimeMinutes(minutes) {
+  const value = clampInteger(minutes, 0, 1439);
+  const hour = String(Math.floor(value / 60)).padStart(2, "0");
+  const minute = String(value % 60).padStart(2, "0");
+  return `${hour}:${minute}`;
+}
+
+function getDurationValue(value = "", max = 1439) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return 0;
+  return Math.min(max, Math.floor(number));
+}
+
+function addMinutesToTime(startTime = "", durationMinutes = 0) {
+  const startMinutes = getTimeMinutes(startTime);
+  if (startMinutes === null) return "";
+  const maxDuration = Math.max(0, 1439 - startMinutes);
+  return formatTimeMinutes(startMinutes + getDurationValue(durationMinutes, maxDuration));
+}
+
+function handleRecurrenceTimeInput(fields, source = "") {
+  syncRecurrenceTimeFields(fields, source);
+  syncTaskRecurrenceFields(fields, { skipTimeSync: true });
+}
+
+function syncRecurrenceTimeFields(fields, source = "") {
+  const startField = fields.recurrenceStartTime;
+  const endField = fields.recurrenceEndTime;
+  const durationField = fields.recurrenceDuration;
+  if (!startField || !endField || !durationField) return;
+
+  const startMinutes = getTimeMinutes(startField.value);
+  const endMinutes = getTimeMinutes(endField.value);
+  const hasDuration = durationField.value !== "";
+  const duration = getDurationValue(durationField.value);
+
+  if (source === "start") {
+    if (startMinutes !== null && hasDuration) {
+      const maxDuration = Math.max(0, 1439 - startMinutes);
+      const nextDuration = getDurationValue(durationField.value, maxDuration);
+      durationField.value = String(nextDuration);
+      endField.value = addMinutesToTime(startField.value, nextDuration);
+    } else if (startMinutes !== null && endMinutes !== null) {
+      durationField.value = String(getTimeDurationMinutes(startField.value, endField.value));
+    }
+    return;
+  }
+
+  if (source === "end") {
+    if (startMinutes !== null && endMinutes !== null && endMinutes < startMinutes) {
+      endField.value = startField.value;
+      durationField.value = "0";
+      return;
+    }
+    if (startMinutes !== null && endMinutes !== null) {
+      durationField.value = String(getTimeDurationMinutes(startField.value, endField.value));
+    }
+    return;
+  }
+
+  if (source === "duration") {
+    if (startMinutes !== null && hasDuration) {
+      const maxDuration = Math.max(0, 1439 - startMinutes);
+      const nextDuration = getDurationValue(durationField.value, maxDuration);
+      durationField.value = String(nextDuration);
+      endField.value = addMinutesToTime(startField.value, nextDuration);
+    }
+    return;
+  }
+
+  if (startMinutes !== null && endMinutes !== null && !hasDuration) {
+    durationField.value = String(getTimeDurationMinutes(startField.value, endField.value));
+  } else if (startMinutes !== null && hasDuration && !endField.value) {
+    endField.value = addMinutesToTime(startField.value, duration);
+  }
+}
+
+function todayDate() {
+  return parseDateString(todayString());
 }
 
 function normalizeTextList(value) {
@@ -1550,6 +2540,9 @@ function splitCommaList(value = "") {
 
 function getSelectedValues(select) {
   if (!select) return [];
+  if (select.classList?.contains("search-multi-select")) {
+    return parseSearchMultiSelectValues(select);
+  }
   return [...select.selectedOptions]
     .map((option) => option.value)
     .filter(Boolean);
@@ -1557,6 +2550,10 @@ function getSelectedValues(select) {
 
 function setMultiSelectValues(select, values = []) {
   if (!select) return;
+  if (select.classList?.contains("search-multi-select")) {
+    setSearchMultiSelectValues(select, values, false);
+    return;
+  }
   const selected = new Set(values);
   [...select.options].forEach((option) => {
     option.selected = selected.has(option.value);
@@ -1636,7 +2633,7 @@ function normalizeProject(project) {
   const normalizedSchedules = createPhaseSchedules(phaseSchedules);
   const plannedRange = getProjectScheduleRange(project.plannedStart || "", project.plannedEnd || "", normalizedSchedules);
   const ownerIds = normalizeOwnerIds(project.internalOwnerIds, project);
-  const owner = getOwnerPayload(ownerIds[0], project);
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, project), project);
 
   return {
     ...baseProject,
@@ -1649,6 +2646,8 @@ function normalizeProject(project) {
     tags: normalizeTextList(project.tags),
     collaborationTags: normalizeTextList(project.collaborationTags),
     phase: project.phase || "deal",
+    status: normalizeProjectStatus(project.status || inferProjectStatusFromDates(project)),
+    priority: normalizePriority(project.priority),
     phaseChangedAt: project.phaseChangedAt || todayString(),
     requirementRequest: project.requirementRequest || "",
     phaseSchedules: normalizedSchedules,
@@ -1660,6 +2659,10 @@ function normalizeProject(project) {
     relatedLinks: normalizeLinkList(project.relatedLinks),
     closed: Boolean(project.closed || project.phase === "closed"),
     closedAt: project.closedAt || "",
+    createdAt: project.createdAt || "",
+    createdBy: project.createdBy || "",
+    updatedAt: project.updatedAt || "",
+    updatedBy: project.updatedBy || "",
   };
 }
 
@@ -1667,6 +2670,7 @@ function normalizeProjectStage(stage = {}) {
   return {
     id: stage.id || createId(),
     projectId: stage.projectId || "",
+    phaseId: stage.phaseId || getPhaseIdByLabel(stage.name) || "",
     name: String(stage.name || "").trim() || "未命名階段",
     description: stage.description || "",
     startDate: stage.startDate || stage.start || "",
@@ -1684,6 +2688,7 @@ function ensureProjectStages(projects = [], stages = []) {
 
   projects.forEach((project) => {
     if (project.category === "general") return;
+    const currentPhaseIndex = Math.max(0, phases.findIndex((phase) => phase.id === project.phase));
     phases.forEach((phase, index) => {
       const key = `${project.id}:${phase.label}`;
       if (existingKeys.has(key) || rows.some((stage) => stage.projectId === project.id && stage.id.endsWith(`-${phase.id}`))) return;
@@ -1696,7 +2701,7 @@ function ensureProjectStages(projects = [], stages = []) {
         description: "",
         startDate: schedule.start || "",
         endDate: schedule.end || "",
-        status: project.phase === phase.id ? "doing" : "not_started",
+        status: project.phase === phase.id ? "doing" : index < currentPhaseIndex ? "done" : "not_started",
         sortOrder: index + 1,
         taskIds: [],
       });
@@ -1717,18 +2722,9 @@ function normalizeDerivedScheduling(nextState) {
 
   nextState.tasks = nextState.tasks.map((task) => {
     const children = childrenByParent.get(task.id) || [];
-    if (!children.length) return task;
-    const start = getEarliestDate(children.map(getTaskTimelineStart).filter(Boolean));
-    const end = getLatestDate(children.map(getTaskTimelineEnd).filter(Boolean));
-    const deadline = getLatestDate(children.map((child) => child.deadline).filter(Boolean));
     return {
       ...task,
-      startDate: start || task.startDate || "",
-      rangeStart: start || task.rangeStart || "",
-      endDate: end || task.endDate || "",
-      rangeEnd: end || task.rangeEnd || "",
-      executionDate: start || task.executionDate || "",
-      deadline: deadline || task.deadline || "",
+      taskType: task.parentTaskId ? "child" : children.length ? "parent" : normalizeTaskType(task),
     };
   });
 
@@ -1743,8 +2739,8 @@ function normalizeDerivedScheduling(nextState) {
   nextState.projectStages = nextState.projectStages.map((stage) => {
     const stageTasks = tasksByStage.get(stage.id) || [];
     const project = projectsById.get(stage.projectId);
-    const start = getEarliestDate(stageTasks.map(getTaskTimelineStart).filter(Boolean));
-    const end = getLatestDate(stageTasks.map(getTaskTimelineEnd).filter(Boolean));
+    const start = getEarliestDate(stageTasks.map((task) => getTaskTimelineStartFromTasks(task, nextState.tasks)).filter(Boolean));
+    const end = getLatestDate(stageTasks.map((task) => getTaskTimelineEndFromTasks(task, nextState.tasks)).filter(Boolean));
     return {
       ...stage,
       startDate: start || stage.startDate || "",
@@ -1777,49 +2773,50 @@ function syncStateOwnershipVisibility() {
 
 function syncSystemOwnershipVisibility(system) {
   const ownerIds = normalizeOwnerIds(system.internalOwnerIds, system);
-  const owner = getOwnerPayload(ownerIds[0], system);
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, system), system);
+  const visibleUids = normalizeVisibleToUids(system.visibleToUids);
   return {
     ...system,
     internalOwnerIds: ownerIds,
     ...owner,
     ownerName: getOwnerNames(ownerIds, system),
-    visibleToUids: uniqueUids(ownerIds),
+    visibleToUids: uniqueUids([...visibleUids, ...ownerIds]),
   };
 }
 
 function syncProjectOwnershipVisibility(project) {
   const ownerIds = normalizeOwnerIds(project.internalOwnerIds, project);
-  const owner = getOwnerPayload(ownerIds[0], project);
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, project), project);
   const system = getSystem(project.systemId);
-  const systemVisibleUids = system
-    ? getInternalOwnerIds(system)
-    : normalizeVisibleToUids(project.visibleToUids);
+  const visibleUids = normalizeVisibleToUids(project.visibleToUids);
+  const systemVisibleUids = system ? getVisibleOrOwnerUids(system) : [];
   return {
     ...project,
     internalOwnerIds: ownerIds,
     ...owner,
     ownerName: getOwnerNames(ownerIds, project),
-    visibleToUids: uniqueUids([...systemVisibleUids, ...ownerIds]),
+    visibleToUids: uniqueUids([...visibleUids, ...systemVisibleUids, ...ownerIds]),
   };
 }
 
 function syncProjectStageVisibility(stage) {
   const project = getProject(stage.projectId);
+  const visibleUids = normalizeVisibleToUids(stage.visibleToUids);
   return {
     ...stage,
-    visibleToUids: project ? normalizeVisibleToUids(project.visibleToUids) : normalizeVisibleToUids(stage.visibleToUids),
+    visibleToUids: project ? normalizeVisibleToUids(project.visibleToUids) : visibleUids,
   };
 }
 
 function syncTaskOwnershipVisibility(task) {
   const ownerIds = normalizeOwnerIds(task.internalOwnerIds, task);
-  const owner = getOwnerPayload(ownerIds[0], task);
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, task), task);
   const scope = getTaskScope(task);
   let parentVisibleUids = [];
 
   if (scope === "system") {
     const system = getSystem(task.systemId);
-    parentVisibleUids = system ? getInternalOwnerIds(system) : normalizeVisibleToUids(task.visibleToUids);
+    parentVisibleUids = system ? getVisibleOrOwnerUids(system) : normalizeVisibleToUids(task.visibleToUids);
   } else if (scope === "project") {
     const project = getProject(task.projectId);
     const system = getSystem(project?.systemId || task.systemId);
@@ -1843,7 +2840,7 @@ function syncTaskOwnershipVisibility(task) {
   };
 }
 
-function saveState() {
+function saveState(options = {}) {
   syncStateOwnershipVisibility();
   persistViewPreferences();
   if (previewMode) {
@@ -1856,15 +2853,160 @@ function saveState() {
     return;
   }
   if (!cloudReady) return;
-  window.clearTimeout(cloudSaveTimer);
-  cloudSaveTimer = window.setTimeout(() => {
-    cloudSaveChain = cloudSaveChain
-      .then(pushStateToCloud)
-      .catch((error) => {
-        logSafeError("cloud.save", error);
-        showToast(`雲端儲存失敗：${getReadableError(error)}`);
-      });
+  queueCloudSave(options.cloudWriteScope || null);
+}
+
+function saveTaskState(taskIds = []) {
+  saveState({ cloudWriteScope: createCloudWriteScope("tasks", taskIds) });
+}
+
+function saveProjectOnlyState(projectIds = []) {
+  saveState({ cloudWriteScope: createCloudWriteScope("projects", projectIds) });
+}
+
+function saveProjectStageState(stageIds = []) {
+  saveState({ cloudWriteScope: createCloudWriteScope("projectStages", stageIds) });
+}
+
+function saveProjectState(projectIds = [], stageIds = [], taskIds = []) {
+  saveState({
+    cloudWriteScope: createCloudWriteScopeFromCollections({
+      projects: projectIds,
+      projectStages: stageIds,
+      tasks: taskIds,
+    }),
+  });
+}
+
+function queueCloudSave(writeScope = null) {
+  const normalizedScope = normalizeCloudWriteScope(writeScope);
+  if (isTaskOnlyCloudWriteScope(normalizedScope)) {
+    queueTaskCloudSave(normalizedScope);
+    return;
+  }
+  if (isScopedCloudWriteScope(normalizedScope)) {
+    queueProjectCloudSave(normalizedScope);
+    return;
+  }
+  queueFullCloudSave();
+}
+
+function createCloudWriteScope(collectionName, ids = []) {
+  const normalizedIds = uniqueUids(ids);
+  return normalizedIds.length ? { collectionIds: { [collectionName]: normalizedIds } } : null;
+}
+
+function createCloudWriteScopeFromCollections(collectionIds = {}) {
+  return normalizeCloudWriteScope({ collectionIds });
+}
+
+function normalizeCloudWriteScope(writeScope = null) {
+  if (!writeScope?.collectionIds) return null;
+  const collectionIds = Object.entries(writeScope.collectionIds).reduce((result, [collectionName, ids]) => {
+    const normalizedIds = uniqueUids(ids || []);
+    if (collectionName && normalizedIds.length) result[collectionName] = normalizedIds;
+    return result;
+  }, {});
+  return Object.keys(collectionIds).length ? { collectionIds } : null;
+}
+
+function mergeCloudWriteScopes(currentScope = null, nextScope = null) {
+  const normalizedNext = normalizeCloudWriteScope(nextScope);
+  if (!normalizedNext) return currentScope ? normalizeCloudWriteScope(currentScope) : null;
+  if (!currentScope) return normalizedNext;
+  const collectionIds = { ...currentScope.collectionIds };
+  Object.entries(normalizedNext.collectionIds).forEach(([collectionName, ids]) => {
+    collectionIds[collectionName] = uniqueUids([...(collectionIds[collectionName] || []), ...ids]);
+  });
+  return { collectionIds };
+}
+
+function isScopedCloudWriteScope(writeScope = null) {
+  return Boolean(normalizeCloudWriteScope(writeScope));
+}
+
+function isSingleCollectionCloudWriteScope(writeScope = null, collectionName = "") {
+  const normalizedScope = normalizeCloudWriteScope(writeScope);
+  if (!normalizedScope) return false;
+  const collectionNames = Object.keys(normalizedScope.collectionIds);
+  return collectionNames.length === 1 && collectionNames[0] === collectionName;
+}
+
+function isTaskOnlyCloudWriteScope(writeScope = null) {
+  return isSingleCollectionCloudWriteScope(writeScope, "tasks");
+}
+
+function isProjectOnlyCloudWriteScope(writeScope = null) {
+  return isSingleCollectionCloudWriteScope(writeScope, "projects");
+}
+
+function isProjectStageOnlyCloudWriteScope(writeScope = null) {
+  return isSingleCollectionCloudWriteScope(writeScope, "projectStages");
+}
+
+function queueTaskCloudSave(writeScope) {
+  pendingTaskCloudWriteScope = mergeCloudWriteScopes(pendingTaskCloudWriteScope, writeScope);
+  window.clearTimeout(cloudTaskSaveTimer);
+  cloudTaskSaveTimer = window.setTimeout(() => {
+    const queuedScope = pendingTaskCloudWriteScope;
+    pendingTaskCloudWriteScope = null;
+    enqueueCloudSaveJob(queuedScope, { notifyOnFailure: true });
+  }, 350);
+}
+
+function queueProjectCloudSave(writeScope) {
+  pendingProjectCloudWriteScope = mergeCloudWriteScopes(pendingProjectCloudWriteScope, writeScope);
+  window.clearTimeout(cloudProjectSaveTimer);
+  cloudProjectSaveTimer = window.setTimeout(() => {
+    const queuedScope = pendingProjectCloudWriteScope;
+    pendingProjectCloudWriteScope = null;
+    enqueueCloudSaveJob(queuedScope, { notifyOnFailure: true });
   }, 250);
+}
+
+function queueFullCloudSave() {
+  pendingFullCloudSave = true;
+  window.clearTimeout(cloudFullSaveTimer);
+  cloudFullSaveTimer = window.setTimeout(() => {
+    if (!pendingFullCloudSave) return;
+    pendingFullCloudSave = false;
+    enqueueCloudSaveJob(null, { notifyOnFailure: false });
+  }, 250);
+}
+
+function enqueueCloudSaveJob(writeScope = null, options = {}) {
+  cloudSaveChain = cloudSaveChain
+    .then(() => pushStateToCloud(writeScope))
+    .catch((error) => {
+      logSafeError("cloud.save", error);
+      if (options.notifyOnFailure) {
+        showToast(`雲端儲存失敗：${getReadableError(error)}`);
+      }
+    });
+}
+
+function getCloudWriteCollections(writeScope = null) {
+  if (!writeScope) return ["systems", "projects", "projectStages", "tasks"];
+  return ["systems", "projects", "projectStages", "tasks"].filter((collectionName) => {
+    return (writeScope.collectionIds?.[collectionName] || []).length;
+  });
+}
+
+function getCloudWriteTaskIds(writeScope = null) {
+  return uniqueUids(writeScope?.collectionIds?.tasks || []);
+}
+
+function getCloudWriteProjectIds(writeScope = null) {
+  return uniqueUids(writeScope?.collectionIds?.projects || []);
+}
+
+function getCloudWriteProjectStageIds(writeScope = null) {
+  return uniqueUids(writeScope?.collectionIds?.projectStages || []);
+}
+
+function cloudWriteScopeAllows(writeScope = null, collectionName, id) {
+  if (!writeScope) return true;
+  return (writeScope.collectionIds?.[collectionName] || []).includes(id);
 }
 
 async function initializeCloudApp() {
@@ -2310,8 +3452,10 @@ function applyRemoteState() {
   state = normalizeState(remoteState);
   lastSyncedState = stateToMaps(remoteState);
   cloudReady = true;
+  const recurringCleanupTaskIds = consumePendingRecurringOccurrenceCleanupTaskIds();
   showAppShell();
   updateAccountUi();
+  if (recurringCleanupTaskIds.length) saveTaskState(recurringCleanupTaskIds);
   render();
   refreshAssignableOwners()
     .then(() => render())
@@ -2322,46 +3466,108 @@ function applyRemoteState() {
   }
 }
 
-async function pushStateToCloud() {
+async function pushStateToCloud(writeScope = null) {
   if (!cloudReady || !db || !currentFirebaseUser) return;
 
+  const deferredProjectWrites = syncProjectVisibilityForCloudCreate(getCloudWriteProjectIds(writeScope));
+  if (deferredProjectWrites.length && isProjectOnlyCloudWriteScope(writeScope)) {
+    logDeferredCloudWrites(deferredProjectWrites);
+    return;
+  }
+
+  const deferredStageWrites = syncProjectStageVisibilityForCloudWrite(getCloudWriteProjectStageIds(writeScope));
+  if (deferredStageWrites.length && isProjectStageOnlyCloudWriteScope(writeScope)) {
+    logDeferredCloudWrites(deferredStageWrites);
+    return;
+  }
+
+  const deferredTaskWrites = syncTaskVisibilityForCloudWrite(getCloudWriteTaskIds(writeScope));
+  if (deferredTaskWrites.length && isTaskOnlyCloudWriteScope(writeScope)) {
+    logDeferredCloudWrites(deferredTaskWrites);
+    return;
+  }
+
+  const currentMaps = stateToMaps(state);
+  const previousMaps = getLastSyncedStateMaps();
+  const writeContext = {
+    uid: currentProfile?.uid || currentFirebaseUser?.uid || "",
+    currentMaps,
+    previousMaps,
+  };
+  const skippedWrites = [];
   let batch = db.batch();
   let operations = 0;
   let committedChanges = false;
+  let batchWrites = [];
+  const committedWrites = [];
 
   const commitIfNeeded = async (force = false) => {
     if (!operations) return;
     if (!force && operations < 450) return;
-    await batch.commit();
+    const writes = batchWrites;
+    try {
+      await batch.commit();
+    } catch (error) {
+      logFailedCloudWrites(writes, error);
+      throw error;
+    }
     committedChanges = true;
+    committedWrites.push(...writes);
     batch = db.batch();
     operations = 0;
+    batchWrites = [];
   };
 
-  for (const collectionName of ["systems", "projects", "projectStages", "tasks"]) {
-    const currentMap = new Map(state[collectionName].map((item) => [item.id, item]));
-    const previousMap = lastSyncedState[collectionName] || new Map();
+  for (const collectionName of getCloudWriteCollections(writeScope)) {
+    const currentMap = currentMaps[collectionName];
+    const previousMap = previousMaps[collectionName];
     const collectionRef = db.collection(collectionName);
 
     for (const [id, item] of currentMap.entries()) {
+      if (!cloudWriteScopeAllows(writeScope, collectionName, id)) continue;
       const previous = previousMap.get(id);
       if (!previous || hasCloudDataChanged(item, previous)) {
+        const action = previous ? "update" : "create";
+        if (!canWriteCloudRecord(collectionName, action, item, previous, writeContext)) {
+          skippedWrites.push(createCloudWriteLogEntry(collectionName, action, id, item));
+          continue;
+        }
         const documentRef = collectionRef.doc(id);
         const documentData = prepareCloudDocument(item, previous);
+        const projectCreatePayloadDebug = collectionName === "projects" && action === "create"
+          ? getProjectCreatePayloadDebug(id, documentData)
+          : null;
+        if (projectCreatePayloadDebug) {
+          logProjectCreatePayload(id, documentData, projectCreatePayloadDebug);
+        }
         if (previous) {
           batch.set(documentRef, documentData, { merge: true });
         } else {
           batch.set(documentRef, documentData);
         }
         operations += 1;
+        batchWrites.push(createCloudWriteLogEntry(
+          collectionName,
+          action,
+          id,
+          item,
+          projectCreatePayloadDebug ? { finalPayload: projectCreatePayloadDebug } : {},
+        ));
         await commitIfNeeded();
       }
     }
 
     for (const id of previousMap.keys()) {
+      if (!cloudWriteScopeAllows(writeScope, collectionName, id)) continue;
       if (!currentMap.has(id)) {
+        const previous = previousMap.get(id);
+        if (!canWriteCloudRecord(collectionName, "delete", null, previous, writeContext)) {
+          skippedWrites.push(createCloudWriteLogEntry(collectionName, "delete", id, previous));
+          continue;
+        }
         batch.delete(collectionRef.doc(id));
         operations += 1;
+        batchWrites.push(createCloudWriteLogEntry(collectionName, "delete", id, previous));
         await commitIfNeeded();
       }
     }
@@ -2369,10 +3575,869 @@ async function pushStateToCloud() {
 
   await commitIfNeeded(true);
 
-  if (committedChanges && !isAdminProfile()) {
-    lastSyncedState = stateToMaps(state);
+  if (skippedWrites.length) {
+    logSkippedCloudWrites(skippedWrites);
+    if (isScopedCloudWriteScope(writeScope) && !committedWrites.length) {
+      throw createCloudWriteSkippedError(skippedWrites);
+    }
+  }
+
+  if (committedWrites.length && (!skippedWrites.length || isScopedCloudWriteScope(writeScope))) {
+    updateLastSyncedStateAfterCloudWrite(committedWrites, currentMaps, writeScope);
+    queueDeferredProjectStagesAfterProjectCommit(committedWrites);
+  }
+
+  if (!isAdminProfile() && (committedChanges || skippedWrites.length)) {
     await refreshVisibleWorkspaceAfterSave();
   }
+}
+
+function getLastSyncedStateMaps() {
+  return {
+    systems: lastSyncedState.systems || new Map(),
+    projects: lastSyncedState.projects || new Map(),
+    projectStages: lastSyncedState.projectStages || new Map(),
+    tasks: lastSyncedState.tasks || new Map(),
+  };
+}
+
+function syncProjectVisibilityForCloudCreate(projectIds = []) {
+  const normalizedProjectIds = uniqueUids(projectIds);
+  if (!normalizedProjectIds.length) return [];
+
+  const projectIdSet = new Set(normalizedProjectIds);
+  const syncedMaps = getLastSyncedStateMaps();
+  const deferredWrites = [];
+
+  state.projects = state.projects.map((project) => {
+    if (!projectIdSet.has(project.id) || syncedMaps.projects.has(project.id)) return project;
+
+    const syncedSystem = getSyncedSystemForProjectCreate(project.systemId);
+    if (!syncedSystem && !isAdminProfile()) {
+      deferredWrites.push(createCloudWriteLogEntry("projects", "create", project.id, project, {
+        reason: "system-parent-not-synced",
+      }));
+      return project;
+    }
+
+    if (!syncedSystem) return project;
+
+    const ownerIds = getRuleOwnerIds(project);
+    return {
+      ...project,
+      visibleToUids: uniqueUids([...getRuleVisibleIds(syncedSystem), ...ownerIds]),
+    };
+  });
+
+  return deferredWrites;
+}
+
+function syncProjectStageVisibilityForCloudWrite(stageIds = []) {
+  const normalizedStageIds = uniqueUids(stageIds);
+  if (!normalizedStageIds.length) return [];
+
+  const stageIdSet = new Set(normalizedStageIds);
+  const syncedMaps = getLastSyncedStateMaps();
+  const deferredWrites = [];
+
+  state.projectStages = state.projectStages.map((stage) => {
+    if (!stageIdSet.has(stage.id)) return stage;
+
+    const syncedProject = syncedMaps.projects.get(stage.projectId);
+    if (!syncedProject && !syncedMaps.projectStages.has(stage.id)) {
+      const localProject = getProject(stage.projectId);
+      if (localProject) {
+        const reason = "project-parent-not-synced";
+        rememberDeferredProjectStageWrites(stage.projectId, [stage.id]);
+        deferredWrites.push(createCloudWriteLogEntry("projectStages", "create", stage.id, stage, {
+          reason,
+          projectId: stage.projectId || "",
+        }));
+        return stage;
+      }
+    }
+
+    return {
+      ...stage,
+      visibleToUids: syncedProject ? cloudVisibleIds(syncedProject) : normalizeVisibleToUids(stage.visibleToUids),
+    };
+  });
+
+  return deferredWrites;
+}
+
+function syncTaskVisibilityForCloudWrite(taskIds = []) {
+  const normalizedTaskIds = uniqueUids(taskIds);
+  if (!normalizedTaskIds.length) return [];
+
+  const taskIdSet = new Set(normalizedTaskIds);
+  const syncedMaps = getLastSyncedStateMaps();
+  const deferredWrites = [];
+
+  state.tasks = state.tasks.map((task) => {
+    if (!taskIdSet.has(task.id)) return task;
+
+    const ownerIds = normalizeOwnerIds(task.internalOwnerIds, task);
+    const parent = getSyncedParentVisibleUidsForTask(task, syncedMaps);
+    if (parent.deferCreate && !syncedMaps.tasks.has(task.id)) {
+      deferredWrites.push(createCloudWriteLogEntry("tasks", "create", task.id, task, {
+        reason: parent.reason,
+      }));
+      return task;
+    }
+
+    return {
+      ...task,
+      visibleToUids: uniqueUids([...parent.visibleUids, ...ownerIds]),
+    };
+  });
+
+  return deferredWrites;
+}
+
+function getSyncedParentVisibleUidsForTask(task = {}, syncedMaps = getLastSyncedStateMaps()) {
+  const scope = getTaskScope(task);
+  if (scope === "general") return { visibleUids: [] };
+
+  if (scope === "system") {
+    const syncedSystem = syncedMaps.systems.get(task.systemId);
+    if (syncedSystem) return { visibleUids: getVisibleOrOwnerUids(syncedSystem) };
+    const localSystem = getSystem(task.systemId);
+    return {
+      visibleUids: localSystem ? getVisibleOrOwnerUids(localSystem) : normalizeVisibleToUids(task.visibleToUids),
+      deferCreate: Boolean(localSystem),
+      reason: "system-parent-not-synced",
+    };
+  }
+
+  if (scope === "project") {
+    const syncedProject = syncedMaps.projects.get(task.projectId);
+    if (syncedProject) return { visibleUids: getVisibleOrOwnerUids(syncedProject) };
+    const localProject = getProject(task.projectId);
+    return {
+      visibleUids: localProject ? getVisibleOrOwnerUids(localProject) : normalizeVisibleToUids(task.visibleToUids),
+      deferCreate: Boolean(localProject),
+      reason: "project-parent-not-synced",
+    };
+  }
+
+  return { visibleUids: normalizeVisibleToUids(task.visibleToUids) };
+}
+
+function getSyncedSystemForProjectCreate(systemId) {
+  const normalizedSystemId = String(systemId || "").trim();
+  return normalizedSystemId ? getLastSyncedStateMaps().systems.get(normalizedSystemId) || null : null;
+}
+
+function getProjectCreateRuleCheck(project = {}) {
+  const diagnostics = getProjectCreateRuleDiagnostics(project.systemId, project);
+
+  if (isAdminProfile()) {
+    return {
+      allowed: true,
+      reason: "",
+      expectedVisibleToUids: diagnostics.expectedVisibleToUids.length
+        ? diagnostics.expectedVisibleToUids
+        : normalizeVisibleToUids(project.visibleToUids),
+    };
+  }
+
+  return {
+    allowed: diagnostics.canCreate,
+    reason: getProjectCreateFailureReason(diagnostics),
+    expectedVisibleToUids: diagnostics.expectedVisibleToUids,
+  };
+}
+
+function logBlockedCloudProjectCreate(project = {}, reason = "current-user-not-system-owner") {
+  console.warn("[cloud.project.create.blocked]", {
+    reason,
+    details: getProjectCreateDebugDetails(project.systemId, project),
+  });
+}
+
+function getProjectCreateRuleDiagnostics(systemId, project = {}) {
+  const syncedSystem = getSyncedSystemForProjectCreate(systemId);
+  const currentUid = currentProfile?.uid || currentFirebaseUser?.uid || "";
+  const systemOwnerIds = getRuleOwnerIds(syncedSystem);
+  const systemVisibleToUids = getRuleVisibleIds(syncedSystem);
+  const projectOwnerIds = getRuleOwnerIds(project);
+  const projectVisibleToUids = normalizeVisibleToUids(project.visibleToUids);
+  const expectedVisibleToUids = syncedSystem ? uniqueUids([...systemVisibleToUids, ...projectOwnerIds]) : [];
+  const ownerUid = String(project.ownerUid || "").trim();
+  const validOwnerFields = Boolean(
+    ownerUid
+    && typeof project.ownerName === "string"
+    && projectOwnerIds.includes(ownerUid)
+    && isRuleOwnerKnownActive(ownerUid),
+  );
+  const visibleMatches = Boolean(syncedSystem && cloudUidListEquals(projectVisibleToUids, expectedVisibleToUids));
+  const systemExists = Boolean(syncedSystem);
+  const isCurrentSystemOwner = systemOwnerIds.includes(currentUid);
+
+  return {
+    systemId: String(systemId || "").trim(),
+    currentUid,
+    ownerUid,
+    ownerNameType: typeof project.ownerName,
+    systemExists,
+    systemOwnerIds,
+    systemVisibleToUids,
+    projectOwnerIds,
+    projectOwnerIsKnownActive: isRuleOwnerKnownActive(ownerUid),
+    ownerUidInProjectOwnerIds: projectOwnerIds.includes(ownerUid),
+    projectVisibleToUids,
+    expectedVisibleToUids,
+    visibleMatches,
+    validOwnerFields,
+    isCurrentSystemOwner,
+    canCreate: systemExists && isCurrentSystemOwner && validOwnerFields && visibleMatches,
+  };
+}
+
+function getProjectCreateFailureReason(details = {}) {
+  if (!details.systemExists) return "system-parent-not-synced";
+  if (!details.isCurrentSystemOwner) return "current-user-not-system-owner";
+  if (!details.validOwnerFields) return "project-owner-not-active";
+  if (!details.visibleMatches) return "project-visible-mismatch";
+  return details.canCreate ? "" : "project-create-rule-mismatch";
+}
+
+function isRuleOwnerKnownActive(uid) {
+  const normalizedUid = String(uid || "").trim();
+  if (!normalizedUid) return false;
+  const owner = assignableOwners.find((item) => item.uid === normalizedUid)
+    || (currentProfile?.uid === normalizedUid ? normalizeOwnerAccount(currentProfile) : null);
+  return owner?.status === "active";
+}
+
+function rememberDeferredProjectStageWrites(projectId, stageIds = []) {
+  const normalizedProjectId = String(projectId || "").trim();
+  const normalizedStageIds = uniqueUids(stageIds);
+  if (!normalizedProjectId || !normalizedStageIds.length) return [];
+
+  const existingStageIds = deferredProjectStageIdsByProject.get(normalizedProjectId) || [];
+  const nextStageIds = uniqueUids([...existingStageIds, ...normalizedStageIds]);
+  deferredProjectStageIdsByProject.set(normalizedProjectId, nextStageIds);
+  return nextStageIds;
+}
+
+function deferProjectStageCloudWrites(projectId, stageIds = [], reason = "project-parent-not-synced") {
+  const nextStageIds = rememberDeferredProjectStageWrites(projectId, stageIds);
+  if (!nextStageIds.length) return;
+
+  const deferredWrites = uniqueUids(stageIds).map((stageId) => {
+    const stage = state.projectStages.find((item) => item.id === stageId) || { id: stageId, projectId };
+    return createCloudWriteLogEntry("projectStages", "create", stageId, stage, {
+      reason,
+      projectId: stage.projectId || projectId || "",
+    });
+  });
+  logDeferredCloudWrites(deferredWrites);
+}
+
+function queueDeferredProjectStagesAfterProjectCommit(committedWrites = []) {
+  const projectIds = uniqueUids(committedWrites
+    .filter((write) => write.collectionName === "projects" && write.action !== "delete")
+    .map((write) => write.id));
+  if (!projectIds.length || !deferredProjectStageIdsByProject.size) return;
+
+  const syncedMaps = getLastSyncedStateMaps();
+  projectIds.forEach((projectId) => {
+    const stageIds = uniqueUids(deferredProjectStageIdsByProject.get(projectId) || []);
+    if (!stageIds.length) return;
+
+    if (!syncedMaps.projects.has(projectId)) {
+      const deferredWrites = stageIds.map((stageId) => {
+        const stage = state.projectStages.find((item) => item.id === stageId) || { id: stageId, projectId };
+        return createCloudWriteLogEntry("projectStages", "create", stageId, stage, {
+          reason: "project-parent-not-synced",
+          projectId,
+        });
+      });
+      logDeferredCloudWrites(deferredWrites);
+      return;
+    }
+
+    deferredProjectStageIdsByProject.delete(projectId);
+    const availableStageIds = stageIds.filter((stageId) => state.projectStages.some((stage) => stage.id === stageId));
+    if (!availableStageIds.length) return;
+
+    console.info("[cloud.write.resumed]", availableStageIds.map((stageId) => {
+      const stage = state.projectStages.find((item) => item.id === stageId) || { id: stageId, projectId };
+      return createCloudWriteLogEntry("projectStages", "create", stageId, stage, {
+        reason: "project-parent-synced",
+        projectId,
+      });
+    }));
+    saveProjectStageState(availableStageIds);
+  });
+}
+
+function updateLastSyncedStateAfterCloudWrite(committedWrites = [], currentMaps, writeScope = null) {
+  if (!isScopedCloudWriteScope(writeScope)) {
+    lastSyncedState = stateToMaps(state);
+    return;
+  }
+
+  const nextSyncedState = getLastSyncedStateMaps();
+  const nextMaps = {
+    systems: new Map(nextSyncedState.systems),
+    projects: new Map(nextSyncedState.projects),
+    projectStages: new Map(nextSyncedState.projectStages),
+    tasks: new Map(nextSyncedState.tasks),
+  };
+  committedWrites.forEach((write) => {
+    const syncedMap = nextMaps[write.collectionName];
+    const currentMap = currentMaps[write.collectionName];
+    if (!syncedMap || !currentMap) return;
+    if (write.action === "delete") {
+      syncedMap.delete(write.id);
+      return;
+    }
+    const currentRecord = currentMap.get(write.id);
+    if (currentRecord) syncedMap.set(write.id, currentRecord);
+  });
+  lastSyncedState = {
+    ...nextMaps,
+  };
+}
+
+function canWriteCloudRecord(collectionName, action, next, previous, context) {
+  if (isAdminProfile()) return true;
+  if (!context.uid || currentProfile?.status !== "active") return false;
+
+  if (collectionName === "systems") {
+    if (action === "create") return canCreateCloudSystem(next, context);
+    if (action === "update") return canUpdateCloudSystem(next, previous, context);
+    return false;
+  }
+
+  if (collectionName === "projects") {
+    if (action === "create") return canCreateCloudProject(next, context);
+    if (action === "update") return canUpdateCloudProject(next, previous, context);
+    if (action === "delete") return canDeleteCloudProject(previous, context);
+  }
+
+  if (collectionName === "projectStages") {
+    if (action === "create") return canCreateCloudProjectStage(next, context);
+    if (action === "update") return canUpdateCloudProjectStage(next, previous, context);
+    if (action === "delete") return canDeleteCloudProjectStage(previous, context);
+  }
+
+  if (collectionName === "tasks") {
+    if (action === "create") return canCreateCloudTask(next, context);
+    if (action === "update") return canUpdateCloudTask(next, previous, context);
+    if (action === "delete") return canDeleteCloudTask(previous, context);
+  }
+
+  return false;
+}
+
+function canCreateCloudSystem(system, context) {
+  const ownerIds = getCloudOwnerIds(system);
+  return validCloudSystem(system, context)
+    && (ownerIds.includes(context.uid) || cloudOwnerIsAdmin(system?.ownerUid));
+}
+
+function canUpdateCloudSystem(next, previous, context) {
+  return Boolean(previous)
+    && getCloudOwnerIds(previous).includes(context.uid)
+    && cloudOwnerIdentityUnchanged(next, previous)
+    && validCloudSystem(next, context);
+}
+
+function canCreateCloudProject(project, context) {
+  return validCloudProject(project, context)
+    && cloudIsSystemOwner(project?.systemId, context);
+}
+
+function canUpdateCloudProject(next, previous, context) {
+  return Boolean(previous)
+    && validCloudProject(next, context, previous)
+    && next?.systemId === previous.systemId
+    && (
+      cloudIsSystemOwner(previous.systemId, context)
+      || (
+        getCloudOwnerIds(previous).includes(context.uid)
+        && cloudOwnerIdentityUnchanged(next, previous)
+      )
+    );
+}
+
+function canDeleteCloudProject(project, context) {
+  return Boolean(project) && cloudIsSystemOwner(project.systemId, context);
+}
+
+function canCreateCloudProjectStage(stage, context) {
+  const project = getCloudProjectAfter(stage?.projectId, context);
+  return validCloudProjectStageAfter(stage, context)
+    && (
+      cloudIsProjectOwnerAfter(stage.projectId, context)
+      || cloudIsSystemOwner(project?.systemId, context)
+    );
+}
+
+function canUpdateCloudProjectStage(next, previous, context) {
+  const project = getCloudProject(previous?.projectId, context);
+  return Boolean(previous)
+    && validCloudProjectStageAfter(next, context)
+    && next?.projectId === previous.projectId
+    && (
+      cloudIsProjectOwner(previous.projectId, context)
+      || cloudIsSystemOwner(project?.systemId, context)
+    );
+}
+
+function canDeleteCloudProjectStage(stage, context) {
+  const project = getCloudProject(stage?.projectId, context);
+  return Boolean(stage)
+    && (
+      cloudIsProjectOwner(stage.projectId, context)
+      || cloudIsSystemOwner(project?.systemId, context)
+    );
+}
+
+function canCreateCloudTask(task, context) {
+  const scope = getTaskScope(task);
+  return validCloudTask(task, context)
+    && (
+      (scope === "general" && (getCloudOwnerIds(task).includes(context.uid) || cloudOwnerIsAdmin(task?.ownerUid)))
+      || (scope === "system" && cloudCanSeeSystem(task?.systemId, context))
+      || (scope === "project" && cloudCanSeeProject(task?.projectId, context))
+    );
+}
+
+function canUpdateCloudTask(next, previous, context) {
+  const visibleOwnerScopeUpdate = Boolean(previous)
+    && cloudVisibleToCurrentUser(previous, context)
+    && cloudOwnerIdentityUnchanged(next, previous)
+    && cloudTaskScopeUnchanged(next, previous);
+
+  return Boolean(previous)
+    && (
+      (
+        visibleOwnerScopeUpdate
+        && validCloudTaskWithVisibleFallback(next, previous, context)
+      )
+      || (
+        validCloudTask(next, context)
+        &&
+        canAssignCloudTaskInScope(previous, context)
+        && canAssignCloudTaskInScope(next, context)
+      )
+    );
+}
+
+function canDeleteCloudTask(task, context) {
+  return Boolean(task) && cloudVisibleToCurrentUser(task, context);
+}
+
+function canAssignCloudTaskInScope(task, context) {
+  const scope = getTaskScope(task);
+  if (scope === "system") return cloudIsSystemOwner(task?.systemId, context);
+  if (scope === "project") {
+    const project = getCloudProject(task?.projectId, context);
+    return cloudIsSystemOwner(project?.systemId, context)
+      || cloudIsProjectOwner(task?.projectId, context);
+  }
+  return false;
+}
+
+function validCloudSystem(system) {
+  return validCloudOwnerFields(system)
+    && cloudUidListEquals(system.visibleToUids, getCloudOwnerIds(system));
+}
+
+function validCloudProject(project, context, previous = null) {
+  const system = getCloudSystem(project?.systemId, context);
+  if (!system) {
+    return Boolean(previous)
+      && validCloudOwnerFields(project)
+      && project?.systemId === previous.systemId
+      && cloudUidListEquals(project.visibleToUids, previous.visibleToUids);
+  }
+
+  return validCloudOwnerFields(project)
+    && cloudUidListEquals(project.visibleToUids, [
+      ...cloudVisibleIds(system),
+      ...getCloudOwnerIds(project),
+    ]);
+}
+
+function validCloudProjectStage(stage, context) {
+  const project = getCloudProject(stage?.projectId, context);
+  if (!project || typeof stage?.name !== "string") return false;
+  return cloudUidListEquals(stage.visibleToUids, cloudVisibleIds(project));
+}
+
+function validCloudProjectStageAfter(stage, context) {
+  const project = getCloudProjectAfter(stage?.projectId, context);
+  if (!project || typeof stage?.name !== "string") return false;
+  return cloudUidListEquals(stage.visibleToUids, cloudVisibleIds(project));
+}
+
+function validCloudTask(task, context) {
+  const scope = getTaskScope(task);
+  if (scope === "general") return validCloudGeneralTask(task);
+  if (scope === "system") return validCloudSystemTask(task, context);
+  if (scope === "project") return validCloudProjectTask(task, context);
+  return false;
+}
+
+function validCloudGeneralTask(task) {
+  return getTaskScope(task) === "general"
+    && validCloudOwnerFields(task)
+    && cloudUidListEquals(task.visibleToUids, getCloudOwnerIds(task));
+}
+
+function validCloudSystemTask(task, context) {
+  const system = getCloudSystem(task?.systemId, context);
+  return getTaskScope(task) === "system"
+    && validCloudOwnerFields(task)
+    && Boolean(system)
+    && task.projectId === ""
+    && cloudUidListEquals(task.visibleToUids, [
+      ...cloudVisibleIds(system),
+      ...getCloudOwnerIds(task),
+    ]);
+}
+
+function validCloudProjectTask(task, context) {
+  const project = getCloudProject(task?.projectId, context);
+  if (!project) return false;
+  const parentVisibleUids = cloudVisibleIds(project);
+  return getTaskScope(task) === "project"
+    && validCloudOwnerFields(task)
+    && task.systemId === project.systemId
+    && cloudUidListEquals(task.visibleToUids, [
+      ...parentVisibleUids,
+      ...getCloudOwnerIds(task),
+    ]);
+}
+
+function validCloudTaskWithVisibleFallback(task, previous, context) {
+  if (validCloudTask(task, context)) return true;
+  return validCloudOwnerFields(task)
+    && cloudTaskParentUnavailableForValidation(task, context)
+    && cloudUidListEquals(task.visibleToUids, previous.visibleToUids)
+    && (
+      (getTaskScope(task) === "system" && task.projectId === "")
+      || (getTaskScope(task) === "project" && task.projectId === previous.projectId && task.systemId === previous.systemId)
+    );
+}
+
+function cloudTaskParentUnavailableForValidation(task, context) {
+  const scope = getTaskScope(task);
+  if (scope === "system") return !getCloudSystem(task?.systemId, context);
+  if (scope === "project") return !getCloudProject(task?.projectId, context);
+  return false;
+}
+
+function validCloudOwnerFields(data = {}) {
+  data ||= {};
+  const ownerIds = getCloudOwnerIds(data);
+  return typeof data.ownerUid === "string"
+    && data.ownerUid !== ""
+    && typeof data.ownerName === "string"
+    && ownerIds.includes(data.ownerUid)
+    && cloudOwnerIsActive(data.ownerUid, data);
+}
+
+function getRuleOwnerIds(data = {}) {
+  data ||= {};
+  const direct = Array.isArray(data.internalOwnerIds) && data.internalOwnerIds.length
+    ? data.internalOwnerIds
+    : [data.ownerUid];
+  return uniqueUids(direct);
+}
+
+function getRuleVisibleIds(data = {}) {
+  const visibleIds = normalizeVisibleToUids(data?.visibleToUids);
+  return visibleIds.length ? visibleIds : getRuleOwnerIds(data);
+}
+
+function getCloudOwnerIds(data = {}) {
+  return getRuleOwnerIds(data);
+}
+
+function cloudOwnerIdentityUnchanged(next = {}, previous = {}) {
+  return next.ownerUid === previous.ownerUid
+    && cloudUidListEquals(getCloudOwnerIds(next), getCloudOwnerIds(previous));
+}
+
+function cloudTaskScopeUnchanged(next = {}, previous = {}) {
+  return getTaskScope(next) === getTaskScope(previous)
+    && next.systemId === previous.systemId
+    && next.projectId === previous.projectId;
+}
+
+function cloudVisibleIds(data = {}) {
+  return getRuleVisibleIds(data);
+}
+
+function cloudVisibleToCurrentUser(data = {}, context) {
+  return cloudVisibleIds(data).includes(context.uid);
+}
+
+function cloudUidListEquals(actual = [], expected = []) {
+  const actualIds = normalizeVisibleToUids(actual);
+  const expectedIds = uniqueUids(expected);
+  return actualIds.length === expectedIds.length
+    && expectedIds.every((uid) => actualIds.includes(uid));
+}
+
+function cloudOwnerIsActive(uid, fallback = {}) {
+  const owner = getKnownOwner(uid, fallback);
+  return owner?.status === "active";
+}
+
+function cloudOwnerIsAdmin(uid) {
+  const owner = getKnownOwner(uid);
+  return owner?.status === "active" && owner.role === "admin";
+}
+
+function cloudIsSystemOwner(systemId, context) {
+  const system = getCloudSystem(systemId, context);
+  return Boolean(system && getCloudOwnerIds(system).includes(context.uid));
+}
+
+function cloudIsProjectOwner(projectId, context) {
+  const project = getCloudProject(projectId, context);
+  return Boolean(project && getCloudOwnerIds(project).includes(context.uid));
+}
+
+function cloudIsProjectOwnerAfter(projectId, context) {
+  const project = getCloudProjectAfter(projectId, context);
+  return Boolean(project && getCloudOwnerIds(project).includes(context.uid));
+}
+
+function cloudCanSeeSystem(systemId, context) {
+  const system = getCloudSystem(systemId, context);
+  return Boolean(system && cloudVisibleIds(system).includes(context.uid));
+}
+
+function cloudCanSeeProject(projectId, context) {
+  const project = getCloudProject(projectId, context);
+  return Boolean(project && cloudVisibleIds(project).includes(context.uid));
+}
+
+function getCloudSystem(systemId, context) {
+  return systemId ? context.previousMaps.systems.get(systemId) || null : null;
+}
+
+function getCloudProject(projectId, context) {
+  return projectId ? context.previousMaps.projects.get(projectId) || null : null;
+}
+
+function getCloudProjectAfter(projectId, context) {
+  return projectId ? context.currentMaps.projects.get(projectId) || null : null;
+}
+
+function createCloudWriteLogEntry(collectionName, action, id, item = {}, extra = {}) {
+  const details = getCloudWriteDebugDetails(collectionName, item);
+  return {
+    collectionName,
+    action,
+    id,
+    ...(details ? { details } : {}),
+    ...extra,
+  };
+}
+
+function getCloudWriteDebugDetails(collectionName, item = {}) {
+  if (!item) return null;
+  if (collectionName === "projects") {
+    return getProjectCreateDebugDetails(item.systemId, item);
+  }
+  if (collectionName === "projectStages") {
+    return {
+      projectId: item.projectId || "",
+      phaseId: item.phaseId || "",
+      visibleToUids: normalizeVisibleToUids(item.visibleToUids),
+    };
+  }
+  if (collectionName !== "tasks") return null;
+  return {
+    scope: getTaskScope(item),
+    systemId: item.systemId || "",
+    projectId: item.projectId || "",
+    ownerUid: item.ownerUid || "",
+    internalOwnerIds: getCloudOwnerIds(item),
+    visibleToUids: normalizeVisibleToUids(item.visibleToUids),
+  };
+}
+
+function getProjectCreateDebugDetails(systemId, project = {}) {
+  return {
+    ...getProjectCreateRuleDiagnostics(systemId, project),
+    fieldContract: getProjectCreatePayloadDebug(project.id || "", project),
+  };
+}
+
+function getProjectCreatePayloadDebug(id, project = {}) {
+  const payload = project || {};
+  const pathId = String(id || "").trim();
+  const payloadId = String(payload.id || "").trim();
+  const hasInternalOwnerIds = Object.prototype.hasOwnProperty.call(payload, "internalOwnerIds");
+  const hasVisibleToUids = Object.prototype.hasOwnProperty.call(payload, "visibleToUids");
+  const hasProjectOwnerIds = Object.prototype.hasOwnProperty.call(payload, "projectOwnerIds");
+  const hasProjectVisibleToUids = Object.prototype.hasOwnProperty.call(payload, "projectVisibleToUids");
+
+  return {
+    path: pathId ? `projects/${pathId}` : "projects/",
+    id: pathId,
+    projectId: payloadId,
+    documentIdMatchesPayload: Boolean(pathId && payloadId && pathId === payloadId),
+    keys: Object.keys(payload).sort(),
+    ownerUid: String(payload.ownerUid || "").trim(),
+    ownerNameType: typeof payload.ownerName,
+    systemId: String(payload.systemId || "").trim(),
+    hasInternalOwnerIds,
+    internalOwnerIds: hasInternalOwnerIds ? getRuleOwnerIds(payload) : [],
+    hasVisibleToUids,
+    visibleToUids: hasVisibleToUids ? normalizeVisibleToUids(payload.visibleToUids) : [],
+    hasProjectOwnerIds,
+    hasProjectVisibleToUids,
+  };
+}
+
+function logProjectCreatePayload(id, project = {}, payloadDebug = getProjectCreatePayloadDebug(id, project)) {
+  console.info("[project.create.payload]", {
+    ...payloadDebug,
+    project,
+  });
+}
+
+async function logProjectCreateFailureContext(writes = []) {
+  const projectWrite = writes.find((write) => write.collectionName === "projects" && write.action === "create");
+  if (!projectWrite || !db || !currentFirebaseUser) return;
+
+  const currentUid = currentFirebaseUser.uid || "";
+  const systemId = projectWrite.finalPayload?.systemId || projectWrite.details?.systemId || "";
+  const [tokenResult, userResult, systemResult] = await Promise.all([
+    currentFirebaseUser.getIdTokenResult?.().catch((error) => ({ error })),
+    getDebugDocumentSnapshot(`users/${currentUid}`),
+    systemId ? getDebugDocumentSnapshot(`systems/${systemId}`) : Promise.resolve({ exists: false, data: null }),
+  ]);
+
+  console.info("[project.create.failure.context]", {
+    currentUid,
+    token: getTokenDebugDetails(tokenResult),
+    currentProfile: {
+      uid: currentProfile?.uid || "",
+      role: currentProfile?.role || "",
+      status: currentProfile?.status || "",
+    },
+    userDoc: getUserDebugDetails(userResult),
+    systemDoc: getSystemDebugDetails(systemResult),
+    browserBlockedHint: "If the console also shows net::ERR_BLOCKED_BY_CLIENT for firestore.googleapis.com, retest in an InPrivate window or temporarily disable blocking/privacy extensions.",
+    write: {
+      id: projectWrite.id || "",
+      systemId,
+      canCreate: Boolean(projectWrite.details?.canCreate),
+      documentIdMatchesPayload: Boolean(projectWrite.finalPayload?.documentIdMatchesPayload),
+      finalPayloadKeys: projectWrite.finalPayload?.keys || [],
+      finalPayloadOwnerIds: projectWrite.finalPayload?.internalOwnerIds || [],
+      finalPayloadVisibleToUids: projectWrite.finalPayload?.visibleToUids || [],
+    },
+  });
+}
+
+async function getDebugDocumentSnapshot(path) {
+  try {
+    const snapshot = await db.doc(path).get();
+    return {
+      exists: snapshot.exists,
+      data: snapshot.exists ? snapshot.data() : null,
+    };
+  } catch (error) {
+    return {
+      exists: false,
+      data: null,
+      error: {
+        code: error?.code || "",
+        message: error?.message || "",
+      },
+    };
+  }
+}
+
+function getTokenDebugDetails(tokenResult = {}) {
+  if (tokenResult?.error) {
+    return {
+      error: {
+        code: tokenResult.error?.code || "",
+        message: tokenResult.error?.message || "",
+      },
+    };
+  }
+  const claims = tokenResult?.claims || {};
+  return {
+    admin: Boolean(claims.admin),
+    role: claims.role || "",
+    status: claims.status || "",
+  };
+}
+
+function getUserDebugDetails(result = {}) {
+  const data = result.data || {};
+  return {
+    exists: Boolean(result.exists),
+    uid: data.uid || "",
+    role: data.role || "",
+    status: data.status || "",
+    ...(result.error ? { error: result.error } : {}),
+  };
+}
+
+function getSystemDebugDetails(result = {}) {
+  const data = result.data || {};
+  return {
+    exists: Boolean(result.exists),
+    ownerUid: data.ownerUid || "",
+    internalOwnerIds: getRuleOwnerIds(data),
+    visibleToUids: normalizeVisibleToUids(data.visibleToUids),
+    ...(result.error ? { error: result.error } : {}),
+  };
+}
+
+function logDeferredCloudWrites(deferredWrites = []) {
+  if (!deferredWrites.length) return;
+  console.info("[cloud.write.deferred]", deferredWrites);
+}
+
+function logSkippedCloudWrites(skippedWrites = []) {
+  const summary = skippedWrites.reduce((rows, item) => {
+    const key = `${item.collectionName}.${item.action}`;
+    rows[key] = (rows[key] || 0) + 1;
+    return rows;
+  }, {});
+  console.warn("[cloud.save.skipped]", summary, skippedWrites.slice(0, 20));
+}
+
+function createCloudWriteSkippedError(skippedWrites = []) {
+  const error = new Error("No permitted cloud writes were available for this scoped change.");
+  error.code = "permission-denied";
+  error.skippedWrites = skippedWrites;
+  return error;
+}
+
+function logFailedCloudWrites(writes = [], error = {}) {
+  const summary = writes.reduce((rows, item) => {
+    const key = `${item.collectionName}.${item.action}`;
+    rows[key] = (rows[key] || 0) + 1;
+    return rows;
+  }, {});
+  console.error("[cloud.save.failed]", {
+    code: error?.code || "",
+    message: error?.message || "",
+    summary,
+    writes: writes.slice(0, 50),
+  });
+  logProjectCreateFailureContext(writes).catch((diagnosticError) => {
+    logSafeError("cloud.projectCreate.diagnostics", diagnosticError);
+  });
 }
 
 function prepareCloudDocument(item, previous = {}) {
@@ -2586,6 +4651,11 @@ function getInternalOwnerIds(entity = {}) {
   return normalizeOwnerIds(entity?.internalOwnerIds, entity || {});
 }
 
+function getPrimaryOwnerUid(ownerIds = [], fallback = {}) {
+  const currentOwnerUid = String(fallback?.ownerUid || "").trim();
+  return ownerIds.includes(currentOwnerUid) ? currentOwnerUid : ownerIds[0] || "";
+}
+
 function normalizeOwnerIds(value, fallback = {}) {
   fallback ||= {};
   const direct = Array.isArray(value) ? value : [];
@@ -2664,13 +4734,8 @@ function getDefaultAssignableOwners() {
 }
 
 function renderOwnerOptions(owners, selectedUid = "", fallback = {}) {
-  const selectedIds = Array.isArray(selectedUid)
-    ? normalizeOwnerIds(selectedUid, fallback)
-    : normalizeOwnerIds(selectedUid ? [selectedUid] : fallback.internalOwnerIds, fallback);
-  const rows = uniqueOwners([
-    ...(owners || []),
-    ...getOwnersFromEntity(fallback),
-  ].filter(Boolean));
+  const selectedIds = getOwnerSelectedValues(selectedUid, fallback);
+  const rows = getOwnerOptionRows(owners, fallback);
   const options = rows.map((owner) => {
     const selected = selectedIds.includes(owner.uid);
     const label = getOwnerDisplayName(owner);
@@ -2682,6 +4747,41 @@ function renderOwnerOptions(owners, selectedUid = "", fallback = {}) {
   }
 
   return options.length ? options.join("") : `<option value="">沒有可指派帳號</option>`;
+}
+
+function getOwnerSelectedValues(selectedUid = "", fallback = {}) {
+  return Array.isArray(selectedUid)
+    ? normalizeOwnerIds(selectedUid, fallback)
+    : normalizeOwnerIds(selectedUid ? [selectedUid] : fallback.internalOwnerIds, fallback);
+}
+
+function getOwnerOptionRows(owners = [], fallback = {}) {
+  return uniqueOwners([
+    ...(owners || []),
+    ...getOwnersFromEntity(fallback),
+  ].filter(Boolean));
+}
+
+function getOwnerDropdownOptions(owners = [], fallback = {}) {
+  return getOwnerOptionRows(owners, fallback).map((owner) => ({
+    value: owner.uid,
+    label: getOwnerDisplayName(owner),
+  }));
+}
+
+function renderOwnerDropdown(container, owners, selectedUid = "", fallback = {}, config = {}) {
+  if (!container) return;
+  renderMultiSelectDropdown(
+    container,
+    getOwnerDropdownOptions(owners, fallback),
+    getOwnerSelectedValues(selectedUid, fallback),
+    {
+      placeholder: "請選擇負責人",
+      summaryUnit: "人",
+      searchPlaceholder: "搜尋負責人",
+      ...config,
+    },
+  );
 }
 
 function ownerSelectValue(select, fallback = {}) {
@@ -2699,6 +4799,12 @@ function isCurrentSystemOwner(systemOrId) {
   return Boolean(currentProfile?.uid && getInternalOwnerIds(system).includes(currentProfile.uid));
 }
 
+function isCurrentSyncedSystemOwner(systemId) {
+  const system = getSyncedSystemForProjectCreate(systemId);
+  const currentUid = currentProfile?.uid || currentFirebaseUser?.uid || "";
+  return Boolean(currentUid && getRuleOwnerIds(system).includes(currentUid));
+}
+
 function isCurrentProjectOwner(projectOrId) {
   const project = typeof projectOrId === "string" ? getProject(projectOrId) : projectOrId;
   return Boolean(currentProfile?.uid && getInternalOwnerIds(project).includes(currentProfile.uid));
@@ -2714,7 +4820,7 @@ function canAssignSystemOwner(system) {
 
 function canAssignProjectOwner(project, systemId) {
   const targetSystemId = systemId || project?.systemId || "";
-  return isAdminProfile() || isCurrentSystemOwner(targetSystemId);
+  return isAdminProfile() || isCurrentSyncedSystemOwner(targetSystemId);
 }
 
 function canAssignTaskOwner(task = null, scopeValues = null) {
@@ -2752,6 +4858,12 @@ function getTaskOwnerChoices(task = null, scopeValues = null) {
 
 function normalizeVisibleToUids(value) {
   return uniqueUids(Array.isArray(value) ? value : []);
+}
+
+function getVisibleOrOwnerUids(entity = {}) {
+  entity ||= {};
+  const visibleIds = normalizeVisibleToUids(entity.visibleToUids);
+  return visibleIds.length ? visibleIds : getInternalOwnerIds(entity);
 }
 
 function uniqueUids(values = []) {
@@ -3312,10 +5424,11 @@ function render() {
   syncSidebarCollapsed();
   renderSystems();
   renderHeader();
-  renderMetrics();
   syncProjectManagementFilterOptions();
+  renderMetrics();
   renderTodoDashboard();
   renderProjectSummaryCards();
+  syncMainDisplayModeControls();
   renderProjects();
   renderProjectTabs();
   renderTagFilterBar();
@@ -3331,11 +5444,47 @@ function render() {
   }
 }
 
+function scheduleRender() {
+  window.clearTimeout(searchRenderTimer);
+  searchRenderTimer = window.setTimeout(() => {
+    searchRenderTimer = null;
+    render();
+  }, 180);
+}
+
 function syncSidebarCollapsed() {
   els.appShell.classList.toggle("sidebar-collapsed", sidebarCollapsed);
   els.sidebarToggle.textContent = sidebarCollapsed ? "›" : "‹";
   els.sidebarToggle.setAttribute("aria-expanded", String(!sidebarCollapsed));
   els.sidebarToggle.setAttribute("aria-label", sidebarCollapsed ? "展開側邊欄" : "收合側邊欄");
+}
+
+function handleMainDisplayModeToggle(event) {
+  const button = event.target.closest("[data-display-target][data-display-mode]");
+  if (!button) return;
+  const mode = button.dataset.displayMode === "detailed" ? "detailed" : "compact";
+  if (button.dataset.displayTarget === "project") {
+    mainProjectDisplayMode = mode;
+  } else if (button.dataset.displayTarget === "task") {
+    mainTaskDisplayMode = mode;
+  } else {
+    return;
+  }
+  persistViewPreferences();
+  render();
+}
+
+function syncMainDisplayModeControls() {
+  syncDisplayModeControl(els.projectDisplayToggle, mainProjectDisplayMode);
+  syncDisplayModeControl(els.taskDisplayToggle, mainTaskDisplayMode);
+}
+
+function syncDisplayModeControl(container, activeMode) {
+  container?.querySelectorAll("[data-display-mode]").forEach((button) => {
+    const active = button.dataset.displayMode === activeMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
 }
 
 function ensureSelection() {
@@ -3355,9 +5504,15 @@ function ensureSelection() {
 function renderSystems() {
   const allActive = selectedSystemId === null;
   const generalActive = selectedScopeIsGeneral();
-  const allProjects = state.projects.length;
-  const allTasks = state.tasks.length;
-  const generalTasks = state.tasks.filter((task) => getTaskScope(task) === "general").length;
+  const visibleSystems = state.systems.filter((system) => systemMatchesOwnerContext(system) || system.id === selectedSystemId);
+  const visibleSystemIds = new Set(visibleSystems.map((system) => system.id));
+  const allProjects = projectOwnerFilterIds.length
+    ? state.projects.filter((project) => visibleSystemIds.has(project.systemId) && projectMatchesOwnerContext(project)).length
+    : state.projects.length;
+  const allTasks = projectOwnerFilterIds.length
+    ? state.tasks.filter((task) => isManagementCountTask(task) && (getTaskScope(task) === "general" || visibleSystemIds.has(task.systemId)) && taskMatchesOwnerContext(task)).length
+    : state.tasks.filter(isManagementCountTask).length;
+  const generalTasks = state.tasks.filter((task) => isManagementCountTask(task) && getTaskScope(task) === "general" && taskMatchesOwnerContext(task)).length;
 
   const buttons = [
     `<button class="system-item ${allActive ? "active" : ""}" type="button" data-system-id="" title="全部系統">
@@ -3365,9 +5520,9 @@ function renderSystems() {
       <strong class="system-name-short">全部</strong>
       <span>${allProjects} 個專案・${allTasks} 個任務</span>
     </button>`,
-    ...state.systems.map((system) => {
-      const projectCount = state.projects.filter((project) => project.systemId === system.id).length;
-      const taskCount = state.tasks.filter((task) => taskMatchesSystemScope(task, system.id)).length;
+    ...visibleSystems.map((system) => {
+      const projectCount = state.projects.filter((project) => project.systemId === system.id && projectMatchesOwnerContext(project)).length;
+      const taskCount = state.tasks.filter((task) => isManagementCountTask(task) && taskMatchesSystemScope(task, system.id) && taskMatchesOwnerContext(task)).length;
       const shortLabel = getSystemShortLabel(system.name);
       const ownerLabel = getOwnerDisplayName(system);
 
@@ -3375,7 +5530,7 @@ function renderSystems() {
         <button class="system-item ${selectedSystemId === system.id ? "active" : ""}" type="button" data-system-id="${system.id}" title="${escapeHtml(system.name)}">
           <strong class="system-name-full">${escapeHtml(system.name)}</strong>
           <strong class="system-name-short">${escapeHtml(shortLabel)}</strong>
-          <span>${projectCount} 個專案・${taskCount} 個任務・${escapeHtml(ownerLabel)}</span>
+          <span>${projectCount} 個專案・${taskCount} 個任務・負責人 ${escapeHtml(ownerLabel)}</span>
         </button>
       `;
     }),
@@ -3430,9 +5585,14 @@ function renderHeader() {
 }
 
 function renderMetrics() {
-  const projects = getScopedProjects();
+  const projects = getScopedProjects(true);
   const projectIds = projects.map((project) => project.id);
-  const tasks = state.tasks.filter((task) => taskMatchesSystemScope(task));
+  const tasks = state.tasks.filter((task) => isManagementCountTask(task) && taskMatchesSystemScope(task) && taskMatchesOwnerContext(task));
+  const visibleSystemCount = selectedScopeIsGeneral()
+    ? 0
+    : selectedSystemId
+      ? 1
+      : state.systems.filter((system) => systemMatchesOwnerContext(system)).length;
   const activeTasks = tasks.filter((task) => task.status !== "done").length;
   const dueSoon = tasks.filter((task) => {
     if (!task.deadline || task.status === "done") return false;
@@ -3440,7 +5600,7 @@ function renderMetrics() {
     return diff >= 0 && diff <= 7;
   }).length;
 
-  els.systemCount.textContent = selectedScopeIsGeneral() ? 0 : selectedSystemId ? 1 : state.systems.length;
+  els.systemCount.textContent = visibleSystemCount;
   els.projectCount.textContent = projectIds.length;
   els.activeTaskCount.textContent = activeTasks;
   els.deadlineCount.textContent = dueSoon;
@@ -3448,21 +5608,469 @@ function renderMetrics() {
 
 function syncProjectManagementFilterOptions() {
   if (!els.ownerFilter || !els.collaborationFilter) return;
-  renderMultiSelectOptions(els.ownerFilter, getAllAssignableOwners().map((owner) => ({
+  const ownerOptions = getAllAssignableOwners().map((owner) => ({
     value: owner.uid,
     label: getOwnerDisplayName(owner),
-  })), projectOwnerFilterIds, "全部負責人");
+  }));
+  projectOwnerFilterIds = normalizeMultiSelectSelectedValues(projectOwnerFilterIds, ownerOptions);
+  renderMultiSelectOptions(els.ownerFilter, ownerOptions, projectOwnerFilterIds, "全部負責人", {
+    summaryUnit: "人",
+    searchPlaceholder: "搜尋負責人",
+  });
 
   const collaborations = getAllCollaborationTags();
-  renderMultiSelectOptions(els.collaborationFilter, collaborations.map((tag) => ({ value: tag, label: tag })), projectCollaborationFilters, "全部協作對象");
+  const collaborationOptions = collaborations.map((tag) => ({ value: tag, label: tag }));
+  projectCollaborationFilters = normalizeMultiSelectSelectedValues(projectCollaborationFilters, collaborationOptions);
+  renderMultiSelectOptions(els.collaborationFilter, collaborationOptions, projectCollaborationFilters, "全部協作對象", {
+    summaryUnit: "組",
+    searchPlaceholder: "搜尋協作對象",
+  });
+
+  const projectPhaseOptions = getMultiFilterOptions(getPhaseFilterOptions());
+  projectFilters.phase = normalizeMultiSelectSelectedValues(projectFilters.phase, projectPhaseOptions);
+  renderMultiSelectOptions(els.phaseFilter, projectPhaseOptions, projectFilters.phase, "全部階段", {
+    summaryUnit: "階段",
+    searchPlaceholder: "搜尋階段",
+  });
+
+  projectFilters.status = normalizeMultiSelectSelectedValues(projectFilters.status, projectStatusOptions);
+  renderMultiSelectOptions(els.projectStatusFilter, projectStatusOptions, projectFilters.status, "全部狀態", {
+    summaryUnit: "項",
+    searchPlaceholder: "搜尋狀態",
+  });
+
+  projectFilters.priority = normalizeMultiSelectSelectedValues(projectFilters.priority, priorityOptions);
+  renderMultiSelectOptions(els.projectPriorityFilter, priorityOptions, projectFilters.priority, "全部優先級", {
+    summaryUnit: "項",
+    searchPlaceholder: "搜尋優先級",
+  });
+
+  const projectScheduleOptions = getMultiFilterOptions(scheduleStatusOptions);
+  projectFilters.schedule = normalizeMultiSelectSelectedValues(projectFilters.schedule, projectScheduleOptions);
+  renderMultiSelectOptions(els.projectScheduleFilter, projectScheduleOptions, projectFilters.schedule, "全部時程狀態", {
+    summaryUnit: "項",
+    searchPlaceholder: "搜尋時程狀態",
+  });
+
+  if (els.projectDateFilter) renderNativeSelectOptions(els.projectDateFilter, dateFilterOptions, projectFilters.date);
+  if (els.projectDateStart) els.projectDateStart.value = projectFilters.dateStart || "";
+  if (els.projectDateEnd) els.projectDateEnd.value = projectFilters.dateEnd || "";
+  projectFilters.more = normalizeMultiSelectSelectedValues(projectFilters.more, projectMoreFilterOptions);
+  renderMultiSelectOptions(els.projectMoreFilter, projectMoreFilterOptions, projectFilters.more, "更多篩選", {
+    summaryUnit: "項",
+    searchPlaceholder: "搜尋更多篩選",
+  });
+
+  syncTaskFilterOptions(ownerOptions, collaborationOptions);
+  syncDateRangeVisibility();
 }
 
-function renderMultiSelectOptions(select, options = [], selectedValues = [], placeholder = "全部") {
+function syncTaskFilterOptions(ownerOptions = [], collaborationOptions = []) {
+  taskFilters.ownerIds = normalizeMultiSelectSelectedValues(taskFilters.ownerIds, ownerOptions);
+  renderMultiSelectOptions(els.taskOwnerFilter, ownerOptions, taskFilters.ownerIds, "全部負責人", {
+    summaryUnit: "人",
+    searchPlaceholder: "搜尋負責人",
+  });
+
+  taskFilters.collaborationTags = normalizeMultiSelectSelectedValues(taskFilters.collaborationTags, collaborationOptions);
+  renderMultiSelectOptions(els.taskCollaborationFilter, collaborationOptions, taskFilters.collaborationTags, "全部協作對象", {
+    summaryUnit: "組",
+    searchPlaceholder: "搜尋協作對象",
+  });
+
+  const taskProjectOptions = getTaskProjectFilterOptions();
+  const taskProjectFilterOptions = getMultiFilterOptions(taskProjectOptions);
+  taskFilters.projectIds = normalizeMultiSelectSelectedValues(taskFilters.projectIds, taskProjectFilterOptions);
+  renderMultiSelectOptions(els.taskProjectFilter, taskProjectFilterOptions, taskFilters.projectIds, taskProjectOptions[0]?.label || "全部專案", {
+    summaryUnit: "個",
+    searchPlaceholder: "搜尋專案",
+  });
+
+  const taskPhaseOptions = getMultiFilterOptions(getPhaseFilterOptions());
+  taskFilters.phase = normalizeMultiSelectSelectedValues(taskFilters.phase, taskPhaseOptions);
+  renderMultiSelectOptions(els.taskPhaseFilter, taskPhaseOptions, taskFilters.phase, "全部階段", {
+    summaryUnit: "階段",
+    searchPlaceholder: "搜尋階段",
+  });
+
+  const taskStatusOptions = taskColumns.map((column) => ({ id: column.id, label: column.title }));
+  taskFilters.status = normalizeMultiSelectSelectedValues(taskFilters.status, taskStatusOptions);
+  renderMultiSelectOptions(els.taskStatusFilter, taskStatusOptions, taskFilters.status, "全部任務狀態", {
+    summaryUnit: "項",
+    searchPlaceholder: "搜尋任務狀態",
+  });
+
+  taskFilters.priority = normalizeMultiSelectSelectedValues(taskFilters.priority, priorityOptions);
+  renderMultiSelectOptions(els.taskPriorityFilter, priorityOptions, taskFilters.priority, "全部優先級", {
+    summaryUnit: "項",
+    searchPlaceholder: "搜尋優先級",
+  });
+
+  const taskDueOptions = getMultiFilterOptions(dueStatusOptions);
+  taskFilters.due = normalizeMultiSelectSelectedValues(taskFilters.due, taskDueOptions);
+  renderMultiSelectOptions(els.taskDueFilter, taskDueOptions, taskFilters.due, "全部到期狀態", {
+    summaryUnit: "項",
+    searchPlaceholder: "搜尋到期狀態",
+  });
+
+  renderNativeSelectOptions(els.taskDateFilter, dateFilterOptions, taskFilters.date);
+  if (els.taskDateStart) els.taskDateStart.value = taskFilters.dateStart || "";
+  if (els.taskDateEnd) els.taskDateEnd.value = taskFilters.dateEnd || "";
+  if (els.taskSearchInput && els.taskSearchInput.value !== taskFilters.query) els.taskSearchInput.value = taskFilters.query || "";
+  taskFilters.more = normalizeMultiSelectSelectedValues(taskFilters.more, taskMoreFilterOptions);
+  renderMultiSelectOptions(els.taskMoreFilter, taskMoreFilterOptions, taskFilters.more, "更多篩選", {
+    summaryUnit: "項",
+    searchPlaceholder: "搜尋更多篩選",
+  });
+}
+
+function renderNativeSelectOptions(select, options = [], selectedValue = "all") {
+  if (!select) return;
+  const value = options.some((option) => option.id === selectedValue || option.value === selectedValue) ? selectedValue : "all";
+  select.innerHTML = options
+    .map((option) => {
+      const optionValue = option.id ?? option.value;
+      const label = option.label ?? optionValue;
+      return `<option value="${escapeHtml(optionValue)}" ${optionValue === value ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    })
+    .join("");
+}
+
+function getPhaseFilterOptions() {
+  return [
+    { id: "all", label: "全部階段" },
+    ...phases.map((phase) => ({ id: phase.id, label: phase.label })),
+    { id: "unset", label: "未設定階段" },
+  ];
+}
+
+function getTaskProjectFilterOptions() {
+  const projects = getScopedProjects(false, { ignoreProjectFilters: true }).sort(compareManualThenName);
+  return [
+    { id: "all", label: `全部專案（${projects.length}）` },
+    { id: taskNoProjectFilterValue, label: "無專案" },
+    ...projects.map((project) => ({ id: project.id, label: project.name })),
+  ];
+}
+
+function getTaskProjectFilterLabel(value = "") {
+  if (value === taskNoProjectFilterValue) return "無專案";
+  return getProject(value)?.name || "未顯示專案";
+}
+
+function syncDateRangeVisibility() {
+  const projectCustom = projectFilters.date === "custom";
+  els.projectDateStart?.closest(".filter-date-range")?.classList.toggle("hidden", !projectCustom);
+  els.projectDateEnd?.closest(".filter-date-range")?.classList.toggle("hidden", !projectCustom);
+  const taskCustom = taskFilters.date === "custom";
+  els.taskDateStart?.closest(".filter-date-range")?.classList.toggle("hidden", !taskCustom);
+  els.taskDateEnd?.closest(".filter-date-range")?.classList.toggle("hidden", !taskCustom);
+}
+
+function renderMultiSelectOptions(select, options = [], selectedValues = [], placeholder = "全部", config = {}) {
+  if (!select) return;
+  const shouldRenderDropdown = select.classList?.contains("search-multi-select")
+    || select.dataset?.multiSelect === "search"
+    || select.tagName !== "SELECT";
+  if (shouldRenderDropdown) {
+    select.classList?.add("search-multi-select");
+    if (select.dataset) select.dataset.multiSelect = "search";
+    renderMultiSelectDropdown(select, options, selectedValues, { placeholder, ...config });
+    return;
+  }
+
   const selected = new Set(selectedValues);
   select.innerHTML = [
     `<option value="" ${selected.size ? "" : "selected"}>${escapeHtml(placeholder)}</option>`,
     ...options.map((option) => `<option value="${escapeHtml(option.value)}" ${selected.has(option.value) ? "selected" : ""}>${escapeHtml(option.label)}</option>`),
   ].join("");
+}
+
+function renderMultiSelectDropdown(container, options = [], selectedValues = [], config = {}) {
+  if (!container) return;
+  const normalizedOptions = normalizeMultiSelectOptions(options);
+  const normalizedSelectedValues = normalizeMultiSelectSelectedValues(selectedValues, normalizedOptions);
+  const selectedOptions = normalizedSelectedValues
+    .map((value) => normalizedOptions.find((option) => option.value === value))
+    .filter(Boolean);
+  const placeholder = config.placeholder || container.dataset.placeholder || "全部";
+  const summaryUnit = config.summaryUnit || container.dataset.summaryUnit || "項";
+  const searchPlaceholder = config.searchPlaceholder || "搜尋";
+  const disabled = Boolean(config.disabled ?? container.disabled ?? container.dataset.disabled === "true");
+  const isOpen = !disabled && container.dataset.open === "true";
+
+  container._searchMultiSelect = {
+    options: normalizedOptions,
+    placeholder,
+    summaryUnit,
+    searchPlaceholder,
+    disabled,
+    showAllSelectedAsPlaceholder: config.showAllSelectedAsPlaceholder,
+    countFrom: config.countFrom,
+  };
+  writeSearchMultiSelectValues(container, normalizedSelectedValues);
+  container.classList.toggle("open", isOpen);
+  container.classList.toggle("disabled", disabled);
+  container.dataset.placeholder = placeholder;
+  container.dataset.disabled = disabled ? "true" : "false";
+  container.disabled = disabled;
+
+  container.innerHTML = `
+      <div class="search-multi-select-control" role="button" tabindex="${disabled ? "-1" : "0"}" aria-haspopup="listbox" aria-expanded="${isOpen}" aria-disabled="${disabled}">
+      <div class="search-multi-select-value">
+        ${renderSearchMultiSelectSummary(selectedOptions, placeholder, summaryUnit, normalizedOptions, config)}
+      </div>
+      <span class="search-multi-select-arrow" aria-hidden="true">▾</span>
+    </div>
+  `;
+
+  attachSearchMultiSelectHandlers(container);
+  if (isOpen) {
+    renderSearchMultiSelectPanel(container);
+  } else if (!document.querySelector(".search-multi-select.open")) {
+    hideSearchMultiSelectLayer();
+  }
+}
+
+function renderSearchMultiSelectSummary(selectedOptions, placeholder, summaryUnit, options = [], config = {}) {
+  const allSelected = Boolean(
+    config.showAllSelectedAsPlaceholder
+      && options.length
+      && selectedOptions.length === options.length,
+  );
+  if (!selectedOptions.length || allSelected) {
+    return `<span class="search-multi-select-placeholder">${escapeHtml(placeholder)}</span>`;
+  }
+
+  const countFrom = Number(config.countFrom) || 3;
+  if (selectedOptions.length >= countFrom) {
+    return `<span class="search-multi-select-count">已選 ${selectedOptions.length} ${escapeHtml(summaryUnit)}</span>`;
+  }
+
+  return `<span class="search-multi-select-text">${escapeHtml(selectedOptions.map((option) => option.label).join("、"))}</span>`;
+}
+
+function attachSearchMultiSelectHandlers(container) {
+  container.querySelector(".search-multi-select-control")?.addEventListener("click", () => {
+    if (container._searchMultiSelect?.disabled) return;
+    setSearchMultiSelectOpen(container, container.dataset.open !== "true");
+  });
+
+  container.querySelector(".search-multi-select-control")?.addEventListener("keydown", (event) => {
+    if (container._searchMultiSelect?.disabled) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setSearchMultiSelectOpen(container, container.dataset.open !== "true");
+    } else if (event.key === "Escape") {
+      setSearchMultiSelectOpen(container, false);
+    }
+  });
+}
+
+function getSearchMultiSelectLayer(container = null) {
+  const root = container?.closest("dialog[open]") || document.body;
+  let layer = [...root.children].find((child) => child.classList?.contains("search-multi-select-layer"));
+  if (!layer) {
+    layer = document.createElement("div");
+    layer.className = "search-multi-select-layer";
+    layer.hidden = true;
+    root.appendChild(layer);
+  }
+  return layer;
+}
+
+function hideSearchMultiSelectLayer() {
+  document.querySelectorAll(".search-multi-select-layer").forEach((layer) => {
+    layer.hidden = true;
+    layer.innerHTML = "";
+    layer.removeAttribute("style");
+  });
+}
+
+function renderSearchMultiSelectPanel(container) {
+  const config = container._searchMultiSelect || {};
+  if (config.disabled) {
+    hideSearchMultiSelectLayer();
+    return;
+  }
+
+  const layer = getSearchMultiSelectLayer(container);
+  const options = config.options || [];
+  const selectedValues = parseSearchMultiSelectValues(container);
+  const selectedSet = new Set(selectedValues);
+  const searchValue = container.dataset.search || "";
+  const optionRows = options.map((option) => {
+    const checked = selectedSet.has(option.value);
+    return `
+      <label class="search-multi-select-option" data-search-multi-row data-label="${escapeHtml(option.label.toLowerCase())}">
+        <input type="checkbox" value="${escapeHtml(option.value)}" data-search-multi-option ${checked ? "checked" : ""} />
+        <span>${escapeHtml(option.label)}</span>
+      </label>
+    `;
+  }).join("");
+
+  layer.innerHTML = `
+    <div class="search-multi-select-panel">
+      <input class="search-multi-select-search" type="search" value="${escapeHtml(searchValue)}" placeholder="${escapeHtml(config.searchPlaceholder || "搜尋")}" data-search-multi-input />
+      <div class="search-multi-select-actions">
+        <button type="button" data-search-multi-select-all ${options.length ? "" : "disabled"}>全選</button>
+        <button type="button" data-search-multi-clear ${selectedValues.length ? "" : "disabled"}>清除</button>
+      </div>
+      <div class="search-multi-select-options" role="listbox" aria-multiselectable="true">
+        ${optionRows}
+      </div>
+      <p class="search-multi-select-empty" data-search-multi-empty>沒有符合的選項</p>
+    </div>
+  `;
+  layer.hidden = false;
+  positionSearchMultiSelectLayer(container, layer);
+  attachSearchMultiSelectPanelHandlers(container, layer);
+  filterSearchMultiSelectOptions(layer, searchValue);
+}
+
+function positionSearchMultiSelectLayer(container, layer = getSearchMultiSelectLayer(container)) {
+  if (!container || layer.hidden) return;
+  const rect = container.getBoundingClientRect();
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+  const gap = 6;
+  const margin = 8;
+  const width = Math.min(Math.max(rect.width, 240), viewportWidth - margin * 2);
+  let left = Math.min(Math.max(rect.left, margin), viewportWidth - width - margin);
+  let top = rect.bottom + gap;
+
+  layer.style.width = `${width}px`;
+  layer.style.left = `${left}px`;
+  layer.style.top = `${top}px`;
+  layer.style.maxHeight = `${Math.max(180, viewportHeight - margin * 2)}px`;
+
+  const layerHeight = layer.offsetHeight;
+  if (top + layerHeight > viewportHeight - margin && rect.top > layerHeight + gap + margin) {
+    top = rect.top - layerHeight - gap;
+    layer.style.top = `${Math.max(margin, top)}px`;
+  }
+
+  left = Math.min(Math.max(left, margin), viewportWidth - width - margin);
+  layer.style.left = `${left}px`;
+}
+
+function attachSearchMultiSelectPanelHandlers(container, layer) {
+  layer.querySelector("[data-search-multi-input]")?.addEventListener("input", (event) => {
+    container.dataset.search = event.target.value;
+    filterSearchMultiSelectOptions(layer, event.target.value);
+  });
+
+  layer.querySelector("[data-search-multi-select-all]")?.addEventListener("click", () => {
+    const options = container._searchMultiSelect?.options || [];
+    setSearchMultiSelectValues(container, options.map((option) => option.value));
+  });
+
+  layer.querySelector("[data-search-multi-clear]")?.addEventListener("click", () => {
+    setSearchMultiSelectValues(container, []);
+  });
+
+  layer.querySelectorAll("[data-search-multi-option]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const selected = new Set(getSelectedValues(container));
+      if (checkbox.checked) {
+        selected.add(checkbox.value);
+      } else {
+        selected.delete(checkbox.value);
+      }
+      setSearchMultiSelectValues(container, [...selected]);
+    });
+  });
+}
+
+function normalizeMultiSelectOptions(options = []) {
+  const rows = new Map();
+  options.forEach((option) => {
+    const value = getFilterOptionValue(option);
+    const label = String(option?.label || value).trim();
+    if (!value) return;
+    rows.set(value, { value, label });
+  });
+  return [...rows.values()];
+}
+
+function normalizeMultiSelectSelectedValues(values = [], options = []) {
+  const allowedValues = new Set(normalizeMultiSelectOptions(options).map((option) => option.value));
+  return [...new Set((Array.isArray(values) ? values : []).map((value) => String(value || "").trim()).filter(Boolean))]
+    .filter((value) => allowedValues.has(value));
+}
+
+function parseSearchMultiSelectValues(container) {
+  try {
+    const parsed = JSON.parse(container.dataset.selectedValues || "[]");
+    return Array.isArray(parsed) ? parsed.map((value) => String(value || "").trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSearchMultiSelectValues(container, values = []) {
+  container.dataset.selectedValues = JSON.stringify([...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))]);
+}
+
+function setSearchMultiSelectValues(container, values = [], notify = true) {
+  const config = container._searchMultiSelect || {};
+  const normalizedValues = normalizeMultiSelectSelectedValues(values, config.options || []);
+  writeSearchMultiSelectValues(container, normalizedValues);
+  rerenderSearchMultiSelect(container);
+  if (notify) container.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function setSearchMultiSelectOpen(container, open) {
+  if (container._searchMultiSelect?.disabled) return;
+  if (open) closeOpenSearchMultiSelects(container);
+  container.dataset.open = open ? "true" : "false";
+  if (!open) container.dataset.search = "";
+  rerenderSearchMultiSelect(container);
+  if (open) {
+    requestAnimationFrame(() => getSearchMultiSelectLayer(container).querySelector("[data-search-multi-input]")?.focus());
+  }
+}
+
+function closeOpenSearchMultiSelects(except = null) {
+  document.querySelectorAll(".search-multi-select.open").forEach((container) => {
+    if (container === except) return;
+    container.dataset.open = "false";
+    container.dataset.search = "";
+    rerenderSearchMultiSelect(container);
+  });
+  if (!document.querySelector(".search-multi-select.open")) {
+    hideSearchMultiSelectLayer();
+  }
+}
+
+function rerenderSearchMultiSelect(container) {
+  const config = container._searchMultiSelect || {};
+  renderMultiSelectDropdown(
+    container,
+    config.options || [],
+    parseSearchMultiSelectValues(container),
+    {
+      ...config,
+      placeholder: config.placeholder || container.dataset.placeholder || "全部",
+    },
+  );
+}
+
+function repositionOpenSearchMultiSelect() {
+  const openContainer = document.querySelector(".search-multi-select.open");
+  if (openContainer) positionSearchMultiSelectLayer(openContainer);
+}
+
+function filterSearchMultiSelectOptions(root, query = "") {
+  const normalizedQuery = query.trim().toLowerCase();
+  let visibleCount = 0;
+  root.querySelectorAll("[data-search-multi-row]").forEach((row) => {
+    const matches = !normalizedQuery || (row.dataset.label || "").includes(normalizedQuery);
+    row.hidden = !matches;
+    if (matches) visibleCount += 1;
+  });
+  const empty = root.querySelector("[data-search-multi-empty]");
+  if (empty) empty.hidden = visibleCount > 0;
 }
 
 function getAllCollaborationTags() {
@@ -3475,7 +6083,7 @@ function getAllCollaborationTags() {
 
 function renderProjectSummaryCards() {
   if (!els.projectSummaryCards) return;
-  const show = !selectedSystemId && !selectedScopeIsGeneral();
+  const show = !selectedScopeIsGeneral();
   els.projectSummaryCards.classList.toggle("hidden", !show);
   if (!show) {
     els.projectSummaryCards.innerHTML = "";
@@ -3484,20 +6092,20 @@ function renderProjectSummaryCards() {
 
   const projects = getScopedProjects(true);
   const projectIds = new Set(projects.map((project) => project.id));
-  const tasks = state.tasks.filter((task) => !task.projectId || projectIds.has(task.projectId));
-  const completedProjects = projects.filter((project) => project.closed || project.phase === "closed").length;
-  const activeProjects = projects.length - completedProjects;
-  const overdueTasks = tasks.filter((task) => taskIsOverdue(task)).length;
-  const doingTasks = tasks.filter((task) => task.status === "doing").length;
-  const workload = getOwnerWorkloadSummary(tasks);
+  const tasks = getUniqueTasksForDisplay(state.tasks)
+    .filter((task) => task.projectId && projectIds.has(task.projectId) && isProjectListTask(task));
+  const activeProjects = projects.filter((project) => getProjectStatus(project) === "doing").length;
+  const reviewProjects = projects.filter((project) => getProjectStatus(project) === "review").length;
+  const delayedProjects = projects.filter((project) => isProjectDelayed(project) || getProjectTaskStats(project.id).delay > 0).length;
+  const overdueTasks = tasks.filter((task) => taskDeadlineOverdue(task)).length;
 
   els.projectSummaryCards.innerHTML = [
     { label: "專案總數", value: projects.length, note: "目前篩選結果" },
-    { label: "進行中專案", value: activeProjects, note: "未結案" },
-    { label: "已完成專案", value: completedProjects, note: "結案或 closed" },
-    { label: "逾期任務", value: overdueTasks, note: "未完成且已過期" },
-    { label: "進行中任務", value: doingTasks, note: "狀態為進行中" },
-    { label: "負責人工作量", value: workload.value, note: workload.note },
+    { label: "任務總數", value: tasks.length, note: "目前專案範圍" },
+    { label: "進行中專案", value: activeProjects, note: "狀態為進行中" },
+    { label: "待確認專案", value: reviewProjects, note: "狀態為待確認" },
+    { label: "延遲專案", value: delayedProjects, note: "階段或任務延遲" },
+    { label: "逾期任務", value: overdueTasks, note: "未完成且已過最後期限" },
   ].map((card) => `
     <article>
       <span>${escapeHtml(card.label)}</span>
@@ -3566,21 +6174,22 @@ function getDashboardTodoSections() {
   const today = todayString();
   const tomorrow = getDateOffset(1);
   const week = getWeekRange(0);
-  const tasks = state.tasks
-    .filter((task) => task.status !== "done" && taskMatchesSystemScope(task))
+  ensureRecurringOccurrencesForRange(today, week.end);
+  const tasks = getUniqueTasksForDisplay(state.tasks)
+    .filter((task) => isTodoDisplayTask(task) && task.status !== "done" && taskMatchesSystemScope(task))
     .sort(compareTasksByUrgency);
   const assigned = new Set();
   const take = (predicate) => {
-    const matches = tasks.filter((task) => !assigned.has(task.id) && predicate(task));
-    matches.forEach((task) => assigned.add(task.id));
+    const matches = tasks.filter((task) => !assigned.has(getTaskDisplayIdentity(task)) && predicate(task));
+    matches.forEach((task) => assigned.add(getTaskDisplayIdentity(task)));
     return matches;
   };
 
   const deadlineToday = take((task) => task.deadline === today);
   const overdue = take((task) => taskIsOverdue(task, today));
-  const todayTasks = take((task) => task.executionDate === today);
-  const tomorrowTasks = take((task) => task.executionDate === tomorrow);
-  const thisWeekPlanned = take((task) => dateInRange(task.executionDate, week.start, week.end));
+  const todayTasks = take((task) => taskMatchesTodayTodo(task, today));
+  const tomorrowTasks = take((task) => taskMatchesDate(task, tomorrow));
+  const thisWeekPlanned = take((task) => taskMatchesRange(task, week.start, week.end));
 
   return [
     {
@@ -3626,8 +6235,7 @@ function getDashboardTodoSections() {
 }
 
 function taskIsOverdue(task, today = todayString()) {
-  if (task.isRecurring) return false;
-  return Boolean((task.executionDate && task.executionDate < today) || (task.deadline && task.deadline < today));
+  return taskDeadlineOverdue(task, today);
 }
 
 function dateInRange(date, start, end) {
@@ -3635,15 +6243,20 @@ function dateInRange(date, start, end) {
 }
 
 function getTodoBuckets() {
-  const tasks = state.tasks
-    .filter((task) => {
-      return task.status !== "done" && taskMatchesSystemScope(task);
-    })
-    .sort(compareTasksByUrgency);
   const today = todayString();
   const tomorrow = getDateOffset(1);
   const thisWeek = getWeekRange(0);
   const nextWeek = getWeekRange(1);
+  ensureRecurringOccurrencesForRange(today, nextWeek.end);
+  const scopedTasks = getUniqueTasksForDisplay(state.tasks)
+    .filter((task) => {
+      return isTodoDisplayTask(task)
+        && task.status !== "done"
+        && taskMatchesSystemScope(task)
+        && taskMatchesTodoOwnerFilter(task);
+    })
+    .sort(compareTasksByUrgency);
+  const tasks = scopedTasks;
 
   return [
     {
@@ -3654,7 +6267,7 @@ function getTodoBuckets() {
     {
       id: "today",
       title: "今日待辦事項",
-      tasks: tasks.filter((task) => taskMatchesTodayTodo(task, today)),
+      tasks: scopedTasks.filter((task) => taskMatchesTodayTodo(task, today)),
     },
     {
       id: "tomorrow",
@@ -3681,12 +6294,15 @@ function renderTodoItem(task, section = {}) {
   const executionOverdue = task.executionDate && task.executionDate < today;
   const deadlineOverdue = task.deadline && task.deadline < today;
   const deadlineUrgent = section.variant === "urgent";
+  const recurrenceBadge = isRecurringOccurrenceTask(task)
+    ? `<span class="todo-recurring-badge">週期</span>`
+    : "";
 
   return `
     <article class="todo-item ${section.variant ? `todo-item-${section.variant}` : ""}">
       <input type="checkbox" data-complete-task="${task.id}" aria-label="完成 ${escapeHtml(task.title)}" />
       <button class="todo-item-content" type="button" data-dashboard-task-open="${task.id}" aria-label="查看 ${escapeHtml(task.title)}">
-        <strong>${escapeHtml(task.title)}</strong>
+        <strong>${escapeHtml(task.title)} ${recurrenceBadge}</strong>
         <span>${escapeHtml(getTaskContextLabel(task))}</span>
         <span class="todo-item-dates">
           <span class="${executionOverdue ? "date-alert" : ""}">執行日期：${formatDate(task.executionDate)}</span>
@@ -3699,6 +6315,10 @@ function renderTodoItem(task, section = {}) {
 
 function markTaskDone(taskId, completed = true) {
   const task = getProjectTask(taskId);
+  if (completed && isRecurringTemplateTask(task)) {
+    alert("這是一個週期任務模板，不能標示單次完成。請開啟已產生的當次任務，或將模板狀態改為已完成來結束整個週期。");
+    return;
+  }
   if (completed && !canCompleteTask(task)) {
     alert("請先完成所有細項步驟，才能將任務標示為已完成。");
     return;
@@ -3706,18 +6326,12 @@ function markTaskDone(taskId, completed = true) {
 
   state.tasks = state.tasks.map((item) => {
     if (item.id !== taskId) return item;
-    if (item.isRecurring && completed) {
-      return {
-        ...item,
-        completedOccurrences: uniqueUids([...(item.completedOccurrences || []), todayString()]),
-      };
-    }
     return applyTaskStatusSideEffects({
       ...item,
       status: completed ? "done" : "not_started",
     }, item, completed ? todayString() : "");
   });
-  saveState();
+  saveTaskState([taskId]);
   if (completed && task) {
     playCompletionSound();
     showToast(`已完成：${task.title}`);
@@ -3790,7 +6404,15 @@ function openGanttPage() {
 
   els.ganttSearchInput.value = els.searchInput.value;
   els.ganttScaleSelect.value = ganttScale;
-  ganttProjectFilter = selectedProjectId !== "all" ? selectedProjectId : "all";
+  if (selectedSystemId && !selectedScopeIsGeneral()) {
+    ganttSystemFilterIds = [selectedSystemId];
+  } else if (selectedScopeIsGeneral()) {
+    ganttSystemFilterIds = [generalWorkScopeId];
+  }
+  ganttSystemFilter = ganttSystemFilterIds[0] || "all";
+  ganttProjectFilterIds = selectedProjectId !== "all" ? [selectedProjectId] : [];
+  ganttProjectFilterIds = filterGanttProjectFiltersBySystem(ganttProjectFilterIds);
+  ganttProjectFilter = ganttProjectFilterIds[0] || "all";
   els.ganttPage.classList.remove("hidden");
   els.ganttPage.setAttribute("aria-hidden", "false");
   renderGanttPage();
@@ -3831,6 +6453,7 @@ function getProjectIdFromPath() {
 }
 
 function renderTodoPage() {
+  syncTodoOwnerFilterOptions();
   const buckets = getTodoBuckets();
   const activeBucket = buckets.find((bucket) => bucket.id === activeTodoView) || buckets[0];
   const query = els.todoPageSearch.value.trim().toLowerCase();
@@ -3870,17 +6493,44 @@ function renderTodoPage() {
   focusTodoSection();
 }
 
+function syncTodoOwnerFilterOptions() {
+  const ownerOptions = getAllAssignableOwners().map((owner) => ({
+    value: owner.uid,
+    label: getOwnerDisplayName(owner),
+  }));
+  todoOwnerFilterIds = normalizeMultiSelectSelectedValues(todoOwnerFilterIds, ownerOptions);
+  renderMultiSelectOptions(els.todoOwnerFilter, ownerOptions, todoOwnerFilterIds, "全部負責人", {
+    summaryUnit: "人",
+    searchPlaceholder: "搜尋負責人",
+    showAllSelectedAsPlaceholder: true,
+    countFrom: 2,
+  });
+}
+
 function renderGanttPage() {
   els.ganttSearchInput.value = els.searchInput.value;
   els.ganttScaleSelect.value = ganttScale;
+  syncGanttPeriodControls();
   els.ganttSortMode && (els.ganttSortMode.value = ganttSortMode);
+  els.ganttShowRecurring && (els.ganttShowRecurring.checked = ganttShowRecurring);
+  els.ganttShowUndatedPhases && (els.ganttShowUndatedPhases.checked = ganttShowUndatedPhases);
+  els.ganttShowUndatedItems && (els.ganttShowUndatedItems.checked = ganttShowUndatedItems);
   syncGanttFilterOptions();
   syncGanttProjectFilterOptions();
 
-  const groups = getGanttGroups();
-  const timeline = buildGanttTimeline(groups);
+  const periodRange = getGanttPeriodRange();
+  const baseGroups = getGanttGroups({ includeRecurring: false, periodRange });
+  const baseTimeline = buildGanttTimeline(baseGroups, periodRange);
+  const groups = ganttShowRecurring
+    ? getGanttGroups({ includeRecurring: true, recurrenceRange: periodRange || baseTimeline, periodRange })
+    : baseGroups;
+  const timeline = periodRange ? buildGanttTimeline(groups, periodRange) : baseTimeline;
   const scaleLabel = ganttScale === "week" ? "以日檢視" : ganttScale === "month" ? "以週檢視" : "以月檢視";
-  els.ganttRangeLabel.textContent = `${formatRange(timeline.startString, timeline.endString)}・${scaleLabel}`;
+  els.ganttRangeLabel.textContent = [
+    formatRange(timeline.startString, timeline.endString),
+    getGanttPeriodRangeLabel(periodRange),
+    scaleLabel,
+  ].filter(Boolean).join("・");
 
   if (!groups.length) {
     els.ganttChart.innerHTML = `<p class="empty-state">目前沒有符合條件的系統、專案或任務。</p>`;
@@ -3897,86 +6547,219 @@ function renderGanttPage() {
 
   attachGanttHandlers();
   renderTodoDrawer();
+  focusGanttTimelineOnToday(timeline);
 }
 
 function syncGanttProjectFilterOptions() {
-  const projects = getGanttFilterProjects();
-  if (ganttProjectFilter !== "all" && !projects.some((project) => project.id === ganttProjectFilter)) {
-    ganttProjectFilter = "all";
-  }
-
-  els.ganttProjectFilter.innerHTML = [
-    `<option value="all">全部專案</option>`,
-    ...projects.map((project) => `<option value="${project.id}">${escapeHtml(project.name)}</option>`),
-  ].join("");
-  els.ganttProjectFilter.value = ganttProjectFilter;
+  const projectOptions = getGanttProjectFilterOptions();
+  ganttProjectFilterIds = normalizeMultiSelectSelectedValues(
+    filterGanttProjectFiltersBySystem(ganttProjectFilterIds),
+    projectOptions,
+  );
+  ganttProjectFilter = ganttProjectFilterIds[0] || "all";
+  renderMultiSelectOptions(els.ganttProjectFilter, projectOptions, ganttProjectFilterIds, "全部專案", {
+    summaryUnit: "個專案",
+    searchPlaceholder: "搜尋專案",
+    showAllSelectedAsPlaceholder: true,
+    countFrom: 2,
+  });
 }
 
 function syncGanttFilterOptions() {
   if (els.ganttSystemFilter) {
-    const systems = state.systems.map((system) => ({ value: system.id, label: system.name }));
-    els.ganttSystemFilter.innerHTML = [
-      `<option value="all">全部系統</option>`,
-      ...systems.map((system) => `<option value="${system.value}" ${ganttSystemFilter === system.value ? "selected" : ""}>${escapeHtml(system.label)}</option>`),
-    ].join("");
-    if (ganttSystemFilter !== "all" && !state.systems.some((system) => system.id === ganttSystemFilter)) ganttSystemFilter = "all";
-    els.ganttSystemFilter.value = ganttSystemFilter;
+    const systemOptions = getGanttSystemFilterOptions();
+    ganttSystemFilterIds = normalizeMultiSelectSelectedValues(ganttSystemFilterIds, systemOptions);
+    ganttSystemFilter = ganttSystemFilterIds[0] || "all";
+    renderMultiSelectOptions(els.ganttSystemFilter, systemOptions, ganttSystemFilterIds, "全部系統", {
+      summaryUnit: "個系統",
+      searchPlaceholder: "搜尋系統",
+      showAllSelectedAsPlaceholder: true,
+      countFrom: 2,
+    });
   }
   if (els.ganttOwnerFilter) {
-    renderMultiSelectOptions(els.ganttOwnerFilter, getAllAssignableOwners().map((owner) => ({
+    const ownerOptions = getAllAssignableOwners().map((owner) => ({
       value: owner.uid,
       label: getOwnerDisplayName(owner),
-    })), ganttOwnerFilterIds, "全部負責人");
+    }));
+    ganttOwnerFilterIds = normalizeMultiSelectSelectedValues(ganttOwnerFilterIds, ownerOptions);
+    renderMultiSelectOptions(els.ganttOwnerFilter, ownerOptions, ganttOwnerFilterIds, "全部負責人", {
+      summaryUnit: "位負責人",
+      searchPlaceholder: "搜尋負責人",
+      showAllSelectedAsPlaceholder: true,
+      countFrom: 2,
+    });
   }
   if (els.ganttCollaborationFilter) {
-    renderMultiSelectOptions(els.ganttCollaborationFilter, getAllCollaborationTags().map((tag) => ({
+    const collaborationOptions = getAllCollaborationTags().map((tag) => ({
       value: tag,
       label: tag,
-    })), ganttCollaborationFilters, "全部協作");
+    }));
+    ganttCollaborationFilters = normalizeMultiSelectSelectedValues(ganttCollaborationFilters, collaborationOptions);
+    renderMultiSelectOptions(els.ganttCollaborationFilter, collaborationOptions, ganttCollaborationFilters, "全部協作", {
+      summaryUnit: "個協作",
+      searchPlaceholder: "搜尋協作",
+      showAllSelectedAsPlaceholder: true,
+      countFrom: 2,
+    });
   }
+  if (els.ganttPhaseFilter) {
+    const phaseOptions = getMultiFilterOptions(getPhaseFilterOptions());
+    ganttPhaseFilterIds = normalizeMultiSelectSelectedValues(ganttPhaseFilterIds, phaseOptions);
+    renderMultiSelectOptions(els.ganttPhaseFilter, phaseOptions, ganttPhaseFilterIds, "全部階段", {
+      summaryUnit: "個階段",
+      searchPlaceholder: "搜尋階段",
+      showAllSelectedAsPlaceholder: true,
+      countFrom: 2,
+    });
+  }
+}
+
+function syncGanttPeriodControls(options = {}) {
+  const customVisible = ganttPeriodFilter === "custom";
+
+  if (customVisible && !ganttPeriodStart && !ganttPeriodEnd) {
+    const year = getGanttPeriodYear();
+    ganttPeriodStart = `${year}-01-01`;
+    ganttPeriodEnd = `${year}-12-31`;
+  }
+
+  if (els.ganttPeriodFilter) els.ganttPeriodFilter.value = ganttPeriodFilter;
+  if (els.ganttPeriodStart) els.ganttPeriodStart.value = ganttPeriodStart;
+  if (els.ganttPeriodEnd) els.ganttPeriodEnd.value = ganttPeriodEnd;
+  document.querySelectorAll("[data-gantt-period-custom], .gantt-period-custom").forEach((field) => {
+    field.hidden = !customVisible;
+    field.classList.toggle("is-visible", customVisible);
+    field.classList.toggle("hidden", !customVisible);
+  });
+}
+
+function getGanttSystemFilterOptions() {
+  return [
+    { value: generalWorkScopeId, label: "一般工作" },
+    ...state.systems.map((system) => ({ value: system.id, label: system.name })),
+  ];
+}
+
+function getGanttProjectFilterOptions() {
+  return getGanttFilterProjects().map((project) => ({ value: project.id, label: project.name }));
+}
+
+function getGanttSelectedSystemIds() {
+  return normalizeFilterValues(ganttSystemFilterIds);
+}
+
+function getGanttSelectedRealSystemIds() {
+  return getGanttSelectedSystemIds().filter((systemId) => systemId !== generalWorkScopeId);
+}
+
+function ganttSystemFilterIncludesGeneral() {
+  return getGanttSelectedSystemIds().includes(generalWorkScopeId);
+}
+
+function taskMatchesGanttSystemFilters(task, systemIds = getGanttSelectedSystemIds()) {
+  if (!systemIds.length) return true;
+  const scope = getTaskScope(task);
+  if (scope === "general") return systemIds.includes(generalWorkScopeId);
+  return systemIds.includes(task.systemId);
+}
+
+function ganttProjectMatchesSystemScope(project, systemIds = getGanttSelectedSystemIds()) {
+  const realSystemIds = systemIds.filter((systemId) => systemId !== generalWorkScopeId);
+  if (!realSystemIds.length) return !systemIds.length;
+  return realSystemIds.includes(project.systemId);
+}
+
+function filterGanttProjectFiltersBySystem(values = []) {
+  const allowedProjectIds = new Set(getGanttFilterProjects().map((project) => project.id));
+  return normalizeFilterValues(values).filter((projectId) => allowedProjectIds.has(projectId));
+}
+
+function hasActiveGanttEntityFilters() {
+  return Boolean(ganttOwnerFilterIds.length || ganttCollaborationFilters.length);
+}
+
+function entityMatchesGanttEntityFilters(entity) {
+  return entityMatchesOwnerFilter(entity, ganttOwnerFilterIds)
+    && entityMatchesCollaborationFilter(entity, ganttCollaborationFilters);
+}
+
+function systemMatchesGanttSearch(system, query) {
+  if (!query) return true;
+  const haystack = [
+    system?.name,
+    system?.description,
+    system?.ownerName,
+    getInternalOwnerIds(system).map((uid) => getOwnerDisplayName(getKnownOwner(uid, system) || { name: uid })).join(" "),
+    (system?.tags || []).join(" "),
+    (system?.collaborationTags || []).join(" "),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(query);
+}
+
+function getGanttFilterTaskProjectIds(systemId, phase) {
+  const phaseProjectIds = state.projects
+    .filter((project) => projectMatchesPhaseFilters(project, phase))
+    .map((project) => project.id);
+
+  return new Set(
+    state.tasks
+      .filter((task) => {
+        return !isTaskDeleted(task)
+          && getTaskScope(task) === "project"
+          && task.projectId
+          && (ganttShowRecurring || (!isRecurringTemplateTask(task) && !isRecurringOccurrenceTask(task)))
+          && taskMatchesSystemScope(task, systemId)
+          && taskMatchesPhaseScope(task, phaseProjectIds, phase)
+          && entityMatchesGanttEntityFilters(task);
+      })
+      .map((task) => task.projectId),
+  );
 }
 
 function getGanttFilterProjects() {
-  if (selectedScopeIsGeneral()) return [];
-  const phase = els.phaseFilter.value;
-  return state.projects.filter((project) => {
-    const filterSystemId = ganttSystemFilter !== "all" ? ganttSystemFilter : selectedSystemId;
-    const matchSystem = filterSystemId ? project.systemId === filterSystemId : true;
-    const matchPhase = project.category === "general" || phase === "all" || project.phase === phase;
-    const system = getSystem(project.systemId);
-    const matchOwner = entityMatchesOwnerFilter(project, ganttOwnerFilterIds)
-      || entityMatchesOwnerFilter(system, ganttOwnerFilterIds);
-    const matchCollaboration = entityMatchesCollaborationFilter(project, ganttCollaborationFilters)
-      || entityMatchesCollaborationFilter(system, ganttCollaborationFilters);
-    return matchSystem && matchPhase && matchOwner && matchCollaboration;
-  });
+  const selectedSystemIds = getGanttSelectedSystemIds();
+  if (ganttSystemFilterIncludesGeneral() && !getGanttSelectedRealSystemIds().length) return [];
+  return state.projects
+    .filter((project) => ganttProjectMatchesSystemScope(project, selectedSystemIds))
+    .sort(compareManualThenName);
 }
 
-function getGanttGroups() {
-  const visibleTasks = getVisibleTasks({
-    projectId: ganttProjectFilter,
-    ownerIds: ganttOwnerFilterIds,
-    collaborationTags: ganttCollaborationFilters,
+function getGanttGroups(options = {}) {
+  const periodRange = options.periodRange ?? getGanttPeriodRange();
+  const visibleTasks = getGanttVisibleTasks({
+    includeRecurring: options.includeRecurring,
+    recurrenceRange: options.recurrenceRange,
+    periodRange,
   });
-  const projects = getGanttScopedProjects(visibleTasks);
+  const projects = getGanttScopedProjects(visibleTasks, { periodRange });
   const groups = [];
+  const selectedSystemIds = getGanttSelectedSystemIds();
+  const selectedRealSystemIds = getGanttSelectedRealSystemIds();
+  const includeGeneral = !selectedSystemIds.length || ganttSystemFilterIncludesGeneral();
 
-  if (selectedScopeIsGeneral()) {
+  if (ganttSystemFilterIncludesGeneral() && !selectedRealSystemIds.length) {
     const generalTasks = visibleTasks.filter((task) => getTaskScope(task) === "general");
-    groups.push({
-      id: "general",
-      name: "一般工作",
-      description: "非系統別任務",
-      projects: [],
-      tasks: generalTasks,
-      kind: "general",
-    });
+    if (generalTasks.length) {
+      groups.push({
+        id: "general",
+        name: "一般工作",
+        description: "非系統別任務",
+        projects: [],
+        tasks: generalTasks,
+        kind: "general",
+      });
+    }
     return groups;
   }
 
-  const filterSystemId = ganttSystemFilter !== "all" ? ganttSystemFilter : selectedSystemId;
-  const systems = filterSystemId
-    ? state.systems.filter((system) => system.id === filterSystemId)
+  const query = els.searchInput.value.trim().toLowerCase();
+  const hasEntityFilters = hasActiveGanttEntityFilters();
+  const systems = selectedRealSystemIds.length
+    ? getProjectGroupSystems(projects, visibleTasks).filter((system) => selectedRealSystemIds.includes(system.id))
     : getProjectGroupSystems(projects, visibleTasks);
 
   systems.forEach((system) => {
@@ -3988,8 +6771,13 @@ function getGanttGroups() {
         tasks: visibleTasks.filter((task) => getTaskScope(task) === "project" && task.projectId === project.id).sort(compareGanttEntity),
       }));
     const systemTasks = visibleTasks.filter((task) => getTaskScope(task) === "system" && task.systemId === system.id).sort(compareGanttEntity);
+    const systemMatchesFilters = entityMatchesGanttEntityFilters(system) && systemMatchesGanttSearch(system, query);
+    const keepMatchingSystem = !periodRange
+      && !ganttProjectFilterIds.length
+      && !ganttPhaseFilterIds.length
+      && (hasEntityFilters ? systemMatchesFilters : selectedRealSystemIds.includes(system.id) && systemMatchesGanttSearch(system, query));
 
-    if (systemProjects.length || systemTasks.length || filterSystemId === system.id) {
+    if (systemProjects.length || systemTasks.length || keepMatchingSystem) {
       groups.push({
         id: `system-${system.id}`,
         systemId: system.id,
@@ -4002,7 +6790,7 @@ function getGanttGroups() {
     }
   });
 
-  if (!selectedSystemId) {
+  if (includeGeneral) {
     const generalTasks = visibleTasks.filter((task) => getTaskScope(task) === "general");
     if (generalTasks.length) {
       groups.push({
@@ -4019,9 +6807,84 @@ function getGanttGroups() {
   return groups;
 }
 
-function getGanttScopedProjects(visibleTasks) {
+function getGanttVisibleTasks(options = {}) {
+  const periodRange = options.periodRange ?? getGanttPeriodRange();
+  const contextPool = getGanttTaskContextPool({ includeRecurring: options.includeRecurring });
+  let visibleTasks = getVisibleTasks({
+    projectId: ganttProjectFilterIds,
+    systemIds: getGanttSelectedSystemIds(),
+    phase: ganttPhaseFilterIds,
+    ownerIds: ganttOwnerFilterIds,
+    collaborationTags: ganttCollaborationFilters,
+    strictEntityFilters: true,
+    includeOccurrences: options.includeRecurring,
+  });
+
+  visibleTasks = options.includeRecurring
+    ? expandGanttRecurringTasks(visibleTasks, options.recurrenceRange || periodRange)
+    : visibleTasks.filter((task) => !isRecurringTemplateTask(task) && !isRecurringOccurrenceTask(task));
+
+  visibleTasks = visibleTasks
+    .filter((task) => !isRecurringTemplateTask(task))
+    .filter((task) => ganttTaskMatchesPeriod(task, periodRange, { allowUndated: ganttShowUndatedItems }));
+
+  return includeGanttTaskAncestors(visibleTasks, contextPool);
+}
+
+function getGanttTaskContextPool(options = {}) {
+  return getUniqueTasksForDisplay(state.tasks).filter((task) => {
+    if (isTaskDeleted(task)) return false;
+    if (!options.includeRecurring && (isRecurringTemplateTask(task) || isRecurringOccurrenceTask(task))) return false;
+    return taskMatchesGanttSystemFilters(task)
+      && taskMatchesProjectScope(task, ganttProjectFilterIds);
+  });
+}
+
+function includeGanttTaskAncestors(tasks = [], pool = []) {
+  const rows = [];
+  const seenIds = new Set();
+  const poolById = new Map(pool.map((task) => [task.id, task]));
+  const addWithAncestors = (task) => {
+    if (!task || seenIds.has(task.id)) return;
+    const ancestors = [];
+    let parent = task.parentTaskId ? poolById.get(task.parentTaskId) : null;
+    while (parent && !seenIds.has(parent.id)) {
+      ancestors.unshift(parent);
+      parent = parent.parentTaskId ? poolById.get(parent.parentTaskId) : null;
+    }
+    ancestors.forEach((ancestor) => {
+      if (!seenIds.has(ancestor.id)) {
+        seenIds.add(ancestor.id);
+        rows.push(ancestor);
+      }
+    });
+    if (!seenIds.has(task.id)) {
+      seenIds.add(task.id);
+      rows.push(task);
+    }
+  };
+  tasks.forEach(addWithAncestors);
+  return rows;
+}
+
+function expandGanttRecurringTasks(tasks = [], timeline = null) {
+  if (!timeline) return tasks;
+  const range = normalizeGanttRangeLike(timeline);
+  if (!range) return tasks;
+  const visibleTasks = tasks.filter((task) => {
+    if (isRecurringOccurrenceTask(task)) return ganttTaskMatchesPeriod(task, range, { allowUndated: false });
+    return true;
+  });
+  const virtualOccurrences = visibleTasks
+    .filter(isRecurringTemplateTask)
+    .flatMap((task) => getVirtualRecurringOccurrencesForRange(task, range.start, range.end));
+  return [...visibleTasks, ...virtualOccurrences];
+}
+
+function getGanttScopedProjects(visibleTasks, options = {}) {
   const query = els.searchInput.value.trim().toLowerCase();
-  const phase = els.phaseFilter.value;
+  const phase = ganttPhaseFilterIds;
+  const periodRange = options.periodRange ?? getGanttPeriodRange();
   const visibleTaskProjectIds = new Set(
     visibleTasks
       .filter((task) => getTaskScope(task) === "project" && task.projectId)
@@ -4030,18 +6893,97 @@ function getGanttScopedProjects(visibleTasks) {
 
   return state.projects.filter((project) => {
     const system = getSystem(project.systemId);
-    const filterSystemId = ganttSystemFilter !== "all" ? ganttSystemFilter : selectedSystemId;
-    const matchSystem = filterSystemId ? project.systemId === filterSystemId : true;
-    const matchProject = ganttProjectFilter === "all" || project.id === ganttProjectFilter;
-    const matchPhase = project.category === "general" || phase === "all" || project.phase === phase;
+    const matchSystem = ganttProjectMatchesSystemScope(project);
+    const matchProject = filterIncludesValue(ganttProjectFilterIds, project.id);
+    const matchPhase = projectMatchesGanttPhaseFilters(project, phase) || visibleTaskProjectIds.has(project.id);
     const matchQuery = !query || projectMatchesSearch(project, system, query) || visibleTaskProjectIds.has(project.id);
-    const matchOwner = entityMatchesOwnerFilter(project, ganttOwnerFilterIds)
-      || entityMatchesOwnerFilter(system, ganttOwnerFilterIds)
-      || visibleTaskProjectIds.has(project.id);
-    const matchCollaboration = entityMatchesCollaborationFilter(project, ganttCollaborationFilters)
-      || entityMatchesCollaborationFilter(system, ganttCollaborationFilters)
-      || visibleTaskProjectIds.has(project.id);
-    return matchSystem && matchProject && matchPhase && matchQuery && matchOwner && matchCollaboration;
+    const matchFilters = entityMatchesGanttEntityFilters(project) || visibleTaskProjectIds.has(project.id);
+    const matchPeriod = visibleTaskProjectIds.has(project.id) || ganttProjectMatchesPeriod(project, periodRange);
+    return matchSystem && matchProject && matchPhase && matchQuery && matchFilters && matchPeriod;
+  });
+}
+
+function getGanttPeriodYear() {
+  return todayDate().getFullYear();
+}
+
+function getGanttPresetPeriodRange(period = ganttPeriodFilter) {
+  const year = getGanttPeriodYear();
+  const ranges = {
+    year: [`${year}-01-01`, `${year}-12-31`],
+    firstHalf: [`${year}-01-01`, `${year}-06-30`],
+    secondHalf: [`${year}-07-01`, `${year}-12-31`],
+    q1: [`${year}-01-01`, `${year}-03-31`],
+    q2: [`${year}-04-01`, `${year}-06-30`],
+    q3: [`${year}-07-01`, `${year}-09-30`],
+    q4: [`${year}-10-01`, `${year}-12-31`],
+  };
+  const range = ranges[period];
+  return range ? { start: range[0], end: range[1] } : null;
+}
+
+function getGanttCustomPeriodRange() {
+  return normalizeGanttRange(ganttPeriodStart, ganttPeriodEnd || ganttPeriodStart);
+}
+
+function getGanttPeriodRange() {
+  if (ganttPeriodFilter === "custom") return getGanttCustomPeriodRange();
+  return getGanttPresetPeriodRange(ganttPeriodFilter);
+}
+
+function getGanttPeriodRangeLabel(periodRange = getGanttPeriodRange()) {
+  if (!periodRange) return "";
+  const periodLabel = ganttPeriodOptions.find((option) => option.value === ganttPeriodFilter)?.label || "期間";
+  return `${periodLabel} ${formatDateRangeYmd(periodRange.start, periodRange.end)}`;
+}
+
+function normalizeGanttRangeLike(range = null) {
+  if (!range) return null;
+  return normalizeGanttRange(range.start || range.startString || "", range.end || range.endString || "");
+}
+
+function ganttRangeMatchesPeriod(start = "", end = "", periodRange = getGanttPeriodRange(), options = {}) {
+  const range = normalizeGanttRange(start, end);
+  if (!range) return Boolean(options.allowUndated);
+  if (!periodRange) return true;
+  return range.start <= periodRange.end && range.end >= periodRange.start;
+}
+
+function ganttTaskMatchesPeriod(task = {}, periodRange = getGanttPeriodRange(), options = {}) {
+  const start = getTaskTimelineStart(task);
+  const end = getTaskTimelineEnd(task) || start;
+  return ganttRangeMatchesPeriod(start, end, periodRange, options);
+}
+
+function ganttPhaseMatchesPeriod(phaseItem = {}, periodRange = getGanttPeriodRange(), options = {}) {
+  return ganttRangeMatchesPeriod(phaseItem.start, phaseItem.end || phaseItem.start, periodRange, options);
+}
+
+function projectMatchesGanttPhaseFilters(project = {}, phaseFilters = ganttPhaseFilterIds) {
+  const selectedPhases = normalizeFilterValues(phaseFilters);
+  if (!selectedPhases.length) return true;
+  if (projectMatchesPhaseFilters(project, selectedPhases)) return true;
+  return getGanttProjectPhases(project).some((phaseItem) => {
+    if (selectedPhases.includes("unset") && phaseItem.unassigned) return true;
+    return selectedPhases.includes(phaseItem.phaseId);
+  });
+}
+
+function ganttPhaseMatchesFilters(phaseItem = {}, phaseFilters = ganttPhaseFilterIds) {
+  const selectedPhases = normalizeFilterValues(phaseFilters);
+  if (!selectedPhases.length) return true;
+  if (phaseItem.unassigned || phaseItem.undatedPhaseTasks) return selectedPhases.includes("unset");
+  return selectedPhases.includes(phaseItem.phaseId);
+}
+
+function ganttProjectMatchesPeriod(project = {}, periodRange = getGanttPeriodRange()) {
+  const projectRange = getGanttProjectRange(project, []);
+  if (ganttRangeMatchesPeriod(projectRange?.start, projectRange?.end, periodRange, { allowUndated: false })) {
+    return true;
+  }
+  return getGanttProjectPhases(project).some((phaseItem) => {
+    return ganttPhaseMatchesFilters(phaseItem)
+      && ganttPhaseMatchesPeriod(phaseItem, periodRange, { allowUndated: ganttShowUndatedPhases });
   });
 }
 
@@ -4105,7 +7047,7 @@ function renderGanttGroup(group, timeline) {
 function renderGanttGroupChildren(group, timeline) {
   const projectRows = group.projects.map((item) => renderGanttProject(item, timeline)).join("");
   const taskRows = renderGanttTaskBlock(
-    group.kind === "general" ? "一般任務" : "系統層級任務",
+    group.kind === "general" ? "一般工作任務" : "系統層級任務",
     group.tasks,
     timeline,
     "system-task",
@@ -4135,8 +7077,11 @@ function renderGanttProject(item, timeline) {
   const collapsed = Boolean(ganttCollapsed.projects[project.id]);
   const progress = getProjectCompletion(project.id);
   const range = getGanttProjectRange(project, tasks);
-  const phaseRows = getGanttProjectPhases(project).map((phaseItem) => renderGanttPhaseRow(project, phaseItem, timeline)).join("");
-  const taskRows = renderGanttTaskBlock("專案任務", tasks, timeline, "project-task", `project-${project.id}-tasks`);
+  const phases = getGanttProjectPhases(project);
+  const phaseRows = renderGanttPhaseBlock(project, phases, tasks, timeline);
+  const taskRows = project.category === "general"
+    ? renderGanttTaskBlock("專案任務", tasks, timeline, "project-task", `project-${project.id}-tasks`)
+    : "";
   const closed = project.category !== "general" && (project.closed || project.phase === "closed");
   const rangeLabel = range ? formatRange(range.start, range.end) : "尚未設定時程";
   const meta = project.category === "general"
@@ -4171,24 +7116,145 @@ function renderGanttProject(item, timeline) {
   `;
 }
 
-function renderGanttPhaseRow(project, phaseItem, timeline) {
-  const active = project.phase === (phaseItem.phaseId || phaseItem.id);
-  return renderGanttRow({
-    className: `gantt-phase-row gantt-level-2 ${active ? "active" : ""}`,
-    label: renderGanttTreeLabel({
-      level: 2,
-      type: "階段",
-      typeClass: active ? "phase active" : "phase",
-      name: phaseItem.label,
-      meta: `${formatRange(phaseItem.start, phaseItem.end)}${active ? "・目前階段" : ""}`,
-    }),
-    grid: renderGanttBar(phaseItem.start, phaseItem.end, timeline, {
-      className: `phase ${active ? "active" : ""}`,
-      title: `${project.name} / ${phaseItem.label}`,
-      content: active ? "目前階段" : phaseItem.label,
-    }),
-    timeline,
+function renderGanttPhaseBlock(project, phases, tasks, timeline) {
+  if (project.category === "general") return "";
+
+  const groupId = `project-${project.id}-phases`;
+  const collapsed = Boolean(ganttCollapsed.phaseGroups[groupId]);
+  const summary = getGanttProjectPhaseSummary(project, phases);
+  const phaseTaskGroups = getGanttPhaseTaskGroups(project, phases, tasks);
+  if (!ganttShowUndatedPhases && !phaseTaskGroups.length) return "";
+  const phaseRows = collapsed ? "" : phaseTaskGroups
+    .map(({ phase, tasks: phaseTasks }) => renderGanttPhaseRow(project, phase, phaseTasks, timeline))
+    .join("");
+
+  return `
+    ${renderGanttRow({
+      className: `gantt-phase-group-row gantt-level-2 status-${summary.status}`,
+      label: renderGanttTreeLabel({
+        level: 2,
+        type: "階段",
+        typeClass: `phase-summary ${summary.status}`,
+        name: "專案階段",
+        meta: summary.meta,
+        toggle: {
+          id: groupId,
+          target: "phase-group",
+          collapsed,
+        },
+      }),
+      grid: renderGanttBar(summary.start, summary.end, timeline, {
+        className: `phase summary ${summary.status}`,
+        title: `${project.name} / ${summary.meta}`,
+        content: summary.content,
+      }),
+      timeline,
+    })}
+    ${phaseRows}
+  `;
+}
+
+function getGanttPhaseTaskGroups(project, phases, tasks = []) {
+  const validStageIds = new Set(phases.map((phase) => phase.id).filter(Boolean));
+  const tasksByStage = new Map(phases.map((phase) => [phase.id, []]));
+  const unassignedTasks = [];
+
+  tasks.forEach((task) => {
+    if (task.stageId && validStageIds.has(task.stageId)) {
+      tasksByStage.get(task.stageId).push(task);
+      return;
+    }
+    unassignedTasks.push(task);
   });
+
+  const periodRange = getGanttPeriodRange();
+  const groups = phases.reduce((rows, phase) => {
+    const phaseTasks = (tasksByStage.get(phase.id) || []).sort(compareGanttEntity);
+    const phaseMatchesFilters = ganttPhaseMatchesFilters(phase);
+    const phaseMatchesPeriod = ganttPhaseMatchesPeriod(phase, periodRange, { allowUndated: ganttShowUndatedPhases });
+    if (phaseTasks.length || (phaseMatchesFilters && phaseMatchesPeriod)) {
+      rows.push({ phase, tasks: phaseTasks });
+    }
+    return rows;
+  }, []);
+
+  if (!ganttShowUndatedPhases) {
+    const undatedPhaseTasks = phases
+      .filter((phase) => !phase.hasDate)
+      .flatMap((phase) => tasksByStage.get(phase.id) || []);
+    if (undatedPhaseTasks.length) {
+      const range = getGanttTasksRange(undatedPhaseTasks);
+      groups.push({
+        phase: {
+          id: `undated-${project.id}`,
+          label: "無日期階段任務",
+          start: range?.start || "",
+          end: range?.end || "",
+          hasDate: false,
+          undatedPhaseTasks: true,
+        },
+        tasks: undatedPhaseTasks.sort(compareGanttEntity),
+      });
+    }
+  }
+
+  if (unassignedTasks.length) {
+    const range = getGanttTasksRange(unassignedTasks);
+    groups.push({
+      phase: {
+        id: `unassigned-${project.id}`,
+        label: "未指定階段",
+        start: range?.start || "",
+        end: range?.end || "",
+        unassigned: true,
+      },
+      tasks: unassignedTasks.sort(compareGanttEntity),
+    });
+  }
+
+  return groups;
+}
+
+function getGanttStageCollapseId(project, phaseItem) {
+  return `project-${project.id}-stage-${phaseItem.id || "unassigned"}`;
+}
+
+function renderGanttPhaseRow(project, phaseItem, phaseTasks, timeline) {
+  const current = !phaseItem.undatedPhaseTasks && isDateWithinGanttPhase(todayString(), phaseItem);
+  const stageId = getGanttStageCollapseId(project, phaseItem);
+  const collapsed = Boolean(ganttCollapsed.stages[stageId]);
+  const taskCount = phaseTasks.length;
+  const rangeLabel = formatRange(phaseItem.start, phaseItem.end);
+  const meta = [
+    rangeLabel,
+    `${taskCount} 任務`,
+    current ? "目前階段" : "",
+  ].filter(Boolean).join("・");
+
+  return `
+    ${renderGanttRow({
+      className: `gantt-phase-row gantt-level-3 ${current ? "active" : ""} ${phaseItem.unassigned ? "unassigned" : ""} ${phaseItem.undatedPhaseTasks ? "undated-phase-tasks" : ""}`,
+      label: renderGanttTreeLabel({
+        level: 3,
+        type: phaseItem.undatedPhaseTasks ? "任務" : "階段",
+        typeClass: `${current ? "phase active" : "phase"} ${phaseItem.unassigned ? "unassigned" : ""} ${phaseItem.undatedPhaseTasks ? "undated-phase-tasks" : ""}`,
+        name: phaseItem.label,
+        meta,
+        toggle: {
+          id: stageId,
+          target: "stage",
+          collapsed,
+        },
+      }),
+      grid: renderGanttBar(phaseItem.start, phaseItem.end, timeline, {
+        className: `phase ${current ? "active" : ""} ${phaseItem.unassigned ? "unassigned" : ""} ${phaseItem.undatedPhaseTasks ? "undated-phase-tasks" : ""}`,
+        title: `${project.name} / ${phaseItem.label}`,
+        content: current ? "目前階段" : phaseItem.undatedPhaseTasks ? "任務" : phaseItem.label,
+      }),
+      timeline,
+    })}
+    ${collapsed ? "" : renderGanttTaskRows(phaseTasks, timeline, 4)}
+  `;
 }
 
 function renderGanttTaskBlock(title, tasks, timeline, className = "", groupId = title) {
@@ -4213,38 +7279,64 @@ function renderGanttTaskBlock(title, tasks, timeline, className = "", groupId = 
       grid: "",
       timeline,
     })}
-    ${collapsed ? "" : tasks.map((task) => renderGanttTaskRow(task, timeline)).join("")}
+    ${collapsed ? "" : renderGanttTaskRows(tasks, timeline)}
   `;
 }
 
-function renderGanttTaskRow(task, timeline) {
+function renderGanttTaskRows(tasks = [], timeline, level = 3) {
+  const byParent = new Map();
+  const taskIds = new Set(tasks.map((task) => task.id));
+  tasks.forEach((task) => {
+    const parentId = task.parentTaskId && taskIds.has(task.parentTaskId) ? task.parentTaskId : "";
+    if (!byParent.has(parentId)) byParent.set(parentId, []);
+    byParent.get(parentId).push(task);
+  });
+  const renderRows = (parentId = "", currentLevel = level) => (byParent.get(parentId) || [])
+    .sort(parentId ? compareSubtasksByStartTime : compareGanttEntity)
+    .map((task) => {
+      const taskKey = task.id;
+      return `${renderGanttTaskRow(task, timeline, currentLevel)}${renderRows(taskKey, currentLevel + 1)}`;
+    })
+    .join("");
+  return renderRows();
+}
+
+function renderGanttTaskRow(task, timeline, level = 3) {
   const priority = getPriorityLabel(task.priority);
   const overdue = task.status !== "done" && taskIsOverdue(task);
   const status = overdue ? "逾期" : getStatusLabel(task.status);
   const owner = task.owner || "未指定";
-  const start = task.startDate || task.rangeStart || task.executionDate;
-  const end = task.endDate || task.rangeEnd || task.executionDate;
-  const timeLabel = task.isRecurring ? getRecurrenceLabel(task) : formatRange(start, end);
+  const taskId = task.originalTaskId || task.id;
+  const taskActionAttributes = isVirtualRecurringOccurrenceTask(task)
+    ? `data-gantt-task="${escapeHtml(task.id)}" data-gantt-virtual-template="${escapeHtml(task.templateTaskId || "")}" data-gantt-virtual-date="${escapeHtml(task.occurrenceDate || "")}"`
+    : `data-gantt-task="${escapeHtml(taskId)}"`;
+  const start = getTaskTimelineStart(task);
+  const end = getTaskTimelineEnd(task) || start;
+  const timeLabel = isRecurringTemplateTask(task)
+    ? getRecurrenceLabel(task)
+    : isRecurringOccurrenceTask(task)
+      ? `${formatRange(start, end)}・${task.recurringLabel || "週期"}`
+      : formatRange(start, end);
   const grid = [
     renderGanttBar(start, end, timeline, {
-      className: `task status-${overdue ? "overdue" : task.status} priority-${task.priority}`,
+      className: `task status-${overdue ? "overdue" : task.status} priority-${task.priority} ${task.isRecurringOccurrence ? "recurring" : ""}`,
       title: `${task.title} ${timeLabel}`,
       content: `${status}・${task.title}`,
-      data: `data-gantt-task="${task.id}"`,
+      data: taskActionAttributes,
     }),
     renderGanttMarker(task.executionDate, timeline, "execution", `執行日：${formatDate(task.executionDate)}`),
     renderGanttMarker(task.deadline, timeline, "deadline", `截止日：${formatDate(task.deadline)}`),
   ].join("");
 
   return renderGanttRow({
-    className: `gantt-task-row gantt-level-3 priority-${task.priority}`,
+    className: `gantt-task-row gantt-level-${level} priority-${task.priority} ${task.isRecurringOccurrence ? "recurring" : ""}`,
     label: renderGanttTreeLabel({
-      level: 3,
+      level,
       type: "任務",
       typeClass: `task priority-${task.priority} ${overdue ? "overdue" : ""}`,
       name: task.title,
-      meta: `${owner}・${status}・${timeLabel}・優先級 ${priority}`,
-      actionAttributes: `data-gantt-task="${task.id}"`,
+      meta: `${owner}・${status}・${timeLabel}${task.occurrenceDate ? `・${formatDate(task.occurrenceDate)}` : ""}・優先級 ${priority}`,
+      actionAttributes: taskActionAttributes,
     }),
     grid,
     timeline,
@@ -4330,6 +7422,24 @@ function attachGanttHandlers() {
     });
   });
 
+  els.ganttChart.querySelectorAll("[data-gantt-toggle-phase-group]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.ganttTogglePhaseGroup;
+      ganttCollapsed.phaseGroups[id] = !ganttCollapsed.phaseGroups[id];
+      persistViewPreferences();
+      renderGanttPage();
+    });
+  });
+
+  els.ganttChart.querySelectorAll("[data-gantt-toggle-stage]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.ganttToggleStage;
+      ganttCollapsed.stages[id] = !ganttCollapsed.stages[id];
+      persistViewPreferences();
+      renderGanttPage();
+    });
+  });
+
   els.ganttChart.querySelectorAll("[data-gantt-toggle-task-group]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset.ganttToggleTaskGroup;
@@ -4347,13 +7457,27 @@ function attachGanttHandlers() {
   });
 
   els.ganttChart.querySelectorAll("[data-gantt-task]").forEach((button) => {
-    button.addEventListener("click", () => openTodoDrawer(button.dataset.ganttTask, "view"));
+    button.addEventListener("click", () => {
+      if (button.dataset.ganttVirtualTemplate) {
+        const occurrence = materializeRecurringOccurrence(button.dataset.ganttVirtualTemplate, button.dataset.ganttVirtualDate);
+        if (!occurrence) {
+          alert("無法建立這次週期任務，請確認週期模板仍可產生任務。");
+          return;
+        }
+        openTodoDrawer(occurrence.id, "view");
+        return;
+      }
+      openTodoDrawer(button.dataset.ganttTask, "view");
+    });
   });
 }
 
-function buildGanttTimeline(groups) {
-  const dates = collectGanttDates(groups).sort();
+function buildGanttTimeline(groups, forcedRange = null) {
   const today = todayString();
+  const normalizedForcedRange = normalizeGanttRangeLike(forcedRange);
+  const dates = normalizedForcedRange
+    ? [normalizedForcedRange.start, normalizedForcedRange.end]
+    : [...collectGanttDates(groups), today].filter(Boolean).sort();
   const firstDate = dates[0] || today;
   const lastDate = dates[dates.length - 1] || getDateOffset(30);
   const paddedStart = addDaysToDateString(firstDate, ganttScale === "week" ? -3 : ganttScale === "month" ? -14 : -45);
@@ -4378,6 +7502,28 @@ function buildGanttTimeline(groups) {
     unitWidth: ganttScale === "week" ? 48 : ganttScale === "month" ? 86 : 112,
     units,
   };
+}
+
+function focusGanttTimelineOnToday(timeline) {
+  if (!timeline?.units?.length || !els.ganttChart) return;
+  const todayIndex = getGanttUnitIndex(todayString(), timeline);
+  if (todayIndex < 0) return;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const chart = els.ganttChart;
+      const inner = chart.querySelector(".gantt-chart-inner");
+      const labelCell = chart.querySelector(".gantt-label-cell");
+      const labelWidth = Number.parseFloat(getComputedStyle(inner || chart).getPropertyValue("--gantt-label-width"))
+        || labelCell?.getBoundingClientRect().width
+        || 0;
+      const visibleGridWidth = Math.max(0, chart.clientWidth - labelWidth);
+      const preferredOffset = Math.max(timeline.unitWidth, Math.floor(visibleGridWidth * 0.25));
+      const maxScroll = Math.max(0, chart.scrollWidth - chart.clientWidth);
+      const targetLeft = Math.min(maxScroll, Math.max(0, todayIndex * timeline.unitWidth - preferredOffset));
+      chart.scrollTo({ left: targetLeft, top: chart.scrollTop, behavior: "auto" });
+    });
+  });
 }
 
 function buildGanttUnits(startDate, endDate, scale) {
@@ -4468,15 +7614,99 @@ function getGanttProjectPhases(project) {
   return getProjectStages(project.id)
     .sort(compareGanttEntity)
     .map((stage) => {
-      const range = normalizeGanttRange(stage.startDate, stage.endDate);
-      return range ? { id: stage.id, phaseId: stage.phaseId || getPhaseIdByLabel(stage.name), label: stage.name, start: range.start, end: range.end } : {
+      const phaseId = stage.phaseId || getPhaseIdByLabel(stage.name);
+      const plannedSchedule = getGanttPhasePlannedSchedule(project, phaseId);
+      const start = plannedSchedule.start || stage.startDate || "";
+      const end = plannedSchedule.end || stage.endDate || "";
+      const hasDate = Boolean(plannedSchedule.hasPlannedDate || stage.startDate || stage.endDate);
+      const range = normalizeGanttRange(start, end);
+      return range ? { id: stage.id, phaseId, label: stage.name, start: range.start, end: range.end, hasDate } : {
         id: stage.id,
-        phaseId: stage.phaseId || getPhaseIdByLabel(stage.name),
+        phaseId,
         label: stage.name,
         start: "",
         end: "",
+        hasDate,
       };
     });
+}
+
+function getGanttPhasePlannedSchedule(project = {}, phaseId = "") {
+  const schedule = phaseId ? project.phaseSchedules?.[phaseId] || {} : {};
+  return {
+    start: schedule.start || "",
+    end: schedule.end || "",
+    hasPlannedDate: Boolean(schedule.start || schedule.end),
+  };
+}
+
+function getGanttProjectPhaseSummary(project, phases = getGanttProjectPhases(project)) {
+  const scheduledPhases = phases
+    .map((phaseItem) => {
+      const start = phaseItem.start || phaseItem.end || "";
+      const end = phaseItem.end || phaseItem.start || "";
+      return { ...phaseItem, start, end };
+    })
+    .filter((phaseItem) => phaseItem.start || phaseItem.end)
+    .sort((a, b) => {
+      const first = a.start || a.end || "9999-12-31";
+      const second = b.start || b.end || "9999-12-31";
+      if (first !== second) return first.localeCompare(second);
+      return (a.end || "").localeCompare(b.end || "");
+    });
+
+  if (!scheduledPhases.length) {
+    return {
+      status: "unset",
+      meta: "未設定階段排程",
+      content: "",
+      start: "",
+      end: "",
+    };
+  }
+
+  const today = todayString();
+  const current = scheduledPhases.find((phaseItem) => isDateWithinGanttPhase(today, phaseItem));
+  if (current) {
+    return {
+      status: "active",
+      meta: `目前階段：${current.label}｜${formatRange(current.start, current.end)}`,
+      content: "目前階段",
+      start: current.start,
+      end: current.end,
+    };
+  }
+
+  const next = scheduledPhases.find((phaseItem) => phaseItem.start && phaseItem.start > today);
+  if (next) {
+    const first = scheduledPhases[0];
+    const status = first.start && today < first.start ? "upcoming" : "gap";
+    return {
+      status,
+      meta: `${status === "upcoming" ? "尚未開始" : "階段空窗"}｜下一階段：${next.label} ${formatDate(next.start)} 開始`,
+      content: "下一階段",
+      start: next.start,
+      end: next.end,
+    };
+  }
+
+  const last = scheduledPhases[scheduledPhases.length - 1];
+  const closed = project.closed || project.phase === "closed";
+  return {
+    status: closed ? "closed" : "overrun",
+    meta: `${closed ? "已結案" : "已超出規劃"}｜最後階段：${last.label} ${formatDate(last.end || last.start)} 結束`,
+    content: closed ? "已結案" : "已超出規劃",
+    start: last.start,
+    end: last.end,
+  };
+}
+
+function isDateWithinGanttPhase(dateString, phaseItem = {}) {
+  if (!dateString) return false;
+  const start = phaseItem.start || phaseItem.end || "";
+  const end = phaseItem.end || phaseItem.start || "";
+  if (!start && !end) return false;
+  return (!start || dateString >= start) && (!end || dateString <= end);
 }
 
 function getGanttTasksRange(tasks) {
@@ -4503,8 +7733,11 @@ function normalizeGanttRange(start, end) {
 function getGanttPlacement(start, end, timeline) {
   const range = normalizeGanttRange(start, end);
   if (!range) return null;
-  const startIndex = getGanttUnitIndex(range.start, timeline);
-  const endIndex = getGanttUnitIndex(range.end, timeline);
+  const visibleStart = range.start < timeline.startString ? timeline.startString : range.start;
+  const visibleEnd = range.end > timeline.endString ? timeline.endString : range.end;
+  if (visibleEnd < timeline.startString || visibleStart > timeline.endString) return null;
+  const startIndex = getGanttUnitIndex(visibleStart, timeline);
+  const endIndex = getGanttUnitIndex(visibleEnd, timeline);
   if (startIndex < 0 || endIndex < 0) return null;
   return {
     start: startIndex + 1,
@@ -4518,7 +7751,7 @@ function getGanttUnitIndex(dateString, timeline) {
 }
 
 function getProjectCompletion(projectId) {
-  const tasks = state.tasks.filter((task) => getTaskScope(task) === "project" && task.projectId === projectId);
+  const tasks = getProjectTasks(projectId);
   if (!tasks.length) return { done: 0, total: 0, ratio: 0, label: "0 / 0 完成" };
   const done = tasks.filter((task) => task.status === "done").length;
   return {
@@ -4641,8 +7874,9 @@ function renderTodoSystemTabs(activeBucketId, query) {
 }
 
 function renderStandardTodoSections(tasks) {
-  const activeTasks = sortTodoTasks(tasks.filter((task) => task.status !== "done"));
-  const completedTasks = sortTodoTasks(tasks.filter((task) => task.status === "done"));
+  const displayTasks = getUniqueTasksForDisplay(tasks);
+  const activeTasks = sortTodoTasks(displayTasks.filter((task) => task.status !== "done"));
+  const completedTasks = sortTodoTasks(displayTasks.filter((task) => task.status === "done"));
 
   return `
     ${renderTodoListHeader()}
@@ -4682,13 +7916,12 @@ function renderTodayTodoSections(tasks) {
 function renderTodoListHeader() {
   return `
     <div class="todo-list-header" aria-hidden="true">
-      <span></span>
       <span>標題</span>
-      <span>執行日期</span>
+      <span>所屬</span>
       <span>最後期限</span>
-      <span>執行區間</span>
+      <span>負責人</span>
+      <span>狀態</span>
       <span>優先級</span>
-      <span>重要性</span>
     </div>
   `;
 }
@@ -4744,35 +7977,30 @@ function renderTodoCompletedSection(tasks, title = "完成", sectionKey = "compl
 }
 
 function renderTodoTaskRow(task) {
-  const system = getSystem(task.systemId);
-  const project = getProject(task.projectId);
   const completed = task.status === "done";
   const today = todayString();
   const shouldMarkOverdue = activeTodoView === "incomplete" && !completed;
-  const executionOverdueClass = shouldMarkOverdue && task.executionDate && task.executionDate < today ? "todo-overdue-date" : "";
   const deadlineOverdueClass = shouldMarkOverdue && task.deadline && task.deadline < today ? "todo-overdue-date" : "";
-  const completedMeta = completed ? `・已完成 ${formatDate(task.completedDate)}` : "";
+  const completedMeta = completed ? `<span class="todo-subtitle">已完成 ${formatDate(task.completedDate)}</span>` : "";
+  const recurrenceMeta = isRecurringTemplateTask(task)
+    ? `<span class="todo-subtitle recurrence">${escapeHtml(getRecurrenceLabel(task))}</span>`
+    : isRecurringOccurrenceTask(task)
+      ? `<span class="todo-subtitle recurrence">週期・${escapeHtml(task.recurringLabel || "")}</span>`
+      : "";
+  const draggable = todoSortKey === "manual" ? ` draggable="true"` : "";
 
   return `
-    <article class="todo-task-row ${completed ? "completed" : ""}" data-task-row="${task.id}">
-      <button class="todo-check-button ${completed ? "completed" : ""}" type="button" data-toggle-complete="${task.id}" title="${completed ? "標示為未完成" : "標示為已完成"}">✓</button>
+    <article class="todo-task-row ${completed ? "completed" : ""} ${isRecurringTemplateTask(task) || isRecurringOccurrenceTask(task) ? "recurring" : ""}" data-task-row="${task.id}"${draggable}>
       <div class="todo-title-cell">
-        <div class="todo-title-line">
-          <input class="todo-title-input" data-inline-title="${task.id}" value="${escapeHtml(task.title)}" aria-label="任務名稱" />
-          <button class="todo-open-edit" type="button" data-open-edit-drawer="${task.id}" title="編輯任務">✎</button>
-        </div>
-        <span class="todo-subtitle">${escapeHtml(getTaskContextLabel(task))}${completedMeta}</span>
+        <strong class="todo-task-title">${escapeHtml(task.title)}</strong>
+        ${completedMeta}
+        ${recurrenceMeta}
       </div>
-      <input class="todo-inline-date ${executionOverdueClass}" data-inline-execution="${task.id}" type="date" min="${task.rangeStart}" max="${task.rangeEnd}" value="${task.executionDate}" aria-label="執行日期" />
-      <input class="todo-inline-date ${deadlineOverdueClass}" data-inline-deadline="${task.id}" type="date" min="${task.rangeEnd}" value="${task.deadline}" aria-label="最後期限" />
-      <div class="todo-range-inputs">
-        <input data-inline-range-start="${task.id}" type="date" value="${task.rangeStart}" aria-label="執行區間開始" />
-        <input data-inline-range-end="${task.id}" type="date" min="${task.rangeStart}" value="${task.rangeEnd}" aria-label="執行區間結束" />
-      </div>
-      <select class="todo-inline-priority" data-inline-priority="${task.id}" aria-label="優先級">
-        ${renderPriorityOptions(task.priority)}
-      </select>
-      <button class="todo-important-button ${task.important ? "important" : ""}" type="button" data-toggle-important="${task.id}" title="${task.important ? "移除重要性" : "將工作標示為重要"}">${task.important ? "★" : "☆"}</button>
+      <span class="todo-task-meta-cell">${escapeHtml(getTaskContextLabel(task))}</span>
+      <span class="todo-task-meta-cell ${deadlineOverdueClass}">${getTaskDeadlineSummary(task)}</span>
+      <span class="todo-task-meta-cell">${escapeHtml(task.owner || task.ownerName || "未指定")}</span>
+      <span class="todo-pill status-${task.status}">${escapeHtml(getStatusLabel(task.status))}</span>
+      <span class="todo-pill priority-${task.priority}">${escapeHtml(getPriorityLabel(task.priority))}</span>
     </article>
   `;
 }
@@ -4832,32 +8060,101 @@ function attachTodoPageHandlers() {
   els.todoPageList.querySelectorAll("[data-toggle-important]").forEach((button) => {
     button.addEventListener("click", () => toggleTaskImportant(button.dataset.toggleImportant));
   });
+
+  if (todoSortKey === "manual") attachTodoManualSortHandlers();
+}
+
+function attachTodoManualSortHandlers() {
+  els.todoPageList.querySelectorAll("[data-task-row]").forEach((row) => {
+    row.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("text/plain", row.dataset.taskRow);
+      event.dataTransfer.effectAllowed = "move";
+      row.classList.add("dragging");
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+    });
+  });
+
+  els.todoPageList.querySelectorAll(".todo-standard-section, .todo-section-content, .todo-completed-list, .todo-group-block").forEach((list) => {
+    list.addEventListener("dragover", (event) => {
+      if (!Array.from(event.dataTransfer.types || []).includes("text/plain")) return;
+      event.preventDefault();
+      list.classList.add("drag-over");
+      event.dataTransfer.dropEffect = "move";
+    });
+    list.addEventListener("dragleave", () => {
+      list.classList.remove("drag-over");
+    });
+    list.addEventListener("drop", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      list.classList.remove("drag-over");
+      const taskId = event.dataTransfer.getData("text/plain");
+      if (!taskId || !getProjectTask(taskId)) return;
+      const beforeId = getDropBeforeId(list, event.clientY, "[data-task-row]", "taskRow");
+      const orderedIds = getReorderedIds(list, "[data-task-row]", "taskRow", taskId, beforeId);
+      applyTaskManualOrder(orderedIds);
+    });
+  });
+}
+
+function applyTaskManualOrder(taskIds = []) {
+  const orderMap = new Map(taskIds.map((id, index) => [id, index + 1]));
+  state.tasks = state.tasks.map((task) => {
+    return orderMap.has(task.id) ? { ...task, sortOrder: orderMap.get(task.id) } : task;
+  });
+  saveTaskState(taskIds);
+  render();
 }
 
 function getTasksForTodoView(viewId, systemId = selectedSystemId) {
-  const normalizedTagFilter = selectedTagFilter.trim().toLowerCase();
-  const scopedTasks = state.tasks.filter((task) => {
-    const matchTag = !normalizedTagFilter || (task.tags || []).some((tag) => tag.toLowerCase() === normalizedTagFilter);
-    return taskMatchesSystemScope(task, systemId) && matchTag;
-  });
   const today = todayString();
   const tomorrow = getDateOffset(1);
   const thisWeek = getWeekRange(0);
   const nextWeek = getWeekRange(1);
+  if (viewId === "tomorrow") ensureRecurringOccurrencesForRange(tomorrow, tomorrow);
+  else if (viewId === "thisWeek") ensureRecurringOccurrencesForRange(thisWeek.start, thisWeek.end);
+  else if (viewId === "nextWeek") ensureRecurringOccurrencesForRange(nextWeek.start, nextWeek.end);
+  else ensureRecurringOccurrencesForRange(today, today);
 
-  if (viewId === "today") return scopedTasks.filter((task) => taskMatchesTodayTodo(task, today));
+  const normalizedTagFilter = selectedTagFilter.trim().toLowerCase();
+  const scopedTasks = getUniqueTasksForDisplay(state.tasks).filter((task) => {
+    const matchTag = !normalizedTagFilter || (task.tags || []).some((tag) => tag.toLowerCase() === normalizedTagFilter);
+    return isTodoDisplayTask(task)
+      && taskMatchesSystemScope(task, systemId)
+      && matchTag
+      && taskMatchesTodoOwnerFilter(task);
+  });
+
+  if (viewId === "today") {
+    return scopedTasks
+      .filter((task) => taskMatchesTodayTodo(task, today));
+  }
   if (viewId === "tomorrow") return scopedTasks.filter((task) => taskMatchesDate(task, tomorrow));
   if (viewId === "thisWeek") return scopedTasks.filter((task) => taskMatchesRange(task, thisWeek.start, thisWeek.end));
   if (viewId === "nextWeek") return scopedTasks.filter((task) => taskMatchesRange(task, nextWeek.start, nextWeek.end));
   return scopedTasks;
 }
 
+function recurringOccurrenceCompleted(task = {}, date = "") {
+  if (!date) return false;
+  const persistedOccurrence = state.tasks.find((item) => {
+    return isRecurringOccurrenceTask(item) && item.templateTaskId === task.id && item.occurrenceDate === date;
+  });
+  return Boolean(persistedOccurrence?.status === "done" || (task.completedOccurrences || []).includes(date));
+}
+
 function getTodayTodoSections(tasks) {
   const today = todayString();
-  const incompleteTasks = tasks.filter((task) => task.status !== "done");
+  const displayTasks = getUniqueTasksForDisplay(tasks);
+  const incompleteTasks = displayTasks.filter((task) => isTodoDisplayTask(task) && task.status !== "done");
   const deadlineTasks = incompleteTasks.filter((task) => task.deadline === today);
   const deadlineIds = new Set(deadlineTasks.map((task) => task.id));
-  const generalTasks = incompleteTasks.filter((task) => task.executionDate === today && !deadlineIds.has(task.id));
+  const generalTasks = incompleteTasks.filter((task) => {
+    const runsToday = task.executionDate === today;
+    return runsToday && !deadlineIds.has(task.id);
+  });
   const generalIds = new Set(generalTasks.map((task) => task.id));
   const rangeTasks = incompleteTasks.filter((task) => {
     return taskRangeIncludesDate(task, today) && !deadlineIds.has(task.id) && !generalIds.has(task.id);
@@ -4867,13 +8164,13 @@ function getTodayTodoSections(tasks) {
     deadline: sortTodoTasks(deadlineTasks),
     general: sortTodoTasks(generalTasks),
     range: sortTodoTasks(rangeTasks),
-    completed: sortTodoTasks(tasks.filter((task) => task.status === "done" && task.completedDate === today)),
+    completed: sortTodoTasks(displayTasks.filter((task) => isTodoDisplayTask(task) && task.status === "done" && task.completedDate === today)),
   };
 }
 
 function taskMatchesTodayTodo(task, today = todayString()) {
+  if (isRecurringTemplateTask(task)) return false;
   if (task.status === "done") return task.completedDate === today;
-  if (task.isRecurring) return taskRecursOnDate(task, today) && !(task.completedOccurrences || []).includes(today);
   return task.deadline === today || task.executionDate === today || taskRangeIncludesDate(task, today);
 }
 
@@ -4922,8 +8219,21 @@ function taskMatchesTodoQuery(task, query) {
   return haystack.includes(query);
 }
 
+function taskMatchesTodoOwnerFilter(task, ownerIds = todoOwnerFilterIds) {
+  const selectedOwnerIds = normalizeFilterValues(ownerIds);
+  if (!selectedOwnerIds.length) return true;
+  const selectedOwners = new Set(selectedOwnerIds);
+  return getInternalOwnerIds(task).some((ownerId) => selectedOwners.has(ownerId));
+}
+
 function sortTodoTasks(tasks) {
   const priorityRank = { low: 0, medium: 1, high: 2 };
+  if (todoSortKey === "manual") {
+    return [...tasks].sort((a, b) => {
+      const result = compareManualThenName(a, b);
+      return todoSortDirection === "desc" ? -result : result;
+    });
+  }
   const getSortValue = (task) => {
     if (todoSortKey === "title") return { value: task.title.toLowerCase(), missing: false };
     if (todoSortKey === "systemProject") {
@@ -4990,8 +8300,14 @@ function applyTaskStatusSideEffects(nextTask, previousTask = null, requestedComp
   updatedTask.completedDate = nextStatus === "done"
     ? requestedCompletedDate || (previous.status === "done" ? previous.completedDate || today : today)
     : "";
+  updatedTask.completedAt = nextStatus === "done"
+    ? previous.completedAt || new Date().toISOString()
+    : null;
+  updatedTask.completedBy = nextStatus === "done"
+    ? previous.completedBy || currentProfile?.uid || currentFirebaseUser?.uid || currentSafeUser?.uid || ""
+    : null;
 
-  if (previousTask && nextStatus === "doing" && previous.status !== "doing" && previous.rangeStart && previous.rangeStart > today) {
+  if (previousTask && !isRecurringTemplateTask(previous) && nextStatus === "doing" && previous.status !== "doing" && previous.rangeStart && previous.rangeStart > today) {
     const rangeDays = Math.max(0, getDateDiffFromStrings(previous.rangeStart, previous.rangeEnd || previous.rangeStart));
     const deadlineDays = previous.deadline
       ? Math.max(0, getDateDiffFromStrings(previous.rangeEnd || previous.rangeStart, previous.deadline))
@@ -5033,7 +8349,7 @@ function updateInlineTask(taskId, patch) {
     return applyTaskStatusSideEffects(nextTask, task, patch.completedDate);
   });
 
-  saveState();
+  saveTaskState([taskId]);
   render();
 }
 
@@ -5058,7 +8374,7 @@ function updateInlineTaskDates(taskId, patch) {
     return nextTask;
   });
 
-  saveState();
+  saveTaskState([taskId]);
   render();
 }
 
@@ -5101,6 +8417,7 @@ function syncTaskDrawerShell(open) {
 
 function openTodoDrawer(taskId, mode = "view") {
   const drawer = getActiveTaskDrawer();
+  const taskChanged = selectedTodoTaskId !== taskId;
   const isSameTaskOpen = selectedTodoTaskId === taskId
     && drawerMode === mode
     && drawer
@@ -5113,6 +8430,7 @@ function openTodoDrawer(taskId, mode = "view") {
 
   selectedTodoTaskId = taskId;
   drawerMode = mode;
+  if (taskChanged || mode !== "view") activeTaskDrawerTab = "summary";
   getInactiveTaskDrawers().forEach(hideTaskDrawer);
   drawer.classList.remove("hidden");
   drawer.setAttribute("aria-hidden", "false");
@@ -5123,6 +8441,7 @@ function openTodoDrawer(taskId, mode = "view") {
 function closeTodoDrawer() {
   selectedTodoTaskId = null;
   drawerMode = "view";
+  activeTaskDrawerTab = "summary";
   hideTaskDrawer(els.todoTaskDrawer);
   hideTaskDrawer(els.ganttTaskDrawer);
   hideTaskDrawer(els.mainTaskDrawer);
@@ -5156,18 +8475,30 @@ function renderTodoDrawer() {
   });
   drawer.querySelector("[data-drawer-view]")?.addEventListener("click", () => {
     drawerMode = "view";
+    activeTaskDrawerTab = "summary";
     renderTodoDrawer();
+  });
+  drawer.querySelectorAll("[data-drawer-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeTaskDrawerTab = normalizeTaskDrawerTab(button.dataset.drawerTab);
+      renderTodoDrawer();
+    });
   });
   drawer.querySelector("[data-drawer-complete]")?.addEventListener("click", () => {
     markTaskDone(task.id, task.status !== "done");
   });
+  drawer.querySelectorAll("[data-template-status]").forEach((button) => {
+    button.addEventListener("click", () => updateTaskStatusFromBoard(task.id, button.dataset.templateStatus));
+  });
   drawer.querySelector("[data-drawer-important]")?.addEventListener("click", () => toggleTaskImportant(task.id));
+  drawer.querySelector("[data-drawer-delete]")?.addEventListener("click", handleDrawerTaskDelete);
   drawer.querySelector("[data-add-subtask]")?.addEventListener("click", () => {
     openTaskDialog(null, {
       scope: getTaskScope(task),
       systemId: task.systemId,
       projectId: task.projectId,
       stageId: task.stageId,
+      taskType: "child",
       parentTaskId: task.id,
       ownerIds: task.internalOwnerIds,
       collaborationTags: task.collaborationTags,
@@ -5176,6 +8507,9 @@ function renderTodoDrawer() {
   });
   drawer.querySelectorAll("[data-open-child-task]").forEach((button) => {
     button.addEventListener("click", () => openTodoDrawer(button.dataset.openChildTask, "view"));
+  });
+  drawer.querySelectorAll("[data-open-parent-task]").forEach((button) => {
+    button.addEventListener("click", () => openTodoDrawer(button.dataset.openParentTask, "view"));
   });
   drawer.querySelector("[data-add-step]")?.addEventListener("click", () => {
     const input = drawer.querySelector("[data-new-step-title]");
@@ -5216,7 +8550,9 @@ function renderTodoDrawer() {
   if (!form) return;
 
   const drawerFields = getDrawerDateFields(form);
+  const drawerRecurrenceFields = getDrawerRecurrenceFields(form);
   const updateDrawerDates = (autoCorrect = true) => updateTaskDateConstraints(drawerFields, autoCorrect);
+  const syncDrawerRecurrence = () => syncTaskRecurrenceFields(drawerRecurrenceFields);
   const syncDrawerCompletedDate = () => {
     const isDone = normalizeTaskStatus(form.elements.status.value) === "done";
     const field = form.querySelector("[data-drawer-completed-date-field]");
@@ -5244,122 +8580,270 @@ function renderTodoDrawer() {
     syncDrawerTaskPermissions(form, task);
     syncDrawerStageAndParentOptions(form, task);
   });
+  form.elements.taskType?.addEventListener("change", () => syncDrawerStageAndParentOptions(form, task));
   form.elements.status.addEventListener("change", syncDrawerCompletedDate);
   drawerFields.rangeStart.addEventListener("change", () => updateDrawerDates(true));
   drawerFields.rangeEnd.addEventListener("change", () => updateDrawerDates(true));
   drawerFields.executionDate.addEventListener("change", () => updateDrawerDates(false));
   drawerFields.deadline.addEventListener("change", () => updateDrawerDates(false));
+  drawerRecurrenceFields.isRecurring?.addEventListener("change", syncDrawerRecurrence);
+  drawerRecurrenceFields.recurrenceType?.addEventListener("change", syncDrawerRecurrence);
+  drawerRecurrenceFields.recurrenceDailyMode?.addEventListener("change", syncDrawerRecurrence);
+  drawerRecurrenceFields.recurrenceMonthlyMode?.addEventListener("change", syncDrawerRecurrence);
+  drawerRecurrenceFields.recurrenceYearlyMode?.addEventListener("change", syncDrawerRecurrence);
+  drawerRecurrenceFields.recurrenceEndMode?.addEventListener("change", syncDrawerRecurrence);
+  drawerRecurrenceFields.recurrenceStartDate?.addEventListener("change", syncDrawerRecurrence);
+  drawerRecurrenceFields.recurrenceStartTime?.addEventListener("change", () => handleRecurrenceTimeInput(drawerRecurrenceFields, "start"));
+  drawerRecurrenceFields.recurrenceEndTime?.addEventListener("change", () => handleRecurrenceTimeInput(drawerRecurrenceFields, "end"));
+  drawerRecurrenceFields.recurrenceDuration?.addEventListener("input", () => handleRecurrenceTimeInput(drawerRecurrenceFields, "duration"));
+  [
+    drawerRecurrenceFields.recurrenceInterval,
+    drawerRecurrenceFields.recurrenceEndDate,
+    drawerRecurrenceFields.recurrenceCount,
+    drawerRecurrenceFields.recurrenceMonthDay,
+    drawerRecurrenceFields.recurrenceYearlyMonth,
+    drawerRecurrenceFields.recurrenceYearlyDay,
+    drawerRecurrenceFields.recurrenceWeekOrder,
+    drawerRecurrenceFields.recurrenceWeekday,
+    drawerRecurrenceFields.dueRuleType,
+    drawerRecurrenceFields.dueRuleDays,
+    ...drawerRecurrenceFields.recurrenceWeekdays,
+  ].filter(Boolean).forEach((field) => {
+    field.addEventListener("input", syncDrawerRecurrence);
+    field.addEventListener("change", syncDrawerRecurrence);
+  });
   form.addEventListener("submit", handleDrawerTaskSubmit);
   syncDrawerScopeFields(form, false);
   syncDrawerOwnerOptions(form, task);
   syncDrawerTaskPermissions(form, task);
   syncDrawerStageAndParentOptions(form, task);
   syncDrawerCompletedDate();
+  syncDrawerRecurrence();
   updateDrawerDates(false);
+}
+
+function renderRecurringTaskNotice(task = {}) {
+  if (isRecurringTemplateTask(task)) {
+    return `
+      <div class="recurring-task-notice template">
+        <strong>這是一個週期性任務模板</strong>
+        <span>系統會依照設定日期產生當次待辦；模板本身不代表某一次工作完成。</span>
+      </div>
+    `;
+  }
+  if (isRecurringOccurrenceTask(task)) {
+    const completed = task.status === "done";
+    return `
+      <div class="recurring-task-notice occurrence">
+        <strong>${completed ? "此週期任務的本次執行已完成" : "此任務為週期性任務的本次執行"}</strong>
+        <span>它可以像一般任務一樣處理、記錄歷程與標示完成，不會影響週期模板。</span>
+      </div>
+    `;
+  }
+  return "";
 }
 
 function renderTodoDrawerView(task) {
   const system = getSystem(task.systemId);
   const project = getProject(task.projectId);
-  const emailList = task.relatedEmails?.length
-    ? `<ul>${task.relatedEmails.map((title) => `<li>${escapeHtml(title)}</li>`).join("")}</ul>`
-    : `<strong>無</strong>`;
-  const linkList = task.relatedLinks?.length
-    ? `<ul>${task.relatedLinks.map((link) => `<li><a href="${escapeHtml(link.url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(link.title || link.url)}</a></li>`).join("")}</ul>`
-    : `<strong>無</strong>`;
-  const stepProgress = getTaskStepProgress(task);
-  const tagList = task.tags?.length ? `<div class="tags">${renderTagButtons(task.tags)}</div>` : `<strong>無</strong>`;
-  const stakeholders = task.collaborationTags?.length ? task.collaborationTags.join(", ") : "無";
-  const stage = task.stageId ? state.projectStages.find((item) => item.id === task.stageId) : null;
   const parentTask = task.parentTaskId ? getProjectTask(task.parentTaskId) : null;
-  const childTasks = state.tasks.filter((item) => item.parentTaskId === task.id).sort(compareManualThenName);
-  const recurrenceLabel = task.isRecurring ? getRecurrenceLabel(task) : "否";
+  const parentHeader = renderTaskParentHeader(parentTask, "返回母任務");
+  const childTasks = getUniqueTasksForDisplay(state.tasks)
+    .filter((item) => item.parentTaskId === task.id)
+    .sort(compareSubtasksByStartTime);
+  const activeTab = normalizeTaskDrawerTab(activeTaskDrawerTab);
+  const tabs = getTaskDrawerTabs(task, childTasks);
+  const systemName = getTaskScope(task) === "general" ? "一般工作" : system?.name || "未指定系統";
+  const projectName = getTaskScope(task) === "project" ? project?.name || "未指定專案" : getTaskScope(task) === "system" ? "系統層級任務" : "無專案";
+  const tagList = task.tags?.length ? `<div class="tags drawer-header-tags">${renderTagButtons(task.tags)}</div>` : `<span class="drawer-muted">無標籤</span>`;
+  const recurringNotice = renderRecurringTaskNotice(task);
+  const completeButton = isRecurringTemplateTask(task)
+    ? ""
+    : `<button class="secondary-button" type="button" data-drawer-complete>${task.status === "done" ? "還原未完成" : "標示完成"}</button>`;
+  const templateActions = isRecurringTemplateTask(task)
+    ? `
+      <button class="secondary-button" type="button" data-template-status="${task.status === "paused" ? "doing" : "paused"}">${task.status === "paused" ? "恢復週期" : "暫停週期"}</button>
+      <button class="secondary-button" type="button" data-template-status="done">結束週期</button>
+    `
+    : "";
 
   return `
-    <div class="drawer-header">
-      <div>
-        <p class="eyebrow">${escapeHtml(getTaskContextLabel(task))}</p>
-        <h2>${escapeHtml(task.title)}</h2>
+    <div class="drawer-sticky-header">
+      <div class="drawer-header">
+        <div class="drawer-title-block">
+          <div class="drawer-context-grid" aria-label="任務歸屬">
+            <span>系統</span>
+            <strong>${escapeHtml(systemName)}</strong>
+            <span>專案</span>
+            <strong>${escapeHtml(projectName)}</strong>
+          </div>
+          <h2>${escapeHtml(task.title)}</h2>
+          ${parentHeader}
+          ${tagList}
+        </div>
+        <button class="drawer-close" type="button" data-close-drawer aria-label="關閉">×</button>
       </div>
-      <button class="drawer-close" type="button" data-close-drawer aria-label="關閉">×</button>
+      <div class="drawer-actions drawer-primary-actions">
+        <button class="primary-button" type="button" data-drawer-edit>編輯任務</button>
+        ${completeButton}
+        ${templateActions}
+        <button class="secondary-button" type="button" data-drawer-important>${task.important ? "★ 重要" : "☆ 標記重要"}</button>
+        <button class="ghost-button" type="button" data-drawer-delete>刪除任務</button>
+      </div>
+      ${recurringNotice}
+      <div class="drawer-tabs" role="tablist" aria-label="任務詳情分頁">
+        ${tabs.map((tab) => `
+          <button class="${activeTab === tab.id ? "active" : ""}" type="button" role="tab" data-drawer-tab="${tab.id}" aria-selected="${activeTab === tab.id}">
+            ${tab.label}${tab.count !== "" ? `<span>${tab.count}</span>` : ""}
+          </button>
+        `).join("")}
+      </div>
     </div>
-    <div class="drawer-actions">
-      <button class="primary-button" type="button" data-drawer-edit>編輯任務</button>
-      <button class="secondary-button" type="button" data-drawer-complete>${task.status === "done" ? "取消完成" : "標示完成"}</button>
-      <button class="secondary-button" type="button" data-drawer-important>${task.important ? "★ 重要" : "☆ 標記重要"}</button>
+    <div class="drawer-tab-panel" role="tabpanel">
+      ${renderTaskDrawerTabPanel(task, activeTab, childTasks)}
     </div>
-    <section class="drawer-section">
-      <span>任務內容</span>
-      <strong>${escapeHtml(task.description || "沒有描述")}</strong>
-    </section>
-    <section class="drawer-section">
+  `;
+}
+
+function normalizeTaskDrawerTab(tab = "") {
+  return ["summary", "history", "subtasks", "relations"].includes(tab) ? tab : "summary";
+}
+
+function getTaskDrawerTabs(task, childTasks = []) {
+  return [
+    { id: "summary", label: "概要", count: "" },
+    { id: "history", label: "歷程", count: (task.history || []).length },
+    { id: "subtasks", label: "子任務", count: childTasks.length },
+    { id: "relations", label: "關聯資料", count: (task.relatedEmails || []).length + (task.relatedLinks || []).length },
+  ];
+}
+
+function renderTaskDrawerTabPanel(task, tab, childTasks = []) {
+  if (tab === "history") return renderTaskDrawerHistoryTab(task);
+  if (tab === "subtasks") return renderTaskDrawerSubtasksTab(task, childTasks);
+  if (tab === "relations") return renderTaskDrawerRelationsTab(task);
+  return renderTaskDrawerSummaryTab(task);
+}
+
+function renderTaskDrawerSummaryTab(task) {
+  const stage = task.stageId ? state.projectStages.find((item) => item.id === task.stageId) : null;
+  const parentTask = task.parentTaskId ? getProjectTask(task.parentTaskId) : null;
+  const stepProgress = getTaskStepProgress(task);
+  const recurrenceLabel = isRecurringTemplateTask(task)
+    ? getRecurrenceLabel(task)
+    : isRecurringOccurrenceTask(task)
+      ? task.recurringLabel || "週期當次任務"
+      : "否";
+  const stakeholders = task.collaborationTags?.length ? task.collaborationTags.join(", ") : "無";
+  const recurringLog = isRecurringTemplateTask(task) ? renderRecurringExecutionLog(task) : "";
+
+  return `
+    <section class="drawer-info-card">
+      <div class="drawer-section-heading">
+        <h3>任務主資訊</h3>
+      </div>
+      <div class="drawer-description">${escapeHtml(task.description || "沒有描述")}</div>
       <div class="drawer-section-heading">
         <span>細項步驟</span>
         <strong>${stepProgress.done} / ${stepProgress.total}</strong>
       </div>
-      <div class="task-step-list">
-        ${renderTaskSteps(task)}
-      </div>
+      <div class="task-step-list">${renderTaskSteps(task)}</div>
       <div class="task-inline-add">
         <input data-new-step-title maxlength="100" placeholder="下一個步驟" />
         <button type="button" data-add-step>新增</button>
       </div>
     </section>
-    <section class="drawer-section">
-      <span>狀態 / 優先級</span>
-      <strong>${getStatusLabel(task.status)} / ${getPriorityLabel(task.priority)}</strong>
-    </section>
-    <section class="drawer-section">
-      <span>執行日期</span>
-      <strong>${formatDate(task.executionDate)}</strong>
-      <span>最後期限</span>
-      <strong>${formatDate(task.deadline)}</strong>
-      <span>執行區間</span>
-      <strong>${formatRange(task.startDate || task.rangeStart, task.endDate || task.rangeEnd)}</strong>
-      <span>週期性</span>
-      <strong>${escapeHtml(recurrenceLabel)}</strong>
-      <span>已完成日期</span>
-      <strong>${task.completedDate ? formatDate(task.completedDate) : "未完成"}</strong>
-    </section>
-    <section class="drawer-section">
-      <span>內部負責人</span>
-      <strong>${escapeHtml(task.owner || "未指定")}</strong>
-      <span>協作對象</span>
-      <strong>${escapeHtml(stakeholders)}</strong>
-      <span>專案階段</span>
-      <strong>${escapeHtml(stage?.name || "未指定")}</strong>
-      <span>母任務</span>
-      <strong>${escapeHtml(parentTask?.title || "無")}</strong>
-      <span>標籤</span>
-      ${tagList}
-    </section>
-    <section class="drawer-section">
+    <section class="drawer-info-card">
       <div class="drawer-section-heading">
-        <span>子任務</span>
-        <strong>${childTasks.length} 筆</strong>
+        <h3>時程與狀態</h3>
       </div>
-      ${childTasks.length ? `<div class="subtask-list">${childTasks.map((child) => `<button type="button" class="subtask-row" data-open-child-task="${child.id}"><span>${escapeHtml(child.title)}</span><strong>${getStatusLabel(child.status)}</strong></button>`).join("")}</div>` : `<p class="drawer-empty">尚未新增子任務。</p>`}
-      <button class="secondary-button" type="button" data-add-subtask="${task.id}">新增子任務</button>
+      <dl class="drawer-info-grid">
+        <div><dt>狀態</dt><dd>${escapeHtml(getStatusLabel(task.status))}</dd></div>
+        <div><dt>優先級</dt><dd>${escapeHtml(getPriorityLabel(task.priority))}</dd></div>
+        <div><dt>執行日期</dt><dd>${formatDate(task.executionDate)}</dd></div>
+        <div><dt>最後期限</dt><dd>${formatDate(task.deadline)}</dd></div>
+        <div><dt>執行區間</dt><dd>${formatRange(task.startDate || task.rangeStart, task.endDate || task.rangeEnd)}</dd></div>
+        <div><dt>完成日期</dt><dd>${task.completedDate ? formatDate(task.completedDate) : "未完成"}</dd></div>
+        <div><dt>週期性</dt><dd>${escapeHtml(recurrenceLabel)}</dd></div>
+      </dl>
     </section>
-    <section class="drawer-section">
-      <span>關聯信件</span>
-      ${emailList}
-    </section>
-    <section class="drawer-section">
-      <span>關聯連結</span>
-      ${linkList}
-    </section>
-    <section class="drawer-section">
-      <span>記事</span>
-      <textarea class="task-notes-field" data-task-notes rows="5" placeholder="新增記事">${escapeHtml(task.notes || "")}</textarea>
-    </section>
-    <section class="drawer-section">
+    <section class="drawer-info-card">
       <div class="drawer-section-heading">
-        <span>歷程紀錄</span>
+        <h3>人員與分類</h3>
+      </div>
+      <dl class="drawer-info-grid">
+        <div><dt>內部負責人</dt><dd>${escapeHtml(task.owner || task.ownerName || "未指定")}</dd></div>
+        <div><dt>協作對象</dt><dd>${escapeHtml(stakeholders)}</dd></div>
+        <div><dt>專案階段</dt><dd>${escapeHtml(stage?.name || "未指定")}</dd></div>
+        <div><dt>母任務</dt><dd>${parentTask ? `<button class="drawer-parent-link" type="button" data-open-parent-task="${parentTask.id}">${escapeHtml(parentTask.title)}</button>` : "無"}</dd></div>
+      </dl>
+    </section>
+    ${recurringLog}
+  `;
+}
+
+function getRecurringExecutionRows(template = {}, referenceDate = todayString(), limit = 12) {
+  const getOccurrenceDate = (task = {}) => task.occurrenceDate || task.executionDate || "";
+  const occurrences = state.tasks
+    .filter((task) => isRecurringOccurrenceTask(task) && task.templateTaskId === template.id)
+    .filter((task) => !isTaskDeleted(task))
+    .filter((task) => getOccurrenceDate(task))
+    .sort((a, b) => getOccurrenceDate(a).localeCompare(getOccurrenceDate(b)));
+  const upcoming = occurrences.filter((task) => getOccurrenceDate(task) >= referenceDate);
+  const past = occurrences
+    .filter((task) => getOccurrenceDate(task) < referenceDate)
+    .sort((a, b) => getOccurrenceDate(b).localeCompare(getOccurrenceDate(a)));
+  return [...upcoming, ...past].slice(0, limit);
+}
+
+function renderRecurringExecutionLog(template = {}) {
+  const occurrences = getRecurringExecutionRows(template, todayString(), 12);
+  const rule = normalizeRecurrenceRule(template.recurrenceRule || {}, template);
+  const upcomingDates = getUpcomingRecurringPreviewDates(rule, 5);
+  const timeLabel = rule.startTime && rule.endTime
+    ? `${rule.startTime} 到 ${rule.endTime}`
+    : rule.startTime || rule.endTime || "未設定時間";
+
+  return `
+    <section class="drawer-info-card recurring-execution-log">
+      <div class="drawer-section-heading">
+        <h3>近期執行紀錄</h3>
+        <strong>${occurrences.length} 筆</strong>
+      </div>
+      ${occurrences.length ? `
+        <div class="recurring-execution-list">
+          ${occurrences.map((occurrence) => `
+            <button type="button" class="recurring-execution-row" data-open-child-task="${occurrence.id}">
+              <span>${escapeHtml(occurrence.occurrenceDate || occurrence.executionDate || "")} ${escapeHtml(formatGanttWeekday(occurrence.occurrenceDate || occurrence.executionDate || todayString()))}</span>
+              <strong>${escapeHtml(getStatusLabel(occurrence.status))}</strong>
+              <small>${escapeHtml([occurrence.startTime, occurrence.endTime].filter(Boolean).join(" 到 ") || "未設定時間")}</small>
+              <small>${occurrence.completedDate ? `完成：${escapeHtml(formatDate(occurrence.completedDate))}` : "尚未完成"}</small>
+            </button>
+          `).join("")}
+        </div>
+      ` : `<p class="drawer-empty">尚未產生當次任務。</p>`}
+      <div class="drawer-section-heading compact">
+        <h3>未來 5 次預覽</h3>
+      </div>
+      <ol class="recurrence-preview-list static">
+        ${upcomingDates.length ? upcomingDates.map((date) => `<li><span>${escapeHtml(date)} ${escapeHtml(formatGanttWeekday(date))}</span><strong>${escapeHtml(timeLabel)}</strong></li>`).join("") : `<li class="recurrence-preview-empty">目前沒有未來預覽。</li>`}
+      </ol>
+    </section>
+  `;
+}
+
+function renderTaskDrawerHistoryTab(task) {
+  return `
+    <section class="drawer-info-card">
+      <div class="drawer-section-heading">
+        <h3>歷程紀錄</h3>
         <strong>${(task.history || []).length} 筆</strong>
       </div>
-      <div class="task-history-list">
-        ${renderTaskHistory(task)}
+      <div class="task-history-list">${renderTaskHistory(task)}</div>
+    </section>
+    <section class="drawer-info-card">
+      <div class="drawer-section-heading">
+        <h3>新增歷程</h3>
       </div>
       <form class="task-history-form" data-history-form>
         <label>
@@ -5374,9 +8858,7 @@ function renderTodoDrawerView(task) {
           補充說明
           <textarea name="note" rows="2" maxlength="300" placeholder="可填信件主旨、背景或提醒"></textarea>
         </label>
-        <div class="history-link-inputs" data-history-link-inputs>
-          ${renderHistoryLinkInputRow()}
-        </div>
+        <div class="history-link-inputs" data-history-link-inputs>${renderHistoryLinkInputRow()}</div>
         <div class="drawer-actions">
           <button class="secondary-button" type="button" data-add-history-link>新增連結</button>
           <button class="primary-button" type="submit">新增歷程</button>
@@ -5386,12 +8868,287 @@ function renderTodoDrawerView(task) {
   `;
 }
 
+function renderTaskDrawerSubtasksTab(task, childTasks = []) {
+  const canAddSubtask = getTaskType(task) === "parent" && getTaskScope(task) === "project";
+  return `
+    <section class="drawer-info-card">
+      <div class="drawer-section-heading">
+        <h3>子任務</h3>
+        <strong>${childTasks.length} 筆</strong>
+      </div>
+      ${childTasks.length ? `<div class="subtask-list">${childTasks.map(renderDrawerSubtaskRow).join("")}</div>` : `<p class="drawer-empty">尚未新增子任務。</p>`}
+      ${canAddSubtask ? `<button class="secondary-button" type="button" data-add-subtask="${task.id}">新增子任務</button>` : ""}
+    </section>
+  `;
+}
+
+function renderDrawerSubtaskRow(child) {
+  return `
+    <button type="button" class="subtask-row drawer-subtask-row" data-open-child-task="${child.id}">
+      <span>${escapeHtml(child.title)}</span>
+      <small>${escapeHtml(getTaskContextLabel(child))}</small>
+      <strong>${escapeHtml(getStatusLabel(child.status))}・${escapeHtml(getPriorityLabel(child.priority))}</strong>
+      <small>期限 ${formatDate(child.deadline)}・負責人 ${escapeHtml(child.owner || child.ownerName || "未指定")}</small>
+    </button>
+  `;
+}
+
+function renderTaskDrawerRelationsTab(task) {
+  const emailList = task.relatedEmails?.length
+    ? `<ul class="drawer-related-list">${task.relatedEmails.map((title) => `<li>${escapeHtml(title)}</li>`).join("")}</ul>`
+    : `<p class="drawer-empty">無關聯信件。</p>`;
+  const linkList = task.relatedLinks?.length
+    ? `<ul class="drawer-related-list">${task.relatedLinks.map((link) => `<li><a href="${escapeHtml(link.url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(link.title || link.url)}</a></li>`).join("")}</ul>`
+    : `<p class="drawer-empty">無關聯連結。</p>`;
+
+  return `
+    <section class="drawer-info-card">
+      <div class="drawer-section-heading">
+        <h3>關聯信件</h3>
+        <strong>${task.relatedEmails?.length || 0}</strong>
+      </div>
+      ${emailList}
+    </section>
+    <section class="drawer-info-card">
+      <div class="drawer-section-heading">
+        <h3>關聯連結</h3>
+        <strong>${task.relatedLinks?.length || 0}</strong>
+      </div>
+      ${linkList}
+    </section>
+    <section class="drawer-info-card">
+      <div class="drawer-section-heading">
+        <h3>記事</h3>
+      </div>
+      <textarea class="task-notes-field" data-task-notes rows="6" placeholder="新增記事">${escapeHtml(task.notes || "")}</textarea>
+    </section>
+  `;
+}
+
+function renderDrawerRecurrenceFields(task = {}) {
+  const rule = normalizeRecurrenceRule(task.recurrenceRule || {}, task);
+  const enabled = Boolean(isRecurringTemplateTask(task) && rule.type);
+  const dueRule = normalizeDueRule(task.dueRule);
+  const weekDays = rule.weekDays || [];
+  const weekdayCheckboxes = [
+    ["0", "日"],
+    ["1", "一"],
+    ["2", "二"],
+    ["3", "三"],
+    ["4", "四"],
+    ["5", "五"],
+    ["6", "六"],
+  ].map(([value, label]) => {
+    const checked = weekDays.includes(Number(value)) ? "checked" : "";
+    return `<label><input type="checkbox" name="recurrenceWeekday" value="${value}" ${checked} />${label}</label>`;
+  }).join("");
+
+  return `
+    <section class="phase-schedule-editor recurrence-editor drawer-recurrence-editor" aria-label="週期性任務">
+      <div>
+        <h3>週期性任務</h3>
+        <p>週期任務只會在符合執行日期時出現在今日待辦。</p>
+      </div>
+      <label class="checkbox-field">
+        <input name="isRecurring" type="checkbox" ${enabled ? "checked" : ""} />
+        啟用週期設定
+      </label>
+      <div class="recurrence-rule-panel ${enabled ? "" : "hidden"}" data-drawer-recurrence-rule-panel>
+        <section class="recurrence-editor-section" aria-label="每次任務時間">
+          <h4>每次任務時間</h4>
+          <div class="drawer-edit-grid">
+            <label>
+              開始時間
+              <input name="recurrenceStartTime" type="time" value="${enabled ? rule.startTime || "" : ""}" />
+            </label>
+            <label>
+              結束時間
+              <input name="recurrenceEndTime" type="time" value="${enabled ? rule.endTime || "" : ""}" />
+            </label>
+            <label>
+              執行期間（分鐘）
+              <input name="recurrenceDuration" type="number" min="0" max="1439" value="${enabled && rule.durationMinutes ? rule.durationMinutes : ""}" readonly />
+            </label>
+          </div>
+        </section>
+
+        <section class="recurrence-editor-section" aria-label="重複規則">
+          <h4>重複規則</h4>
+          <div class="drawer-edit-grid">
+            <label>
+              週期類型
+              <select name="recurrenceType">
+                ${renderRecurrenceTypeOptions(rule.type)}
+              </select>
+            </label>
+            <label data-drawer-recurrence-interval-field>
+              <span data-drawer-recurrence-interval-label>每隔</span>
+              <span class="inline-number-field">
+                <input name="recurrenceInterval" type="number" min="1" max="365" value="${enabled ? rule.interval || 1 : ""}" />
+                <span data-drawer-recurrence-interval-unit>天</span>
+              </span>
+            </label>
+          </div>
+          <div class="recurrence-pattern-section" data-drawer-recurrence-daily-field>
+            <label>
+              每日規則
+              <select name="recurrenceDailyMode">
+                <option value="interval" ${rule.dailyMode === "interval" ? "selected" : ""}>每隔 N 天</option>
+                <option value="weekday" ${rule.dailyMode === "weekday" ? "selected" : ""}>每個工作日</option>
+              </select>
+            </label>
+          </div>
+          <div class="recurrence-weekday-field" data-drawer-recurrence-weekday-field>
+            <span>重複於星期</span>
+            <div class="weekday-picker">${weekdayCheckboxes}</div>
+          </div>
+          <div class="recurrence-pattern-section" data-drawer-recurrence-monthly-field>
+            <div class="drawer-edit-grid">
+              <label>
+                每月設定
+                <select name="recurrenceMonthlyMode">
+                  <option value="dayOfMonth" ${rule.monthlyMode === "dayOfMonth" ? "selected" : ""}>固定日期</option>
+                  <option value="nthWeekday" ${rule.monthlyMode === "nthWeekday" ? "selected" : ""}>星期規則</option>
+                </select>
+              </label>
+              <label data-drawer-recurrence-month-day-field>
+                日期
+                <input name="recurrenceMonthDay" type="number" min="1" max="31" value="${enabled && rule.monthDay ? rule.monthDay : ""}" />
+              </label>
+            </div>
+          </div>
+          <div class="recurrence-pattern-section" data-drawer-recurrence-yearly-field>
+            <div class="drawer-edit-grid">
+              <label>
+                每年設定
+                <select name="recurrenceYearlyMode">
+                  <option value="date" ${rule.yearlyMode === "date" ? "selected" : ""}>固定日期</option>
+                  <option value="nthWeekday" ${rule.yearlyMode === "nthWeekday" ? "selected" : ""}>星期規則</option>
+                </select>
+              </label>
+              <label>
+                月份
+                <input name="recurrenceYearlyMonth" type="number" min="1" max="12" value="${enabled && rule.yearlyMonth ? rule.yearlyMonth : ""}" />
+              </label>
+              <label data-drawer-recurrence-yearly-day-field>
+                日期
+                <input name="recurrenceYearlyDay" type="number" min="1" max="31" value="${enabled && rule.yearlyDay ? rule.yearlyDay : ""}" />
+              </label>
+            </div>
+          </div>
+          <div class="drawer-edit-grid" data-drawer-recurrence-nth-weekday-field>
+            <label>
+              第幾個
+              <select name="recurrenceWeekOrder">
+                ${renderWeekOrderOptions(rule.weekOrder)}
+              </select>
+            </label>
+            <label>
+              星期
+              <select name="recurrenceNthWeekday">
+                ${renderWeekdaySelectOptions(rule.weekday)}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="recurrence-editor-section" aria-label="週期有效期間">
+          <h4>週期有效期間</h4>
+          <div class="drawer-edit-grid">
+            <label>
+              開始日期
+              <input name="recurrenceStartDate" type="date" value="${enabled ? rule.startDate || "" : ""}" />
+            </label>
+            <label>
+              結束條件
+              <select name="recurrenceEndMode">
+                <option value="none" ${rule.endMode === "none" ? "selected" : ""}>沒有結束日期</option>
+                <option value="date" ${rule.endMode === "date" ? "selected" : ""}>結束於指定日期</option>
+                <option value="count" ${rule.endMode === "count" ? "selected" : ""}>反覆 N 次之後結束</option>
+              </select>
+            </label>
+          </div>
+          <div class="drawer-edit-grid">
+            <label data-drawer-recurrence-end-date-field>
+              結束日期
+              <input name="recurrenceEndDate" type="date" value="${enabled ? rule.endDate || "" : ""}" />
+            </label>
+            <label data-drawer-recurrence-count-field>
+              次數
+              <input name="recurrenceCount" type="number" min="1" max="999" value="${enabled && rule.occurrenceCount ? rule.occurrenceCount : ""}" />
+            </label>
+          </div>
+        </section>
+        <section class="recurrence-editor-section" aria-label="每次任務期限規則">
+          <h4>每次任務期限規則</h4>
+          <div class="drawer-edit-grid">
+            <label>
+              期限規則
+              <select name="dueRuleType">
+                <option value="sameDay" ${dueRule.type === "sameDay" ? "selected" : ""}>當天完成</option>
+                <option value="afterDays" ${dueRule.type === "afterDays" ? "selected" : ""}>執行日後 N 天</option>
+                <option value="manual" ${dueRule.type === "manual" ? "selected" : ""}>產生後手動設定</option>
+              </select>
+            </label>
+            <label data-drawer-due-rule-days-field>
+              執行日後
+              <span class="inline-number-field">
+                <input name="dueRuleDays" type="number" min="0" max="365" value="${dueRule.type === "afterDays" ? dueRule.daysAfterOccurrence : ""}" />
+                <span>天</span>
+              </span>
+            </label>
+          </div>
+        </section>
+        <section class="recurrence-editor-section" aria-label="未來執行預覽">
+          <h4>未來 5 次執行預覽</h4>
+          <ol class="recurrence-preview-list" data-drawer-recurrence-preview-list></ol>
+        </section>
+      </div>
+    </section>
+  `;
+}
+
+function renderRecurrenceTypeOptions(selectedType = "") {
+  return [
+    ["", "不設定"],
+    ["daily", "每日"],
+    ["weekly", "每週"],
+    ["monthly", "每月"],
+    ["yearly", "每年"],
+  ].map(([value, label]) => `<option value="${value}" ${value === selectedType ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function renderWeekOrderOptions(selectedOrder = 1) {
+  return [
+    ["1", "第 1 個"],
+    ["2", "第 2 個"],
+    ["3", "第 3 個"],
+    ["4", "第 4 個"],
+    ["-1", "最後一個"],
+  ].map(([value, label]) => `<option value="${value}" ${String(selectedOrder) === value ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function renderWeekdaySelectOptions(selectedWeekday = 1) {
+  return [
+    ["0", "星期日"],
+    ["1", "星期一"],
+    ["2", "星期二"],
+    ["3", "星期三"],
+    ["4", "星期四"],
+    ["5", "星期五"],
+    ["6", "星期六"],
+  ].map(([value, label]) => `<option value="${value}" ${String(selectedWeekday) === value ? "selected" : ""}>${label}</option>`).join("");
+}
+
 function renderTodoDrawerEdit(task) {
+  const parentTask = task.parentTaskId ? getProjectTask(task.parentTaskId) : null;
+  const parentHeader = renderTaskParentHeader(parentTask);
   return `
     <div class="drawer-header">
       <div>
         <p class="eyebrow">編輯任務</p>
         <h2>${escapeHtml(task.title)}</h2>
+        ${parentHeader}
       </div>
       <button class="drawer-close" type="button" data-close-drawer aria-label="關閉">×</button>
     </div>
@@ -5413,9 +9170,13 @@ function renderTodoDrawerEdit(task) {
           專案階段
           <select name="stageId">${renderStageOptionsForProject(task.projectId, task.stageId)}</select>
         </label>
+        <label data-drawer-type-field>
+          任務層級
+          <select name="taskType">${renderTaskTypeOptions(getTaskType(task), { allowChild: getTaskScope(task) === "project" })}</select>
+        </label>
         <label data-drawer-parent-field>
           母任務
-          <select name="parentTaskId">${renderParentTaskOptions(task, task.projectId, task.parentTaskId)}</select>
+          <select name="parentTaskId">${renderParentTaskOptions(task, { scope: getTaskScope(task), systemId: task.systemId, projectId: task.projectId }, task.parentTaskId)}</select>
         </label>
       </div>
       <label>
@@ -5465,16 +9226,10 @@ function renderTodoDrawerEdit(task) {
         <input name="completedDate" type="date" value="${task.completedDate || ""}" />
       </label>
       <div class="drawer-edit-grid">
-        <label>
-          內部負責人
-          <select name="owner" multiple size="4" required>
-            ${renderOwnerOptions(getTaskOwnerChoices(task, {
-              scope: getTaskScope(task),
-              systemId: task.systemId,
-              projectId: task.projectId,
-            }), task.internalOwnerIds || task.ownerUid, task)}
-          </select>
-        </label>
+        <div class="drawer-edit-field">
+          <span>內部負責人</span>
+          <div class="search-multi-select" data-drawer-owner data-summary-unit="人"></div>
+        </div>
         <label>
           標籤
           <input name="tags" value="${escapeHtml(task.tags?.join(", ") || "")}" placeholder="以逗號分隔" />
@@ -5484,6 +9239,7 @@ function renderTodoDrawerEdit(task) {
         協作對象
         <input name="stakeholders" maxlength="160" value="${escapeHtml((task.collaborationTags || task.stakeholders || []).join(", ") || "")}" placeholder="以逗號分隔" />
       </label>
+      ${renderDrawerRecurrenceFields(task)}
       <label>
         關聯信件
         <textarea name="relatedEmails" rows="3" placeholder="一行一個信件標題">${escapeHtml((task.relatedEmails || []).join("\n"))}</textarea>
@@ -5493,10 +9249,21 @@ function renderTodoDrawerEdit(task) {
         <textarea name="relatedLinks" rows="3" placeholder="一行一筆：標題 | https://example.com">${escapeHtml(formatLinksForTextarea(task.relatedLinks || []))}</textarea>
       </label>
       <div class="drawer-actions">
+        <button class="ghost-button" type="button" data-drawer-delete>刪除任務</button>
+        ${getTaskType(task) === "parent" && getTaskScope(task) === "project" ? `<button class="secondary-button" type="button" data-add-subtask="${task.id}">新增子任務</button>` : ""}
         <button class="primary-button" type="submit">儲存</button>
         <button class="secondary-button" type="button" data-drawer-view>返回查看</button>
       </div>
     </form>
+  `;
+}
+
+function renderTaskParentHeader(parentTask, label = "母任務") {
+  if (!parentTask) return "";
+  return `
+    <button class="drawer-parent-link header" type="button" data-open-parent-task="${parentTask.id}">
+      ${escapeHtml(label)}：${escapeHtml(parentTask.title)}
+    </button>
   `;
 }
 
@@ -5524,17 +9291,28 @@ function renderTaskHistory(task) {
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
     .map((item) => {
       const links = item.links?.length
-        ? `<ul>${item.links.map((link) => `<li><a href="${escapeHtml(link.url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(link.name || link.url)}</a></li>`).join("")}</ul>`
+        ? `<ul>${item.links.map((link) => `<li><span>${escapeHtml(link.name || "未命名連結")}</span><a href="${escapeHtml(link.url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(link.url || link.name)}</a></li>`).join("")}</ul>`
         : "";
 
       return `
         <article class="task-history-card">
           <div class="task-history-card-header">
-            <strong>${formatDate(item.date)}</strong>
+            <div>
+              <span>日期</span>
+              <strong>${formatDate(item.date)}</strong>
+            </div>
             <button class="drawer-remove-button" type="button" data-remove-history="${item.id}" aria-label="刪除歷程">×</button>
           </div>
-          <p>${escapeHtml(item.description)}</p>
-          ${item.note ? `<small>${escapeHtml(item.note)}</small>` : ""}
+          <dl class="task-history-fields">
+            <div>
+              <dt>歷程描述</dt>
+              <dd>${escapeHtml(item.description || "未填寫")}</dd>
+            </div>
+            <div>
+              <dt>補充說明</dt>
+              <dd>${escapeHtml(item.note || "無")}</dd>
+            </div>
+          </dl>
           ${links}
         </article>
       `;
@@ -5578,7 +9356,7 @@ function addTaskStep(taskId, title) {
       steps: [...(task.steps || []), { id: createId(), title: trimmedTitle, completed: false }],
     };
   });
-  saveState();
+  saveTaskState([taskId]);
   render();
 }
 
@@ -5599,7 +9377,7 @@ function toggleTaskStep(taskId, stepId) {
       completedDate: task.status === "done" && !allStepsDone ? "" : task.completedDate,
     };
   });
-  saveState();
+  saveTaskState([taskId]);
   if (completedStep) playCompletionSound();
   render();
 }
@@ -5612,7 +9390,7 @@ function removeTaskStep(taskId, stepId) {
       steps: (task.steps || []).filter((step) => step.id !== stepId),
     };
   });
-  saveState();
+  saveTaskState([taskId]);
   render();
 }
 
@@ -5620,7 +9398,7 @@ function updateTaskNotes(taskId, notes) {
   state.tasks = state.tasks.map((task) => {
     return task.id === taskId ? { ...task, notes: notes.trim() } : task;
   });
-  saveState();
+  saveTaskState([taskId]);
   render();
 }
 
@@ -5649,7 +9427,7 @@ function addTaskHistory(taskId, entry) {
       history: [normalizedEntry, ...(task.history || [])],
     };
   });
-  saveState();
+  saveTaskState([taskId]);
   render();
 }
 
@@ -5661,7 +9439,7 @@ function removeTaskHistory(taskId, historyId) {
       history: (task.history || []).filter((item) => item.id !== historyId),
     };
   });
-  saveState();
+  saveTaskState([taskId]);
   render();
 }
 
@@ -5674,34 +9452,95 @@ function getDrawerDateFields(form) {
   };
 }
 
+function getDrawerRecurrenceFields(form) {
+  return {
+    isRecurring: form.elements.isRecurring,
+    recurrenceType: form.elements.recurrenceType,
+    recurrenceDailyField: form.querySelector("[data-drawer-recurrence-daily-field]"),
+    recurrenceDailyMode: form.elements.recurrenceDailyMode,
+    recurrenceIntervalField: form.querySelector("[data-drawer-recurrence-interval-field]"),
+    recurrenceIntervalLabel: form.querySelector("[data-drawer-recurrence-interval-label]"),
+    recurrenceInterval: form.elements.recurrenceInterval,
+    recurrenceIntervalUnit: form.querySelector("[data-drawer-recurrence-interval-unit]"),
+    recurrenceRulePanel: form.querySelector("[data-drawer-recurrence-rule-panel]"),
+    recurrenceStartDate: form.elements.recurrenceStartDate,
+    recurrenceEndMode: form.elements.recurrenceEndMode,
+    recurrenceEndDateField: form.querySelector("[data-drawer-recurrence-end-date-field]"),
+    recurrenceEndDate: form.elements.recurrenceEndDate,
+    recurrenceCountField: form.querySelector("[data-drawer-recurrence-count-field]"),
+    recurrenceCount: form.elements.recurrenceCount,
+    recurrenceWeekdayField: form.querySelector("[data-drawer-recurrence-weekday-field]"),
+    recurrenceWeekdays: form.querySelectorAll('[name="recurrenceWeekday"]'),
+    recurrenceMonthlyField: form.querySelector("[data-drawer-recurrence-monthly-field]"),
+    recurrenceMonthlyMode: form.elements.recurrenceMonthlyMode,
+    recurrenceMonthDayField: form.querySelector("[data-drawer-recurrence-month-day-field]"),
+    recurrenceMonthDay: form.elements.recurrenceMonthDay,
+    recurrenceYearlyField: form.querySelector("[data-drawer-recurrence-yearly-field]"),
+    recurrenceYearlyMode: form.elements.recurrenceYearlyMode,
+    recurrenceYearlyMonth: form.elements.recurrenceYearlyMonth,
+    recurrenceYearlyDayField: form.querySelector("[data-drawer-recurrence-yearly-day-field]"),
+    recurrenceYearlyDay: form.elements.recurrenceYearlyDay,
+    recurrenceNthWeekdayField: form.querySelector("[data-drawer-recurrence-nth-weekday-field]"),
+    recurrenceWeekOrder: form.elements.recurrenceWeekOrder,
+    recurrenceWeekday: form.elements.recurrenceNthWeekday,
+    recurrenceStartTime: form.elements.recurrenceStartTime,
+    recurrenceEndTime: form.elements.recurrenceEndTime,
+    recurrenceDuration: form.elements.recurrenceDuration,
+    dueRuleType: form.elements.dueRuleType,
+    dueRuleDaysField: form.querySelector("[data-drawer-due-rule-days-field]"),
+    dueRuleDays: form.elements.dueRuleDays,
+    recurrencePreviewList: form.querySelector("[data-drawer-recurrence-preview-list]"),
+    rangeStartField: form.elements.rangeStart?.closest("label"),
+    rangeEndField: form.elements.rangeEnd?.closest("label"),
+    executionDateField: form.elements.executionDate?.closest("label"),
+    deadlineField: form.elements.deadline?.closest("label"),
+    executionDate: form.elements.executionDate,
+    rangeStart: form.elements.rangeStart,
+    rangeEnd: form.elements.rangeEnd,
+    deadline: form.elements.deadline,
+  };
+}
+
 function handleDrawerTaskSubmit(event) {
   event.preventDefault();
 
   const form = event.currentTarget;
   const fields = getDrawerDateFields(form);
   updateTaskDateConstraints(fields);
+  const recurrenceFields = getDrawerRecurrenceFields(form);
+  const recurrenceRule = collectTaskRecurrenceRule(recurrenceFields);
+  const isRecurring = Boolean(form.elements.isRecurring?.checked && recurrenceRule.type);
+  const dueRule = collectTaskDueRule(recurrenceFields);
 
-  const rangeStart = fields.rangeStart.value;
-  const rangeEnd = fields.rangeEnd.value;
-  const executionDate = fields.executionDate.value;
-  const deadline = fields.deadline.value;
+  const rangeStart = isRecurring ? recurrenceRule.startDate || "" : fields.rangeStart.value;
+  const rangeEnd = isRecurring
+    ? recurrenceRule.endMode === "date"
+      ? recurrenceRule.endDate || recurrenceRule.startDate || ""
+      : recurrenceRule.startDate || ""
+    : fields.rangeEnd.value;
+  const executionDate = isRecurring ? "" : fields.executionDate.value;
+  const deadline = isRecurring ? "" : fields.deadline.value;
 
-  if (!validateTaskDates(rangeStart, rangeEnd, executionDate, deadline)) return;
+  if (!isRecurring && !validateTaskDates(rangeStart, rangeEnd, executionDate, deadline)) return;
 
   const existingTask = getProjectTask(selectedTodoTaskId);
   if (!existingTask) return;
   const scopeValues = getTaskScopeValuesFromForm(form);
   if (!validateTaskScopeValues(scopeValues)) return;
+  const taskType = normalizeTaskTypeValue(form.elements.taskType?.value || "normal");
+  const parentTaskId = scopeValues.scope === "project" && taskType === "child" ? form.elements.parentTaskId?.value || "" : "";
+  if (!validateTaskTypeSelection({ taskType, parentTaskId, scope: scopeValues.scope, projectId: scopeValues.projectId, existingTask })) return;
 
   const status = normalizeTaskStatus(form.elements.status.value);
-  if (status === "done" && !canCompleteTask(existingTask)) {
+  if (status === "done" && !isRecurringTemplateTask(existingTask) && !canCompleteTask(existingTask)) {
     alert("請先完成所有細項步驟，才能將任務狀態改為已完成。");
     return;
   }
 
   const requestedCompletedDate = status === "done" ? form.elements.completedDate.value || todayString() : "";
-  const ownerIds = ownerSelectValue(form.elements.owner, existingTask);
-  const owner = getOwnerPayload(ownerIds[0], existingTask || {});
+  const ownerIds = ownerSelectValue(getDrawerOwnerControl(form), existingTask);
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, existingTask || {}), existingTask || {});
+  if (isRecurring && !validateRecurrenceRule(recurrenceRule)) return;
 
   const updatedTask = applyTaskStatusSideEffects({
     ...existingTask,
@@ -5709,7 +9548,8 @@ function handleDrawerTaskSubmit(event) {
     systemId: scopeValues.systemId,
     projectId: scopeValues.projectId,
     stageId: scopeValues.scope === "project" ? form.elements.stageId?.value || "" : "",
-    parentTaskId: form.elements.parentTaskId?.value || "",
+    parentTaskId,
+    taskType: parentTaskId ? "child" : taskType,
     internalOwnerIds: ownerIds,
     ...owner,
     ownerName: getOwnerNames(ownerIds, existingTask || {}),
@@ -5724,9 +9564,19 @@ function handleDrawerTaskSubmit(event) {
     rangeEnd,
     executionDate,
     deadline,
+    dueDate: deadline,
     tags: splitCommaList(form.elements.tags.value),
     collaborationTags: splitCommaList(form.elements.stakeholders.value),
     stakeholders: splitCommaList(form.elements.stakeholders.value),
+    isRecurring,
+    recurrenceEnabled: isRecurring,
+    isRecurringTemplate: isRecurring,
+    isRecurringOccurrence: isRecurring ? false : existingTask.isRecurringOccurrence || false,
+    templateTaskId: isRecurring ? "" : existingTask.templateTaskId || "",
+    occurrenceDate: isRecurring ? "" : existingTask.occurrenceDate || "",
+    recurrenceType: isRecurring ? recurrenceRule.type : "",
+    recurrenceRule: isRecurring ? recurrenceRule : {},
+    dueRule: isRecurring ? dueRule : normalizeDueRule(existingTask.dueRule),
     relatedEmails: parseEmailTextarea(form.elements.relatedEmails.value),
     relatedLinks: parseLinkTextarea(form.elements.relatedLinks.value),
   }, existingTask, requestedCompletedDate);
@@ -5735,7 +9585,7 @@ function handleDrawerTaskSubmit(event) {
   selectedSystemId = updatedTask.scope === "general" ? generalWorkScopeId : updatedTask.systemId;
   selectedProjectId = updatedTask.projectId || "all";
   drawerMode = "view";
-  saveState();
+  saveTaskState([updatedTask.id]);
   render();
 }
 
@@ -5749,6 +9599,17 @@ function getDefaultTaskScope(defaults = {}) {
 function renderTaskScopeOptions(selectedScope = "project") {
   return taskScopeOptions
     .map((option) => `<option value="${option.id}" ${option.id === selectedScope ? "selected" : ""}>${option.label}</option>`)
+    .join("");
+}
+
+function renderTaskTypeOptions(selectedTaskType = "normal", options = {}) {
+  const allowChild = options.allowChild !== false;
+  const normalizedType = allowChild ? normalizeTaskTypeValue(selectedTaskType) : selectedTaskType === "parent" ? "parent" : "normal";
+  return taskTypeOptions
+    .map((option) => {
+      const disabled = option.id === "child" && !allowChild;
+      return `<option value="${option.id}" ${option.id === normalizedType ? "selected" : ""} ${disabled ? "disabled" : ""}>${option.label}</option>`;
+    })
     .join("");
 }
 
@@ -5781,23 +9642,88 @@ function syncTaskScopeFields(fields, clearProject = true) {
 
 function syncTaskStageAndParentOptions(fields, task = null) {
   const scope = fields.scope?.value || "project";
+  const systemId = scope === "general" ? "" : fields.systemId?.value || "";
   const projectId = scope === "project" ? fields.projectId?.value || "" : "";
   fields.stageField?.classList.toggle("hidden", scope !== "project");
-  fields.parentField?.classList.toggle("hidden", scope !== "project");
   if (fields.stageId) fields.stageId.innerHTML = renderStageOptionsForProject(projectId, task?.stageId || fields.stageId.value);
-  if (fields.parentTaskId) fields.parentTaskId.innerHTML = renderParentTaskOptions(task || getProjectTask(fields.id?.value), projectId, task?.parentTaskId || fields.parentTaskId.value);
+  syncTaskTypeFields(fields, task);
+  if (fields.parentTaskId) fields.parentTaskId.innerHTML = renderParentTaskOptions(
+    task || getProjectTask(fields.id?.value),
+    { scope, systemId, projectId },
+    task?.parentTaskId || fields.parentTaskId.value,
+  );
+  syncTaskTypeFields(fields, task);
+}
+
+function syncTaskTypeFields(fields, task = null) {
+  if (!fields.taskType) {
+    fields.parentField?.classList.toggle("hidden", true);
+    return;
+  }
+
+  const scope = fields.scope?.value || "project";
+  const isProject = scope === "project";
+  const selectedType = normalizeTaskTypeValue(fields.taskType.value || getTaskType(task || getProjectTask(fields.id?.value) || {}));
+  fields.taskType.innerHTML = renderTaskTypeOptions(selectedType, { allowChild: isProject });
+  if (!isProject && fields.taskType.value === "child") fields.taskType.value = "normal";
+
+  const isChild = isProject && fields.taskType.value === "child";
+  fields.parentField?.classList.toggle("hidden", !isChild);
+  if (fields.parentTaskId) {
+    fields.parentTaskId.required = isChild;
+    if (!isChild) fields.parentTaskId.value = "";
+  }
+}
+
+function validateTaskTypeSelection({ taskType = "normal", parentTaskId = "", scope = "project", projectId = "", existingTask = null } = {}) {
+  const normalizedType = normalizeTaskTypeValue(taskType);
+  const existingChildren = existingTask?.id ? state.tasks.filter((task) => task.parentTaskId === existingTask.id && !isTaskDeleted(task)) : [];
+  if (existingChildren.length && normalizedType !== "parent") {
+    alert(`此任務底下還有 ${existingChildren.length} 筆子任務，請先移出子任務後再變更為獨立任務或子任務。`);
+    return false;
+  }
+  if (existingChildren.length && (scope !== "project" || existingChildren.some((child) => child.projectId !== projectId))) {
+    alert("已有子任務的母任務需保留在原專案底下。");
+    return false;
+  }
+
+  if (normalizedType !== "child") return true;
+  if (scope !== "project") {
+    alert("子任務需綁定同一專案底下的母任務。");
+    return false;
+  }
+  if (!parentTaskId) {
+    alert("請選擇所屬母任務。");
+    return false;
+  }
+
+  const parentTask = getProjectTask(parentTaskId);
+  if (!parentTask || parentTask.projectId !== projectId || getTaskType(parentTask) !== "parent" || parentTask.parentTaskId) {
+    alert("所屬母任務只能選擇同一專案底下的母任務。");
+    return false;
+  }
+
+  if (existingTask?.id && parentTask.id === existingTask.id) {
+    alert("任務不能選擇自己作為母任務。");
+    return false;
+  }
+
+  return true;
 }
 
 function syncTaskOwnerOptions(fields, task = null) {
   const scopeValues = getTaskScopeFormValues(fields);
   const existingTask = task || (fields.id?.value ? getProjectTask(fields.id.value) : null);
   const selectedOwnerUid = existingTask?.internalOwnerIds || existingTask?.ownerUid || currentProfile?.uid || "";
-  fields.owner.innerHTML = renderOwnerOptions(
+  renderOwnerDropdown(
+    fields.owner,
     getTaskOwnerChoices(existingTask, scopeValues),
     selectedOwnerUid,
     existingTask || {},
+    {
+      disabled: Boolean(existingTask?.id && !canAssignTaskOwner(existingTask, scopeValues)),
+    },
   );
-  fields.owner.disabled = Boolean(existingTask?.id && !canAssignTaskOwner(existingTask, scopeValues));
 }
 
 function syncDrawerScopeFields(form, clearProject = true) {
@@ -5831,13 +9757,40 @@ function syncDrawerScopeFields(form, clearProject = true) {
 
 function syncDrawerStageAndParentOptions(form, task = null) {
   const scope = form.elements.scope?.value || "project";
+  const systemId = scope === "general" ? "" : form.elements.systemId?.value || "";
   const projectId = scope === "project" ? form.elements.projectId?.value || "" : "";
   const stageField = form.querySelector("[data-drawer-stage-field]");
-  const parentField = form.querySelector("[data-drawer-parent-field]");
   stageField?.classList.toggle("hidden", scope !== "project");
-  parentField?.classList.toggle("hidden", scope !== "project");
   if (form.elements.stageId) form.elements.stageId.innerHTML = renderStageOptionsForProject(projectId, task?.stageId || form.elements.stageId.value);
-  if (form.elements.parentTaskId) form.elements.parentTaskId.innerHTML = renderParentTaskOptions(task, projectId, task?.parentTaskId || form.elements.parentTaskId.value);
+  syncDrawerTaskTypeFields(form, task);
+  if (form.elements.parentTaskId) form.elements.parentTaskId.innerHTML = renderParentTaskOptions(
+    task,
+    { scope, systemId, projectId },
+    task?.parentTaskId || form.elements.parentTaskId.value,
+  );
+  syncDrawerTaskTypeFields(form, task);
+}
+
+function syncDrawerTaskTypeFields(form, task = null) {
+  const taskTypeSelect = form.elements.taskType;
+  const parentField = form.querySelector("[data-drawer-parent-field]");
+  if (!taskTypeSelect) {
+    parentField?.classList.toggle("hidden", true);
+    return;
+  }
+
+  const scope = form.elements.scope?.value || "project";
+  const isProject = scope === "project";
+  const selectedType = normalizeTaskTypeValue(taskTypeSelect.value || getTaskType(task || {}));
+  taskTypeSelect.innerHTML = renderTaskTypeOptions(selectedType, { allowChild: isProject });
+  if (!isProject && taskTypeSelect.value === "child") taskTypeSelect.value = "normal";
+
+  const isChild = isProject && taskTypeSelect.value === "child";
+  parentField?.classList.toggle("hidden", !isChild);
+  if (form.elements.parentTaskId) {
+    form.elements.parentTaskId.required = isChild;
+    if (!isChild) form.elements.parentTaskId.value = "";
+  }
 }
 
 function getTaskScopeValuesFromForm(form) {
@@ -5849,16 +9802,23 @@ function getTaskScopeValuesFromForm(form) {
   };
 }
 
+function getDrawerOwnerControl(form) {
+  return form.querySelector("[data-drawer-owner]");
+}
+
 function syncDrawerOwnerOptions(form, task) {
-  const ownerSelect = form.elements.owner;
+  const ownerSelect = getDrawerOwnerControl(form);
   if (!ownerSelect) return;
   const scopeValues = getTaskScopeValuesFromForm(form);
-  ownerSelect.innerHTML = renderOwnerOptions(
+  renderOwnerDropdown(
+    ownerSelect,
     getTaskOwnerChoices(task, scopeValues),
     task?.internalOwnerIds || task?.ownerUid || currentProfile?.uid || "",
     task || {},
+    {
+      disabled: Boolean(task?.id && !canAssignTaskOwner(task, scopeValues)),
+    },
   );
-  ownerSelect.disabled = Boolean(task?.id && !canAssignTaskOwner(task, scopeValues));
 }
 
 function syncDrawerTaskPermissions(form, task) {
@@ -5897,16 +9857,41 @@ function renderStageOptionsForProject(projectId, selectedStageId = "") {
   ].join("");
 }
 
-function renderParentTaskOptions(task = null, projectId = "", selectedParentTaskId = "") {
+function renderParentTaskOptions(task = null, scopeValues = {}, selectedParentTaskId = "") {
+  const scope = scopeValues.scope || getTaskScope(task || {});
+  const projectId = scopeValues.projectId || task?.projectId || "";
+  const blockedIds = getTaskDescendantIds(task?.id);
   const candidates = state.tasks.filter((candidate) => {
+    if (isTaskDeleted(candidate)) return false;
     if (candidate.id === task?.id) return false;
-    if (candidate.parentTaskId === task?.id) return false;
-    return getTaskScope(candidate) === "project" && candidate.projectId === projectId;
+    if (blockedIds.has(candidate.id)) return false;
+    if (scope !== "project") return false;
+    if (getTaskScope(candidate) !== "project") return false;
+    if (candidate.projectId !== projectId) return false;
+    if (candidate.parentTaskId) return false;
+    return getTaskType(candidate) === "parent";
   });
   return [
     `<option value="" ${!selectedParentTaskId ? "selected" : ""}>無母任務</option>`,
-    ...candidates.map((candidate) => `<option value="${candidate.id}" ${candidate.id === selectedParentTaskId ? "selected" : ""}>${escapeHtml(candidate.title)}</option>`),
+    ...candidates.sort(compareManualThenName).map((candidate) => `<option value="${candidate.id}" ${candidate.id === selectedParentTaskId ? "selected" : ""}>${escapeHtml(candidate.title)}</option>`),
   ].join("");
+}
+
+function getTaskDescendantIds(taskId = "") {
+  const descendants = new Set();
+  if (!taskId) return descendants;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    state.tasks.forEach((task) => {
+      if (!task.parentTaskId || descendants.has(task.id)) return;
+      if (task.parentTaskId === taskId || descendants.has(task.parentTaskId)) {
+        descendants.add(task.id);
+        changed = true;
+      }
+    });
+  }
+  return descendants;
 }
 
 function renderStatusOptions(selectedStatus = "not_started") {
@@ -5976,14 +9961,14 @@ function handleTodoQuickSubmit(event) {
 
   const existingTask = todoAddFields.mode.value === "existing" ? getProjectTask(todoAddFields.existingTaskId.value) : null;
   const status = normalizeTaskStatus(todoAddFields.status.value);
-  if (status === "done" && !canCompleteTask(existingTask)) {
+  if (status === "done" && !isRecurringTemplateTask(existingTask) && !canCompleteTask(existingTask)) {
     alert("請先完成所有細項步驟，才能將任務狀態改為已完成。");
     return;
   }
 
   const requestedCompletedDate = status === "done" ? todoAddFields.completedDate.value || todayString() : "";
   const ownerIds = ownerSelectValue(todoAddFields.owner, existingTask);
-  const owner = getOwnerPayload(ownerIds[0], existingTask || {});
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, existingTask || {}), existingTask || {});
 
   const task = applyTaskStatusSideEffects({
     id: todoAddFields.mode.value === "existing" ? todoAddFields.existingTaskId.value : createId(),
@@ -6004,10 +9989,22 @@ function handleTodoQuickSubmit(event) {
     rangeEnd,
     executionDate,
     deadline,
+    dueDate: deadline,
     tags: splitCommaList(todoAddFields.tags.value),
     collaborationTags: splitCommaList(todoAddFields.stakeholders.value),
     stakeholders: splitCommaList(todoAddFields.stakeholders.value),
-    sortOrder: existingTask?.sortOrder || getNextSortOrder(state.tasks.filter((item) => item.projectId === projectId)),
+    isRecurring: existingTask?.isRecurring || false,
+    recurrenceEnabled: existingTask?.recurrenceEnabled || false,
+    isRecurringTemplate: existingTask?.isRecurringTemplate || false,
+    isRecurringOccurrence: existingTask?.isRecurringOccurrence || false,
+    templateTaskId: existingTask?.templateTaskId || "",
+    occurrenceDate: existingTask?.occurrenceDate || "",
+    recurringLabel: existingTask?.recurringLabel || "",
+    recurrenceType: existingTask?.recurrenceType || "",
+    recurrenceRule: existingTask?.recurrenceRule || {},
+    dueRule: normalizeDueRule(existingTask?.dueRule),
+    completedOccurrences: existingTask?.completedOccurrences || [],
+    sortOrder: existingTask?.sortOrder || getNextSortOrder(getTaskSortScopeItems({ scope, systemId, projectId })),
     relatedEmails: collectEmailRows(todoAddFields.relatedEmails),
     relatedLinks: collectLinkRows(todoAddFields.relatedLinks),
     important: existingTask?.important || false,
@@ -6025,7 +10022,7 @@ function handleTodoQuickSubmit(event) {
 
   selectedSystemId = task.scope === "general" ? generalWorkScopeId : task.systemId;
   selectedProjectId = task.projectId || "all";
-  saveState();
+  saveTaskState([task.id]);
   resetTodoAddForm();
   render();
 }
@@ -6094,7 +10091,9 @@ function populateTodoProjectSelect(systemId, preferredProjectId = "") {
 
 function populateTodoExistingTaskSelect(preferredTaskId = "") {
   const scopeValues = getTaskScopeFormValues(todoAddFields);
-  const tasks = state.tasks.filter((task) => {
+  const tasks = getUniqueTasksForDisplay(state.tasks).filter((task) => {
+    if (isTaskDeleted(task)) return false;
+    if (isRecurringTemplateTask(task)) return false;
     if (task.status === "done") return false;
     if (scopeValues.scope === "general") return getTaskScope(task) === "general";
     if (scopeValues.scope === "system") return getTaskScope(task) === "system" && task.systemId === scopeValues.systemId;
@@ -6167,50 +10166,297 @@ function getDefaultTodoDateForView(viewId) {
   return todayString();
 }
 
+function getProjectTasks(projectId) {
+  return getUniqueTasksForDisplay(state.tasks)
+    .filter((task) => getTaskScope(task) === "project" && task.projectId === projectId && isProjectListTask(task));
+}
+
+function getProjectActivityTasks(projectId) {
+  return getUniqueTasksForDisplay(state.tasks)
+    .filter((task) => getTaskScope(task) === "project" && task.projectId === projectId && !isRecurringTemplateTask(task) && !isTaskDeleted(task));
+}
+
+function getProjectTaskCount(projectId) {
+  return getProjectTasks(projectId).length;
+}
+
+function getProjectStatus(project = {}) {
+  if (!project?.id) return normalizeProjectStatus(project.status || inferProjectStatusFromDates(project));
+  if (project.closed || project.phase === "closed") return "closed";
+  const tasks = getProjectTasks(project.id);
+  if (tasks.length && tasks.every((task) => task.status === "done")) return "done";
+  const current = getProjectCurrentStageInfo(project);
+  const stages = getProjectStages(project.id);
+  if (stages.length && stages.every((stage) => normalizeTaskStatus(stage.status) === "done")) return "done";
+  if (current.stage?.status === "paused") return "paused";
+  if (current.stage?.status === "review") return "review";
+  return normalizeProjectStatus(project.status || inferProjectStatusFromDates(project));
+}
+
+function getProjectStatusLabel(status) {
+  return projectStatusOptions.find((option) => option.id === status)?.label || "進行中";
+}
+
+function getProjectCurrentStageInfo(project = {}) {
+  if (!project?.id || project.category === "general") {
+    return { stage: null, label: project.category === "general" ? "一般專案" : "未設定階段", index: 0, total: 0, phaseId: "" };
+  }
+  const stages = getProjectStages(project.id);
+  if (!stages.length) return { stage: null, label: "未設定階段", index: 0, total: 0, phaseId: "" };
+  const projectPhaseStage = stages.find((stage) => (stage.phaseId || getPhaseIdByLabel(stage.name)) === project.phase);
+  const doing = stages.find((stage) => normalizeTaskStatus(stage.status) === "doing");
+  const pending = stages.find((stage) => normalizeTaskStatus(stage.status) !== "done");
+  const stage = projectPhaseStage || doing || pending || stages[stages.length - 1];
+  const index = Math.max(0, stages.findIndex((item) => item.id === stage.id));
+  const phaseId = stage.phaseId || getPhaseIdByLabel(stage.name);
+  return {
+    stage,
+    label: `${stage.name} ${index + 1}/${stages.length}`,
+    index: index + 1,
+    total: stages.length,
+    phaseId,
+  };
+}
+
+function getStageDisplayStatus(stage = {}, currentStageId = "", stageIndex = -1, currentStageIndex = -1) {
+  const status = normalizeTaskStatus(stage.status);
+  if (stageIndex >= 0 && currentStageIndex >= 0 && stageIndex < currentStageIndex) return "done";
+  if (status === "done") return "done";
+  if (stage.id === currentStageId || status === "doing") {
+    if (stage.endDate && stage.endDate < todayString()) return "delay";
+    return "doing";
+  }
+  if (status !== "done" && stage.endDate && stage.endDate < todayString()) return "delay";
+  return "not_started";
+}
+
+function getStageDisplayStatusLabel(status) {
+  return {
+    done: "已完成",
+    doing: "進行中",
+    not_started: "未開始",
+    delay: "延遲",
+  }[status] || "未開始";
+}
+
+function getTaskStage(task = {}) {
+  return task.stageId ? state.projectStages.find((stage) => stage.id === task.stageId) || null : null;
+}
+
+function getTaskStageLabel(task = {}) {
+  return getTaskStage(task)?.name || "未設定階段";
+}
+
+function taskDeadlineOverdue(task, today = todayString()) {
+  if (isRecurringTemplateTask(task)) return false;
+  return Boolean(task.status !== "done" && task.deadline && task.deadline < today);
+}
+
+function taskIsDelayed(task, today = todayString()) {
+  if (isRecurringTemplateTask(task)) return false;
+  if (task.status === "done") return false;
+  const plannedEnd = task.rangeEnd || task.endDate || task.executionDate || "";
+  return Boolean(plannedEnd && plannedEnd < today);
+}
+
+function getProjectTaskStats(projectId) {
+  const tasks = getProjectTasks(projectId);
+  return {
+    total: tasks.length,
+    delay: tasks.filter(taskIsDelayed).length,
+    overdue: tasks.filter(taskDeadlineOverdue).length,
+  };
+}
+
+function getProjectScheduleStatus(project = {}) {
+  const range = getProjectScheduleDates(project);
+  if (!range.start && !range.end) return "unset";
+  if (projectIsClosed(project)) return "done";
+  if (isProjectDelayed(project)) return "delay";
+  const stats = getProjectTaskStats(project.id);
+  if (stats.overdue) return "overdue";
+  const today = todayString();
+  if (range.start && today < range.start) return "not_started";
+  if (range.end && today > range.end) return "overdue";
+  return "doing";
+}
+
+function getProjectScheduleDates(project = {}) {
+  const stages = project?.id ? getProjectStages(project.id) : [];
+  const stageRange = getGanttRangeFromDates(stages.flatMap((stage) => [stage.startDate, stage.endDate]));
+  if (stageRange) return stageRange;
+  const range = getProjectScheduleRange(project.plannedStart, project.plannedEnd, project.phaseSchedules || {});
+  return { start: range.start || "", end: range.end || "" };
+}
+
+function scheduleStatusMatchesProject(project, filter) {
+  if (!filter || filter === "all") return true;
+  const range = getProjectScheduleDates(project);
+  if (filter === "this_week" || filter === "this_month") {
+    const dateRange = getDateFilterRange(filter);
+    return Boolean(range.end && dateInRange(range.end, dateRange.start, dateRange.end));
+  }
+  return getProjectScheduleStatus(project) === filter;
+}
+
+function getTaskDueStatus(task = {}) {
+  if (!task.deadline && !task.executionDate && !task.rangeEnd) return "unset";
+  if (taskDeadlineOverdue(task)) return "overdue";
+  if (taskIsDelayed(task)) return "delay";
+  if (task.deadline === todayString()) return "today";
+  if (!task.deadline) return "no_deadline";
+  const week = getWeekRange(0);
+  if (dateInRange(task.deadline, week.start, week.end)) return "this_week";
+  return "scheduled";
+}
+
+function dueStatusMatchesTask(task, filter) {
+  if (!filter || filter === "all") return true;
+  if (filter === "this_week") {
+    const week = getWeekRange(0);
+    return Boolean(task.deadline && dateInRange(task.deadline, week.start, week.end));
+  }
+  if (filter === "no_deadline") return !task.deadline;
+  return getTaskDueStatus(task) === filter;
+}
+
+function dateFilterMatchesDates(dates = [], filter = "all", start = "", end = "") {
+  if (!filter || filter === "all") return true;
+  const range = getDateFilterRange(filter, start, end);
+  if (!range.start && !range.end) return true;
+  return dates.filter(Boolean).some((date) => (!range.start || date >= range.start) && (!range.end || date <= range.end));
+}
+
+function getDateFilterRange(filter = "all", customStart = "", customEnd = "") {
+  if (filter === "this_week") return getWeekRange(0);
+  if (filter === "this_month") return getMonthRange(0);
+  if (filter === "custom") {
+    return {
+      start: customStart || "",
+      end: customEnd || customStart || "",
+    };
+  }
+  return { start: "", end: "" };
+}
+
+function getMonthRange(offsetMonths = 0) {
+  const now = todayDate();
+  const first = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
+  const last = new Date(now.getFullYear(), now.getMonth() + offsetMonths + 1, 0);
+  return { start: toDateInputValue(first), end: toDateInputValue(last) };
+}
+
+function formatDateYmd(dateString) {
+  return dateString ? dateString.replaceAll("-", "/") : "未設定";
+}
+
+function formatDateRangeYmd(start, end) {
+  if (!start && !end) return "未設定";
+  if (start && !end) return formatDateYmd(start);
+  if (!start && end) return formatDateYmd(end);
+  return `${formatDateYmd(start)} - ${formatDateYmd(end)}`;
+}
+
+function formatFirestoreDate(value) {
+  if (!value) return "未記錄";
+  const date = typeof value.toDate === "function"
+    ? value.toDate()
+    : value.seconds
+      ? new Date(value.seconds * 1000)
+      : value instanceof Date
+        ? value
+        : null;
+  if (!date || Number.isNaN(date.getTime())) return "未記錄";
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function matchesFuzzyText(haystack = "", query = "") {
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  const normalizedHaystack = String(haystack || "").toLowerCase();
+  return normalizedQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((token) => normalizedHaystack.includes(token));
+}
+
 function renderProjects() {
   const projects = getScopedProjects(true);
   const systems = selectedScopeIsGeneral()
     ? []
     : selectedSystemId
       ? state.systems.filter((system) => system.id === selectedSystemId)
-      : getProjectGroupSystems(projects);
+      : getProjectGroupSystems(projects).filter((system) => systemMatchesOwnerContext(system));
 
   els.projectList.classList.add("project-group-list");
+  els.projectList.classList.remove("project-compact-list");
+  renderProjectActiveFilterChips();
 
   if (selectedScopeIsGeneral()) {
-    els.projectList.innerHTML = `<p class="empty-state">一般工作不需要專案。可直接在上方新增一般任務，或在待辦工作台切到一般工作新增待辦。</p>`;
+    els.projectList.innerHTML = `<p class="empty-state">一般工作不需要專案。可直接在上方新增一般工作任務，或在待辦工作台切到一般工作新增待辦。</p>`;
     return;
   }
 
-  if (!systems.length) {
-    els.projectList.innerHTML = `<p class="empty-state">目前沒有符合條件的專案，請新增專案或調整篩選。</p>`;
+  if (!projects.length) {
+    els.projectList.innerHTML = `<p class="empty-state">找不到符合條件的專案，請調整搜尋關鍵字或篩選條件。</p>`;
     return;
   }
 
   els.projectList.innerHTML = systems.map((system) => {
-    const systemProjects = projects.filter((project) => project.systemId === system.id);
-    const projectCards = systemProjects.length
-      ? systemProjects.map(renderProjectCard).join("")
-      : `<p class="empty-state">這個系統目前沒有符合條件的專案。</p>`;
+    const systemProjects = projects.filter((project) => project.systemId === system.id).sort(compareProjectsForList);
+    if (!systemProjects.length) return "";
+    const summary = getProjectGroupSummary(systemProjects);
+    const collapsed = Boolean(projectGroupCollapsed[system.id]);
+    const ownerLabel = getOwnerDisplayName(system);
+    const projectRows = systemProjects.map(renderProjectListRow).join("");
     const addProjectButton = !system.missing && canAssignProjectOwner(null, system.id)
       ? `<button class="secondary-button" type="button" data-add-project-for-system="${system.id}">新增專案</button>`
       : "";
 
     return `
-      <section class="project-system-group">
+      <section class="project-system-group ${collapsed ? "collapsed" : ""}">
         <div class="project-system-group-header">
-          <div>
-            <h3>${escapeHtml(system.name)}</h3>
-            <p>${escapeHtml(system.description || "未設定描述")}</p>
+          <div class="project-system-group-title">
+            <button class="project-group-toggle" type="button" data-project-group-toggle="${system.id}" aria-expanded="${String(!collapsed)}" aria-label="${collapsed ? "展開" : "收合"} ${escapeHtml(system.name)}">
+              <span aria-hidden="true">${collapsed ? "+" : "-"}</span>
+            </button>
+            <div>
+              <h3>${escapeHtml(system.name)}</h3>
+              <p>${escapeHtml(system.description || "未設定描述")}</p>
+              <p class="project-system-owner">負責人 ${escapeHtml(ownerLabel)}</p>
+            </div>
           </div>
-          ${addProjectButton}
+          <div class="project-system-group-actions">
+            <div class="project-group-stats" aria-label="${escapeHtml(system.name)} 專案摘要">
+              <span>專案 ${summary.total}</span>
+              <span>進行中 ${summary.active}</span>
+              <span>結案 ${summary.closed}</span>
+              <span>延遲 ${summary.delayed}</span>
+              <span>任務 ${summary.tasks}</span>
+            </div>
+            ${addProjectButton}
+          </div>
         </div>
-        <div class="project-system-projects">
-          ${projectCards}
-        </div>
+        ${collapsed ? "" : `
+          <div class="project-list-shell" data-project-sort-system="${system.id}">
+            ${renderProjectListHeader()}
+            ${projectRows}
+          </div>
+        `}
       </section>
     `;
   }).join("");
+
+  attachProjectListSortHandlers();
+
+  els.projectList.querySelectorAll("[data-project-group-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const groupId = button.dataset.projectGroupToggle;
+      projectGroupCollapsed[groupId] = !projectGroupCollapsed[groupId];
+      persistViewPreferences();
+      renderProjects();
+    });
+  });
 
   els.projectList.querySelectorAll("[data-add-project-for-system]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -6233,7 +10479,8 @@ function renderProjects() {
       const project = getProject(button.dataset.projectFilter);
       selectedTagFilter = "";
       selectedSystemId = project.systemId;
-      selectedProjectId = project.id;
+      selectedProjectId = "all";
+      taskFilters.projectIds = [project.id];
       render();
     });
   });
@@ -6250,26 +10497,485 @@ function renderProjects() {
     button.addEventListener("click", () => toggleProjectClosed(button.dataset.projectClose));
   });
 
-  els.projectList.querySelectorAll("[data-project-phase]").forEach((select) => {
-    select.addEventListener("change", () => {
-      const project = getProject(select.dataset.projectPhase);
-      project.phase = select.value;
-      project.phaseChangedAt = todayString();
-      project.closed = select.value === "closed";
-      project.closedAt = project.closed ? todayString() : "";
-      project.phaseSchedules = createPhaseSchedules(project.phaseSchedules);
-      if (project.closed) {
-        project.phaseSchedules.closed.start ||= todayString();
-        project.phaseSchedules.closed.end ||= todayString();
-      }
-      const plannedRange = getProjectScheduleRange(project.plannedStart, project.plannedEnd, project.phaseSchedules);
-      project.plannedStart = plannedRange.start;
-      project.plannedEnd = plannedRange.end;
-      syncProjectStagesForProject(project, project);
-      saveState();
-      render();
+  els.projectList.querySelectorAll("[data-project-create-child]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const project = getProject(button.dataset.projectCreateChild);
+      openProjectDialog(null, { systemId: project?.systemId });
     });
   });
+
+  els.projectList.querySelectorAll("[data-project-gantt]").forEach((button) => {
+    button.addEventListener("click", () => openGanttForProject(button.dataset.projectGantt));
+  });
+
+  els.projectList.querySelectorAll("[data-project-toggle]").forEach((button) => {
+    button.addEventListener("click", () => toggleProjectExpanded(button.dataset.projectToggle));
+  });
+
+  els.projectList.querySelectorAll("[data-project-row]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button, a, details, summary, select, input")) return;
+      toggleProjectExpanded(row.dataset.projectRow);
+    });
+  });
+
+  els.projectList.querySelectorAll("[data-project-task-view]").forEach((button) => {
+    button.addEventListener("click", () => openTodoDrawer(button.dataset.projectTaskView, "view"));
+  });
+
+  els.projectList.querySelectorAll("[data-project-stage-select]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const projectId = button.dataset.projectStageProject;
+      const stageId = button.dataset.projectStageSelect;
+      if (!projectId || !stageId) return;
+      selectedProjectStageIds[projectId] = stageId;
+      renderProjects();
+    });
+  });
+
+  attachTaskTreeToggleHandlers(els.projectList, renderProjects);
+}
+
+function renderProjectListRow(project) {
+  const system = getSystem(project.systemId);
+  const ownerLabel = getOwnerDisplayName(project);
+  const currentStage = getProjectCurrentStageInfo(project);
+  const status = getProjectStatus(project);
+  const priority = normalizePriority(project.priority);
+  const range = getProjectScheduleDates(project);
+  const scheduleStatus = getProjectScheduleStatus(project);
+  const stats = getProjectTaskStats(project.id);
+  const expanded = expandedProjectIds.has(project.id);
+  const collaborators = renderCollaboratorSummary(project.collaborationTags || []);
+  const isDevelopmentProject = project.category !== "general";
+  const overdueHint = scheduleStatus === "overdue" ? `<small class="schedule-alert">逾期</small>` : scheduleStatus === "delay" ? `<small class="schedule-delay">延遲</small>` : "";
+
+  return `
+    <article class="project-list-item ${expanded ? "expanded" : ""}" data-project-card="${project.id}">
+      <div class="project-list-row" data-project-row="${project.id}">
+        <div class="project-name-cell">
+          <button class="project-expand-button" type="button" data-project-toggle="${project.id}" aria-expanded="${expanded}" aria-label="${expanded ? "收合" : "展開"} ${escapeHtml(project.name)}">
+            <span aria-hidden="true">${expanded ? "⌄" : "›"}</span>
+          </button>
+          <div class="project-row-title">
+            <h3>${escapeHtml(project.name)}</h3>
+            <div class="project-system">${escapeHtml(system?.name || "未指定系統")}・${getProjectCategoryLabel(project.category)}・負責人 ${escapeHtml(ownerLabel)}</div>
+          </div>
+        </div>
+        <div class="project-stage-cell">
+          <span class="phase-badge ${currentStage.stage ? "" : "muted"}">${escapeHtml(isDevelopmentProject ? currentStage.label : "一般專案")}</span>
+        </div>
+        <div>${renderStatusBadge(status, "project")}</div>
+        <div>${renderPriorityBadge(priority)}</div>
+        <div class="project-schedule-cell">
+          <span>${escapeHtml(formatDateRangeYmd(range.start, range.end))}</span>
+          ${overdueHint}
+        </div>
+        <div class="project-owner-cell">${renderOwnerAvatar(ownerLabel)}<span>${escapeHtml(ownerLabel || "未指定")}</span></div>
+        <div class="project-collab-cell">${collaborators}</div>
+        <div class="task-stat-cell">
+          <span>任務 ${stats.total}</span>
+          <span class="stat-delay">延遲 ${stats.delay}</span>
+          <span class="stat-overdue">逾期 ${stats.overdue}</span>
+        </div>
+        <div class="project-row-actions">
+          <button class="chip-button" type="button" data-project-view="${project.id}">檢視</button>
+          ${renderProjectMoreMenu(project)}
+        </div>
+      </div>
+      ${expanded ? renderProjectExpandedSummary(project, currentStage) : ""}
+    </article>
+  `;
+}
+
+function renderProjectMoreMenu(project) {
+  const closed = projectIsClosed(project);
+  return `
+    <details class="row-more-menu">
+      <summary aria-label="更多操作">...</summary>
+      <div class="row-more-menu-panel">
+        <button type="button" data-project-add-task="${project.id}">新增任務</button>
+        <button type="button" data-project-edit="${project.id}">專案設定</button>
+        <button type="button" data-project-create-child="${project.id}">建立子專案</button>
+        <button type="button" data-project-gantt="${project.id}">檢視甘特圖</button>
+        ${project.category !== "general" ? `<button type="button" data-project-close="${project.id}">${closed ? "重新開啟" : "標記結案"}</button>` : ""}
+      </div>
+    </details>
+  `;
+}
+
+function renderProjectExpandedSummary(project, currentStage) {
+  const system = getSystem(project.systemId);
+  const tasks = getProjectTasks(project.id).sort(compareTaskForDisplay);
+  const stages = getProjectStages(project.id);
+  const selectedStage = stages.find((stage) => stage.id === selectedProjectStageIds[project.id])
+    || currentStage.stage
+    || stages[0]
+    || null;
+  const tasksByDisplayStage = getProjectDetailStageTasks(tasks);
+  const selectedStageTasks = selectedStage
+    ? tasksByDisplayStage.get(selectedStage.id) || []
+    : tasksByDisplayStage.get("") || [];
+  const selectedStageLabel = selectedStage?.name || "未設定階段";
+  const createdAt = formatFirestoreDate(project.createdAt);
+  const creator = project.createdBy ? getOwnerDisplayName(getKnownOwner(project.createdBy, project) || { name: project.createdBy }) : "未記錄";
+
+  return `
+    <div class="project-expanded-panel">
+      <section class="project-expanded-info">
+        <h4>專案資訊</h4>
+        <dl>
+          <div><dt>所屬系統</dt><dd>${escapeHtml(system?.name || "未指定系統")}</dd></div>
+          <div><dt>專案類型</dt><dd>${escapeHtml(getProjectCategoryLabel(project.category))}</dd></div>
+          <div><dt>建立人</dt><dd>${escapeHtml(creator)}</dd></div>
+          <div><dt>建立時間</dt><dd>${escapeHtml(createdAt)}</dd></div>
+          <div class="wide"><dt>專案描述</dt><dd>${escapeHtml(project.description || "沒有描述")}</dd></div>
+        </dl>
+      </section>
+      <section class="project-expanded-flow">
+        <h4>專案階段流程</h4>
+        ${renderProjectStageFlow(project, currentStage.stage?.id || "", selectedStage?.id || "")}
+      </section>
+      <section class="project-expanded-tasks">
+        <div class="project-expanded-heading">
+          <h4>階段任務（選取：${escapeHtml(selectedStageLabel)}）</h4>
+          <button class="chip-button" type="button" data-project-filter="${project.id}">查看全部 ${tasks.length} 個任務</button>
+        </div>
+        ${renderProjectStageTaskList(selectedStageTasks)}
+      </section>
+    </div>
+  `;
+}
+
+function renderProjectStageFlow(project, currentStageId = "", selectedStageId = "") {
+  const stages = getProjectStages(project.id);
+  if (!stages.length) return `<p class="empty-state">未設定階段</p>`;
+  const currentStageIndex = stages.findIndex((stage) => stage.id === currentStageId);
+  return `
+    <div class="stage-flow">
+      ${stages.map((stage, index) => {
+        const status = getStageDisplayStatus(stage, currentStageId, index, currentStageIndex);
+        const selected = stage.id === selectedStageId;
+        return `
+          <button class="stage-flow-step ${status} ${selected ? "selected" : ""}" type="button" data-project-stage-project="${project.id}" data-project-stage-select="${stage.id}" aria-pressed="${selected}">
+            <span class="stage-flow-dot"></span>
+            <strong>${escapeHtml(stage.name)}</strong>
+            <small>${escapeHtml(formatDateRangeYmd(stage.startDate, stage.endDate))}</small>
+            <em>${escapeHtml(getStageDisplayStatusLabel(status))}</em>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderProjectStageTaskList(tasks = []) {
+  if (!tasks.length) return `<p class="empty-state">此階段目前沒有任務。</p>`;
+  const childrenByParent = getProjectDetailChildrenByParent(tasks);
+  const topLevelTasks = getTopLevelTasksForHierarchy(tasks)
+    .sort((a, b) => compareProjectDetailTopLevelTasks(a, b, childrenByParent))
+    .slice(0, 6);
+  return `
+    <div class="stage-task-table">
+      <div class="stage-task-header" aria-hidden="true">
+        <span>任務名稱</span>
+        <span>負責人</span>
+        <span>優先級</span>
+        <span>狀態</span>
+        <span>時程</span>
+        <span>協作對象</span>
+        <span>操作</span>
+      </div>
+      ${topLevelTasks.map((task) => renderProjectStageTaskRow(task, {
+        children: childrenByParent.get(task.id) || [],
+      })).join("")}
+    </div>
+  `;
+}
+
+function renderProjectStageTaskRow(task, options = {}) {
+  const children = options.children || [];
+  const isParent = getTaskType(task) === "parent" || children.length > 0;
+  const isChild = Boolean(options.isChild) || getTaskType(task) === "child";
+  const expanded = isTaskTreeExpanded("projectStage", task.id);
+  const childRows = isParent && expanded ? children
+    .sort(compareProjectDetailSubtasks)
+    .map((child) => renderProjectStageTaskRow(child, { isChild: true, children: [] }))
+    .join("") : "";
+  return `
+    <div class="stage-task-row ${isParent ? "parent-task-row" : ""} ${isChild ? "child-task-row" : ""}">
+      <div class="stage-task-title-cell">
+        <div class="task-tree-title-line">
+          ${renderTaskTreeToggle("projectStage", task.id, children.length)}
+          ${isChild ? `<span class="hierarchy-branch" aria-hidden="true">↳</span>` : `<span class="hierarchy-branch-placeholder" aria-hidden="true"></span>`}
+          <strong>${escapeHtml(task.title)}</strong>
+        </div>
+        <small>${escapeHtml(getTaskTypeLabel(getTaskType(task)))}</small>
+      </div>
+      <span>${escapeHtml(task.owner || task.ownerName || "未指定")}</span>
+      <span>${renderPriorityBadge(task.priority)}</span>
+      <span>${renderStatusBadge(task.status, "task")}</span>
+      <span>${escapeHtml(getProjectDetailTaskScheduleLabel(task))}</span>
+      <span>${renderCollaboratorSummary(task.collaborationTags || task.stakeholders || [])}</span>
+      <span><button class="chip-button" type="button" data-project-task-view="${task.id}">檢視</button></span>
+    </div>
+    ${childRows}
+  `;
+}
+
+function renderCollaboratorSummary(collaborators = []) {
+  const list = normalizeTextList(collaborators);
+  if (!list.length) return `<span class="muted-text">未設定</span>`;
+  const visible = list.slice(0, 2).map((tag) => `<span class="mini-chip">${escapeHtml(tag)}</span>`).join("");
+  const more = list.length > 2 ? `<span class="mini-chip more">+${list.length - 2}</span>` : "";
+  return `${visible}${more}`;
+}
+
+function renderOwnerAvatar(label = "") {
+  const initial = String(label || "?").trim().slice(0, 1).toUpperCase();
+  return `<span class="owner-avatar" aria-hidden="true">${escapeHtml(initial || "?")}</span>`;
+}
+
+function renderStatusBadge(status, type = "project") {
+  const label = type === "project" ? getProjectStatusLabel(status) : getStatusLabel(status);
+  return `<span class="status-badge status-${escapeHtml(status)}">${escapeHtml(label)}</span>`;
+}
+
+function renderPriorityBadge(priority = "medium") {
+  const normalized = normalizePriority(priority);
+  return `<span class="priority-pill priority-${normalized}">優先 ${escapeHtml(getPriorityLabel(normalized))}</span>`;
+}
+
+function toggleProjectExpanded(projectId) {
+  if (!projectId) return;
+  if (expandedProjectIds.has(projectId)) expandedProjectIds.delete(projectId);
+  else expandedProjectIds.add(projectId);
+  persistViewPreferences();
+  renderProjects();
+}
+
+function openGanttForProject(projectId) {
+  const project = getProject(projectId);
+  if (!project) return;
+  selectedSystemId = project.systemId;
+  selectedProjectId = project.id;
+  ganttSystemFilterIds = project.systemId ? [project.systemId] : [];
+  ganttProjectFilterIds = [project.id];
+  ganttSystemFilter = ganttSystemFilterIds[0] || "all";
+  ganttProjectFilter = ganttProjectFilterIds[0] || "all";
+  persistViewPreferences();
+  openGanttPage();
+}
+
+function renderProjectActiveFilterChips() {
+  if (!els.projectActiveFilters) return;
+  const chips = [];
+  const query = els.searchInput?.value.trim() || "";
+  if (query) chips.push({ key: "query", label: `搜尋：${query}` });
+  projectOwnerFilterIds.forEach((uid) => chips.push({ key: "owner", value: uid, label: `負責人：${getOwnerDisplayName(getKnownOwner(uid) || { name: uid })}` }));
+  projectCollaborationFilters.forEach((tag) => chips.push({ key: "collaboration", value: tag, label: `協作：${tag}` }));
+  projectFilters.phase.forEach((value) => chips.push({ key: "phase", value, label: `階段：${getFilterOptionLabel(getPhaseFilterOptions(), value)}` }));
+  projectFilters.status.forEach((value) => chips.push({ key: "status", value, label: `狀態：${getFilterOptionLabel(projectStatusOptions, value)}` }));
+  projectFilters.priority.forEach((value) => chips.push({ key: "priority", value, label: `優先級：${getFilterOptionLabel(priorityOptions, value)}` }));
+  projectFilters.schedule.forEach((value) => chips.push({ key: "schedule", value, label: getFilterOptionLabel(scheduleStatusOptions, value) }));
+  if (projectFilters.date !== "all") chips.push({ key: "date", label: getDateChipLabel(projectFilters) });
+  projectFilters.more.forEach((value) => chips.push({ key: "more", value, label: getFilterOptionLabel(projectMoreFilterOptions, value) }));
+  renderActiveFilterChips(els.projectActiveFilters, chips, "project");
+}
+
+function renderTaskActiveFilterChips() {
+  if (!els.taskActiveFilters) return;
+  const chips = [];
+  if (taskFilters.query) chips.push({ key: "query", label: `搜尋：${taskFilters.query}` });
+  taskFilters.projectIds.forEach((value) => chips.push({ key: "project", value, label: `專案：${getTaskProjectFilterLabel(value)}` }));
+  taskFilters.phase.forEach((value) => chips.push({ key: "phase", value, label: `階段：${getFilterOptionLabel(getPhaseFilterOptions(), value)}` }));
+  taskFilters.status.forEach((value) => chips.push({ key: "status", value, label: `狀態：${getFilterOptionLabel(taskColumns.map((column) => ({ id: column.id, label: column.title })), value)}` }));
+  taskFilters.ownerIds.forEach((uid) => chips.push({ key: "owner", value: uid, label: `負責人：${getOwnerDisplayName(getKnownOwner(uid) || { name: uid })}` }));
+  taskFilters.collaborationTags.forEach((tag) => chips.push({ key: "collaboration", value: tag, label: `協作：${tag}` }));
+  taskFilters.priority.forEach((value) => chips.push({ key: "priority", value, label: `優先級：${getFilterOptionLabel(priorityOptions, value)}` }));
+  taskFilters.due.forEach((value) => chips.push({ key: "due", value, label: getFilterOptionLabel(dueStatusOptions, value) }));
+  if (taskFilters.date !== "all") chips.push({ key: "date", label: getDateChipLabel(taskFilters) });
+  taskFilters.more.forEach((value) => chips.push({ key: "more", value, label: getFilterOptionLabel(taskMoreFilterOptions, value) }));
+  renderActiveFilterChips(els.taskActiveFilters, chips, "task");
+}
+
+function renderActiveFilterChips(container, chips = [], scope) {
+  if (!chips.length) {
+    container.innerHTML = `<span class="all-visible-note">目前顯示全部${scope === "project" ? "專案" : "任務"}</span>`;
+    return;
+  }
+  container.innerHTML = `
+    ${chips.map((chip) => `<button class="filter-chip" type="button" data-${scope}-filter-chip="${escapeHtml(chip.key)}" data-filter-value="${escapeHtml(chip.value || "")}">${escapeHtml(chip.label)} ×</button>`).join("")}
+    <button class="filter-chip clear" type="button" data-${scope}-filter-clear>清除全部</button>
+  `;
+}
+
+function getFilterOptionLabel(options = [], value = "") {
+  const normalizedValue = String(value || "").trim();
+  return options.find((option) => getFilterOptionValue(option) === normalizedValue)?.label || normalizedValue;
+}
+
+function getDateChipLabel(filters) {
+  if (filters.date === "custom") {
+    return `日期：${formatDateRangeYmd(filters.dateStart, filters.dateEnd)}`;
+  }
+  return getFilterOptionLabel(dateFilterOptions, filters.date);
+}
+
+function handleProjectFilterChipClick(event) {
+  const clear = event.target.closest("[data-project-filter-clear]");
+  if (clear) {
+    clearProjectFilters();
+    return;
+  }
+  const chip = event.target.closest("[data-project-filter-chip]");
+  if (!chip) return;
+  removeProjectFilter(chip.dataset.projectFilterChip, chip.dataset.filterValue || "");
+}
+
+function handleTaskFilterChipClick(event) {
+  const clear = event.target.closest("[data-task-filter-clear]");
+  if (clear) {
+    clearTaskFilters();
+    return;
+  }
+  const chip = event.target.closest("[data-task-filter-chip]");
+  if (!chip) return;
+  removeTaskFilter(chip.dataset.taskFilterChip, chip.dataset.filterValue || "");
+}
+
+function clearProjectFilters() {
+  els.searchInput.value = "";
+  projectOwnerFilterIds = [];
+  projectCollaborationFilters = [];
+  projectFilters = { phase: [], status: [], priority: [], schedule: [], date: "all", dateStart: "", dateEnd: "", more: [] };
+  selectedTagFilter = "";
+  selectedProjectId = "all";
+  persistViewPreferences();
+  render();
+}
+
+function clearTaskFilters() {
+  taskFilters = {
+    query: "",
+    projectIds: [],
+    phase: [],
+    status: [],
+    ownerIds: [],
+    collaborationTags: [],
+    priority: [],
+    due: [],
+    date: "all",
+    dateStart: "",
+    dateEnd: "",
+    more: [],
+  };
+  persistViewPreferences();
+  render();
+}
+
+function removeProjectFilter(key, value = "") {
+  if (key === "query") els.searchInput.value = "";
+  if (key === "owner") projectOwnerFilterIds = projectOwnerFilterIds.filter((uid) => uid !== value);
+  if (key === "collaboration") projectCollaborationFilters = projectCollaborationFilters.filter((tag) => tag !== value);
+  if (key === "phase") projectFilters.phase = projectFilters.phase.filter((item) => item !== value);
+  if (key === "status") projectFilters.status = projectFilters.status.filter((item) => item !== value);
+  if (key === "priority") projectFilters.priority = projectFilters.priority.filter((item) => item !== value);
+  if (key === "schedule") projectFilters.schedule = projectFilters.schedule.filter((item) => item !== value);
+  if (key === "date") Object.assign(projectFilters, { date: "all", dateStart: "", dateEnd: "" });
+  if (key === "more") projectFilters.more = projectFilters.more.filter((item) => item !== value);
+  persistViewPreferences();
+  render();
+}
+
+function removeTaskFilter(key, value = "") {
+  if (key === "query") taskFilters.query = "";
+  if (key === "project") taskFilters.projectIds = taskFilters.projectIds.filter((item) => item !== value);
+  if (key === "phase") taskFilters.phase = taskFilters.phase.filter((item) => item !== value);
+  if (key === "status") taskFilters.status = taskFilters.status.filter((item) => item !== value);
+  if (key === "owner") taskFilters.ownerIds = taskFilters.ownerIds.filter((uid) => uid !== value);
+  if (key === "collaboration") taskFilters.collaborationTags = taskFilters.collaborationTags.filter((tag) => tag !== value);
+  if (key === "priority") taskFilters.priority = taskFilters.priority.filter((item) => item !== value);
+  if (key === "due") taskFilters.due = taskFilters.due.filter((item) => item !== value);
+  if (key === "date") Object.assign(taskFilters, { date: "all", dateStart: "", dateEnd: "" });
+  if (key === "more") taskFilters.more = taskFilters.more.filter((item) => item !== value);
+  persistViewPreferences();
+  render();
+}
+
+function attachProjectSortHandlers() {
+  els.projectList.querySelectorAll("[data-project-card]").forEach((card) => {
+    card.addEventListener("dragstart", (event) => {
+      if (event.target.closest("button, select, input, textarea, a")) {
+        event.preventDefault();
+        return;
+      }
+      event.dataTransfer.setData("text/plain", card.dataset.projectCard);
+      event.dataTransfer.effectAllowed = "move";
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+    });
+  });
+
+  els.projectList.querySelectorAll("[data-project-sort-system]").forEach((list) => {
+    list.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      list.classList.add("drag-over");
+      event.dataTransfer.dropEffect = "move";
+    });
+    list.addEventListener("dragleave", () => {
+      list.classList.remove("drag-over");
+    });
+    list.addEventListener("drop", (event) => {
+      event.preventDefault();
+      list.classList.remove("drag-over");
+      const projectId = event.dataTransfer.getData("text/plain");
+      const project = getProject(projectId);
+      if (!project || project.systemId !== list.dataset.projectSortSystem) return;
+      const beforeId = getDropBeforeId(list, event.clientY, "[data-project-card]", "projectCard");
+      const orderedIds = getReorderedIds(list, "[data-project-card]", "projectCard", projectId, beforeId);
+      applyProjectManualOrder(orderedIds);
+    });
+  });
+}
+
+function applyProjectManualOrder(projectIds = []) {
+  const orderMap = new Map(projectIds.map((id, index) => [id, index + 1]));
+  state.projects = state.projects.map((project) => {
+    return orderMap.has(project.id) ? { ...project, sortOrder: orderMap.get(project.id) } : project;
+  });
+  saveState();
+  renderProjects();
+  renderGanttPageIfOpen();
+}
+
+function getDropBeforeId(container, pointerY, selector, datasetKey) {
+  const candidates = [...container.querySelectorAll(`${selector}:not(.dragging)`)];
+  let closest = { offset: Number.NEGATIVE_INFINITY, id: "" };
+  candidates.forEach((item) => {
+    const box = item.getBoundingClientRect();
+    const offset = pointerY - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      closest = { offset, id: item.dataset[datasetKey] || "" };
+    }
+  });
+  return closest.id;
+}
+
+function getReorderedIds(container, selector, datasetKey, draggedId, beforeId = "") {
+  const ids = [...container.querySelectorAll(selector)]
+    .map((item) => item.dataset[datasetKey])
+    .filter((id) => id && id !== draggedId);
+  const insertAt = beforeId ? ids.indexOf(beforeId) : -1;
+  if (insertAt >= 0) ids.splice(insertAt, 0, draggedId);
+  else ids.push(draggedId);
+  return ids;
+}
+
+function renderGanttPageIfOpen() {
+  if (ganttPageIsOpen()) renderGanttPage();
 }
 
 function getProjectGroupSystems(projects = [], tasks = []) {
@@ -6288,6 +10994,72 @@ function getProjectGroupSystems(projects = [], tasks = []) {
   return systems;
 }
 
+function getProjectGroupSummary(projects = []) {
+  return projects.reduce((summary, project) => {
+    const closed = projectIsClosed(project);
+    summary.total += 1;
+    summary.closed += closed ? 1 : 0;
+    summary.active += closed ? 0 : 1;
+    summary.delayed += project.category !== "general" && isProjectDelayed(project) ? 1 : 0;
+    summary.tasks += getProjectTaskCount(project.id);
+    return summary;
+  }, { total: 0, active: 0, closed: 0, delayed: 0, tasks: 0 });
+}
+
+function projectIsClosed(project) {
+  return project.category !== "general" && (project.closed || project.phase === "closed");
+}
+
+function renderProjectCompactRow(project) {
+  const system = getSystem(project.systemId);
+  const ownerLabel = getOwnerDisplayName(project);
+  const isDevelopmentProject = project.category !== "general";
+  const actualRange = getProjectActualRange(project.id);
+  const plannedRange = isDevelopmentProject ? getProjectPlannedRange(project) : "";
+  const currentStage = getProjectStages(project.id).find((stage) => (stage.phaseId || getPhaseIdByLabel(stage.name)) === project.phase);
+  const stageRange = formatRange(currentStage?.startDate, currentStage?.endDate);
+  const taskCount = getProjectTaskCount(project.id);
+  const closed = projectIsClosed(project);
+  const delayed = isDevelopmentProject && isProjectDelayed(project);
+  const dateSummary = isDevelopmentProject
+    ? stageRange || plannedRange || actualRange || "尚無日期"
+    : actualRange || "尚無任務日期";
+  const phaseControl = isDevelopmentProject
+    ? `
+      <select class="phase-select project-row-phase" data-project-phase="${project.id}" aria-label="專案階段">
+        ${renderPhaseOptions(project.phase)}
+      </select>
+    `
+    : `<span class="phase-badge">一般</span>`;
+
+  return `
+    <article class="project-card project-card-compact ${closed ? "closed" : ""}" data-project-card="${project.id}" draggable="true">
+      <div class="project-row-main">
+        <div class="project-row-title">
+          <h3>${escapeHtml(project.name)}</h3>
+          <div class="project-system">${escapeHtml(system?.name || "未指定系統")}・${getProjectCategoryLabel(project.category)}・負責人 ${escapeHtml(ownerLabel)}</div>
+        </div>
+        ${delayed ? `<span class="project-warning-pill">延遲</span>` : ""}
+      </div>
+      <div class="project-row-status">
+        ${phaseControl}
+        <span class="status-badge ${closed ? "closed" : ""}">${isDevelopmentProject ? (closed ? "已結案" : "進行中") : "一般"}</span>
+      </div>
+      <div class="project-row-meta">
+        <span>${escapeHtml(isDevelopmentProject ? getPhaseLabel(project.phase) || "未設定階段" : "一般專案")}・${escapeHtml(dateSummary)}</span>
+        <span>任務 ${taskCount} 筆</span>
+      </div>
+      <div class="project-card-actions project-row-actions">
+        <button class="chip-button" type="button" data-project-view="${project.id}">檢視</button>
+        <button class="chip-button" type="button" data-project-filter="${project.id}">任務</button>
+        <button class="chip-button" type="button" data-project-add-task="${project.id}">新增</button>
+        <button class="chip-button" type="button" data-project-edit="${project.id}">設定</button>
+        ${isDevelopmentProject ? `<button class="chip-button" type="button" data-project-close="${project.id}">${closed ? "重開" : "結案"}</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
 function renderProjectCard(project) {
   const system = getSystem(project.systemId);
   const ownerLabel = getOwnerDisplayName(project);
@@ -6295,7 +11067,7 @@ function renderProjectCard(project) {
   const actualRange = getProjectActualRange(project.id);
   const plannedRange = isDevelopmentProject ? getProjectPlannedRange(project) : "";
   const currentStage = getProjectStages(project.id).find((stage) => (stage.phaseId || getPhaseIdByLabel(stage.name)) === project.phase);
-  const taskCount = state.tasks.filter((task) => task.projectId === project.id).length;
+  const taskCount = getProjectTaskCount(project.id);
   const relatedSummary = getProjectRelatedSummary(project);
   const tagList = project.tags?.length ? `<div class="tags">${renderTagButtons(project.tags)}</div>` : "";
   const collaborationList = project.collaborationTags?.length ? `<div class="project-system">協作 ${escapeHtml(project.collaborationTags.join(", "))}</div>` : "";
@@ -6337,7 +11109,7 @@ function renderProjectCard(project) {
       `;
 
   return `
-    <article class="project-card ${closed ? "closed" : ""}">
+    <article class="project-card ${closed ? "closed" : ""}" data-project-card="${project.id}" draggable="true">
       <div class="project-card-header">
         <div>
           <h3>${escapeHtml(project.name)}</h3>
@@ -6351,7 +11123,7 @@ function renderProjectCard(project) {
       ${collaborationList}
 
       ${phaseControl}
-      ${delayed ? `<div class="delay-alert">delay 須調整時程或加強追蹤</div>` : ""}
+      ${delayed ? `<div class="delay-alert">時程延遲，需調整時程或加強追蹤</div>` : ""}
 
       <div class="project-dates">
         ${dateRows}
@@ -6384,7 +11156,8 @@ function renderProjectDetailPage() {
   }
 
   const system = getSystem(project.systemId);
-  const tasks = state.tasks.filter((task) => task.projectId === project.id).sort(compareTaskForDisplay);
+  const tasks = getProjectTasks(project.id).sort(compareTaskForDisplay);
+  const activityTasks = getProjectActivityTasks(project.id);
   const stages = getProjectStages(project.id);
   const statusCounts = taskColumns.map((column) => ({
     label: column.title,
@@ -6392,8 +11165,13 @@ function renderProjectDetailPage() {
   }));
   const overdueCount = tasks.filter((task) => taskIsOverdue(task)).length;
   const todos = tasks.filter((task) => task.status !== "done").slice(0, 8);
-  const histories = tasks
-    .flatMap((task) => (task.history || []).map((entry) => ({ ...entry, taskTitle: task.title })))
+  const histories = activityTasks
+    .flatMap((task) => (task.history || []).map((entry) => ({
+      ...entry,
+      taskTitle: task.title,
+      occurrenceDate: task.occurrenceDate || "",
+      recurringLabel: task.recurringLabel || "",
+    })))
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
     .slice(0, 8);
 
@@ -6482,12 +11260,14 @@ function renderProjectDetailPage() {
   els.projectDetailContent.querySelectorAll("[data-detail-task]").forEach((button) => {
     button.addEventListener("click", () => openTodoDrawer(button.dataset.detailTask, "view"));
   });
+  attachTaskTreeToggleHandlers(els.projectDetailContent, renderProjectDetailPage);
 }
 
 function renderProjectStageTaskGroups(project, stages, tasks) {
-  const unassigned = tasks.filter((task) => !task.stageId);
+  const stageTasks = getProjectDetailStageTasks(tasks);
+  const unassigned = stageTasks.get("") || [];
   const groups = [
-    ...stages.map((stage) => ({ stage, tasks: tasks.filter((task) => task.stageId === stage.id) })),
+    ...stages.map((stage) => ({ stage, tasks: stageTasks.get(stage.id) || [] })),
     ...(unassigned.length ? [{ stage: { id: "", name: "未指定階段", startDate: "", endDate: "" }, tasks: unassigned }] : []),
   ];
   if (!groups.length) return `<p class="drawer-empty">尚未建立階段或任務。</p>`;
@@ -6497,9 +11277,194 @@ function renderProjectStageTaskGroups(project, stages, tasks) {
         <strong>${escapeHtml(stage.name)}</strong>
         <span>${escapeHtml(formatRange(stage.startDate, stage.endDate))}・${stageTasks.length} 筆</span>
       </summary>
-      ${stageTasks.length ? renderHierarchicalTaskRows(stageTasks) : `<p class="drawer-empty">此階段尚無任務。</p>`}
+      ${stageTasks.length ? renderProjectDetailTaskTable(stageTasks) : `<p class="drawer-empty">此階段尚無任務。</p>`}
     </details>
   `).join("");
+}
+
+function getProjectDetailStageTasks(tasks = []) {
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  return tasks.reduce((groups, task) => {
+    const parentTask = task.parentTaskId ? taskById.get(task.parentTaskId) : null;
+    const stageId = parentTask?.projectId === task.projectId ? parentTask.stageId || "" : task.stageId || "";
+    if (!groups.has(stageId)) groups.set(stageId, []);
+    groups.get(stageId).push(task);
+    return groups;
+  }, new Map());
+}
+
+function renderProjectDetailTaskTable(tasks = []) {
+  const childrenByParent = getProjectDetailChildrenByParent(tasks);
+  const topLevelTasks = getTopLevelTasksForHierarchy(tasks)
+    .sort((a, b) => compareProjectDetailTopLevelTasks(a, b, childrenByParent));
+  const rows = topLevelTasks.map((task) => renderProjectDetailTaskTableRow(task, {
+    level: 0,
+    children: childrenByParent.get(task.id) || [],
+  })).join("");
+
+  return `
+    <div class="project-detail-task-table">
+      <div class="project-detail-task-header" aria-hidden="true">
+        <span>任務</span>
+        <span>負責人</span>
+        <span>優先級</span>
+        <span>狀態</span>
+        <span>時程</span>
+        <span>協作對象</span>
+        <span>檢視</span>
+      </div>
+      ${rows}
+    </div>
+  `;
+}
+
+function getProjectDetailChildrenByParent(tasks = []) {
+  const uniqueTasks = getUniqueTasksForDisplay(tasks);
+  const taskIds = new Set(uniqueTasks.map((task) => task.id));
+  const byParent = new Map();
+  uniqueTasks.forEach((task) => {
+    const parentId = task.parentTaskId && taskIds.has(task.parentTaskId) ? task.parentTaskId : "";
+    if (!parentId) return;
+    if (!byParent.has(parentId)) byParent.set(parentId, []);
+    byParent.get(parentId).push(task);
+  });
+  byParent.forEach((children, parentId) => {
+    byParent.set(parentId, children.sort(compareProjectDetailSubtasks));
+  });
+  return byParent;
+}
+
+function getTopLevelTasksForHierarchy(tasks = []) {
+  const uniqueTasks = getUniqueTasksForDisplay(tasks);
+  const taskIds = new Set(uniqueTasks.map((task) => task.id));
+  return uniqueTasks.filter((task) => !task.parentTaskId || !taskIds.has(task.parentTaskId));
+}
+
+function isTaskTreeExpanded(scope = "", taskId = "") {
+  return Boolean(taskTreeExpanded[scope]?.[taskId]);
+}
+
+function toggleTaskTreeExpanded(scope = "", taskId = "") {
+  if (!scope || !taskId) return;
+  taskTreeExpanded[scope] ||= {};
+  if (taskTreeExpanded[scope][taskId]) delete taskTreeExpanded[scope][taskId];
+  else taskTreeExpanded[scope][taskId] = true;
+}
+
+function renderTaskTreeToggle(scope, taskId, childCount = 0, extraClass = "") {
+  if (!childCount) return renderTaskTreeTogglePlaceholder(extraClass);
+  const expanded = isTaskTreeExpanded(scope, taskId);
+  return `
+    <button class="task-tree-toggle ${escapeHtml(extraClass)}" type="button" data-task-tree-toggle="${escapeHtml(taskId)}" data-task-tree-scope="${escapeHtml(scope)}" aria-expanded="${expanded}" aria-label="${expanded ? "收合子任務" : "展開子任務"}">
+      <span aria-hidden="true">${expanded ? "▾" : "▸"}</span>
+      <small>${childCount}</small>
+    </button>
+  `;
+}
+
+function renderTaskTreeTogglePlaceholder(extraClass = "") {
+  return `<span class="task-tree-toggle-placeholder ${escapeHtml(extraClass ? `${extraClass}-placeholder` : "")}" aria-hidden="true"></span>`;
+}
+
+function attachTaskTreeToggleHandlers(root, afterToggle) {
+  root?.querySelectorAll("[data-task-tree-toggle]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleTaskTreeExpanded(button.dataset.taskTreeScope, button.dataset.taskTreeToggle);
+      afterToggle?.();
+    });
+  });
+}
+
+function renderProjectDetailTaskTableRow(task, options = {}) {
+  const children = options.children || [];
+  const isParent = getTaskType(task) === "parent" || children.length > 0;
+  const isChild = options.level > 0 || getTaskType(task) === "child";
+  const rowClass = [
+    "project-detail-task-row",
+    isParent ? "parent-task-row" : "",
+    isChild ? "child-task-row" : "",
+  ].filter(Boolean).join(" ");
+  const expanded = isTaskTreeExpanded("projectDetail", task.id);
+  const childRows = isParent && expanded
+    ? children.map((child) => renderProjectDetailTaskTableRow(child, { level: 1, children: [] })).join("")
+    : "";
+  const toggle = renderTaskTreeToggle("projectDetail", task.id, children.length, "project-detail-task-toggle");
+  const hierarchy = isChild
+    ? `<span class="project-detail-task-branch" aria-hidden="true">↳</span>`
+    : `<span class="project-detail-task-branch-placeholder" aria-hidden="true"></span>`;
+
+  return `
+    <div class="${rowClass}">
+      <div class="project-detail-task-title-cell">
+        <div class="project-detail-task-title-line">
+          ${toggle}
+          ${hierarchy}
+          <strong>${escapeHtml(task.title)}</strong>
+        </div>
+        <small>${escapeHtml(getTaskTypeLabel(getTaskType(task)))}</small>
+      </div>
+      <span>${escapeHtml(task.owner || task.ownerName || "未指定")}</span>
+      <span>${renderPriorityBadge(task.priority)}</span>
+      <span>${renderStatusBadge(task.status, "task")}</span>
+      <span>${escapeHtml(getProjectDetailTaskScheduleLabel(task))}</span>
+      <span>${renderCollaboratorSummary(task.collaborationTags || task.stakeholders || [])}</span>
+      <span class="task-row-actions">
+        <button class="chip-button" type="button" data-detail-task="${task.id}">檢視</button>
+      </span>
+    </div>
+    ${childRows}
+  `;
+}
+
+function getProjectDetailTaskScheduleLabel(task = {}) {
+  const start = task.startDate || task.rangeStart || "";
+  const end = task.endDate || task.rangeEnd || "";
+  if (start || end) return formatRange(start, end);
+  if (task.executionDate) return `執行 ${formatDate(task.executionDate)}`;
+  if (task.deadline) return `期限 ${formatDate(task.deadline)}`;
+  return "未設定";
+}
+
+function compareProjectDetailTopLevelTasks(a, b, childrenByParent = new Map()) {
+  const first = getProjectDetailTopLevelSortDate(a, childrenByParent);
+  const second = getProjectDetailTopLevelSortDate(b, childrenByParent);
+  const dateOrder = compareProjectDetailDateValues(first, second);
+  if (dateOrder) return dateOrder;
+  const endOrder = compareProjectDetailDateValues(getProjectDetailEndDate(a), getProjectDetailEndDate(b));
+  if (endOrder) return endOrder;
+  return compareManualThenName(a, b);
+}
+
+function getProjectDetailTopLevelSortDate(task = {}, childrenByParent = new Map()) {
+  const ownStart = getProjectDetailStartDate(task);
+  if (ownStart) return ownStart;
+  const childStarts = (childrenByParent.get(task.id) || []).map(getProjectDetailStartDate).filter(Boolean);
+  return getEarliestDate(childStarts);
+}
+
+function compareProjectDetailSubtasks(a, b) {
+  const startOrder = compareProjectDetailDateValues(getProjectDetailStartDate(a), getProjectDetailStartDate(b));
+  if (startOrder) return startOrder;
+  const endOrder = compareProjectDetailDateValues(getProjectDetailEndDate(a), getProjectDetailEndDate(b));
+  if (endOrder) return endOrder;
+  return compareManualThenName(a, b);
+}
+
+function compareProjectDetailDateValues(a = "", b = "") {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  return a.localeCompare(b);
+}
+
+function getProjectDetailStartDate(task = {}) {
+  return task.startDate || task.rangeStart || "";
+}
+
+function getProjectDetailEndDate(task = {}) {
+  return task.endDate || task.rangeEnd || "";
 }
 
 function renderHierarchicalTaskRows(tasks = []) {
@@ -6510,7 +11475,7 @@ function renderHierarchicalTaskRows(tasks = []) {
     byParent.get(parentId).push(task);
   });
   const renderRows = (parentId = "", level = 0) => (byParent.get(parentId) || [])
-    .sort(compareTaskForDisplay)
+    .sort(parentId ? compareSubtasksByStartTime : compareTaskForDisplay)
     .map((task) => `
       <button class="detail-task-row level-${level}" type="button" data-detail-task="${task.id}">
         <span>${" ".repeat(level * 2)}${escapeHtml(task.title)}</span>
@@ -6518,7 +11483,7 @@ function renderHierarchicalTaskRows(tasks = []) {
       </button>
       ${renderRows(task.id, level + 1)}
     `).join("");
-  return renderRows() || tasks.sort(compareTaskForDisplay).map((task) => renderProjectDetailTodo(task)).join("");
+  return renderRows() || tasks.sort(compareSubtasksByStartTime).map((task) => renderProjectDetailTodo(task)).join("");
 }
 
 function renderProjectDetailTodo(task) {
@@ -6537,6 +11502,17 @@ function compareTaskForDisplay(a, b) {
     if (first !== second) return first.localeCompare(second);
   }
   return compareManualThenName(a, b);
+}
+
+function compareSubtasksByStartTime(a, b) {
+  const first = getSubtaskStartSortDate(a);
+  const second = getSubtaskStartSortDate(b);
+  if (first !== second) return first.localeCompare(second);
+  return compareManualThenName(a, b);
+}
+
+function getSubtaskStartSortDate(task = {}) {
+  return task.startDate || task.rangeStart || task.executionDate || task.deadline || "9999-12-31";
 }
 
 function compareGanttEntity(a, b) {
@@ -6562,25 +11538,26 @@ function renderProjectTabs() {
   }
 
   const projects = getScopedProjects(true);
-  const allActive = selectedProjectId === "all";
 
   if (selectedProjectId !== "all" && !projects.some((project) => project.id === selectedProjectId)) {
     selectedProjectId = "all";
   }
+  const allActive = selectedProjectId === "all";
 
-  els.projectTabs.innerHTML = [
-    `<button class="chip-button ${allActive ? "active" : ""}" type="button" data-project-tab="all">全部專案</button>`,
-    ...projects.map((project) => {
-      return `<button class="chip-button ${selectedProjectId === project.id ? "active" : ""}" type="button" data-project-tab="${project.id}">${escapeHtml(project.name)}</button>`;
-    }),
-  ].join("");
+  els.projectTabs.innerHTML = `
+    <label class="project-filter-select">
+      <span>任務專案</span>
+      <select data-project-tab-select aria-label="篩選任務專案">
+        <option value="all" ${allActive ? "selected" : ""}>全部專案（${projects.length}）</option>
+        ${projects.map((project) => `<option value="${project.id}" ${selectedProjectId === project.id ? "selected" : ""}>${escapeHtml(project.name)}</option>`).join("")}
+      </select>
+    </label>
+  `;
 
-  els.projectTabs.querySelectorAll("[data-project-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
+  els.projectTabs.querySelector("[data-project-tab-select]")?.addEventListener("change", (event) => {
       selectedTagFilter = "";
-      selectedProjectId = button.dataset.projectTab;
+      selectedProjectId = event.target.value;
       render();
-    });
   });
 }
 
@@ -6620,7 +11597,7 @@ function applyTagFilter(tag) {
   selectedTagFilter = normalizedTag;
   selectedSystemId = null;
   selectedProjectId = "all";
-  els.phaseFilter.value = "all";
+  projectFilters.phase = [];
   els.searchInput.value = "";
   closeTodoDrawer();
   render();
@@ -6634,9 +11611,12 @@ function renderTagButtons(tags = []) {
 }
 
 function renderBoard() {
-  const tasks = getVisibleTasks();
+  const tasks = getVisibleTasks({ useTaskFilters: true });
   const scopeProject = getProject(selectedProjectId);
   const scopeSystem = getSystem(selectedSystemId);
+
+  renderTaskActiveFilterChips();
+  syncTaskViewControls();
 
   els.taskScopeLabel.textContent = selectedTagFilter
     ? `目前顯示標籤「${selectedTagFilter}」的全部任務。`
@@ -6648,8 +11628,23 @@ function renderBoard() {
         ? `目前顯示「${scopeSystem.name}」的系統與專案任務。`
         : "目前顯示全部系統與一般工作的任務。";
 
-  els.board.innerHTML = taskColumns
-    .map((column) => renderTaskColumn(column, tasks))
+  if (!tasks.length) {
+    els.board.classList.remove("task-list-mode");
+    els.board.innerHTML = `<p class="empty-state">找不到符合條件的任務，請調整搜尋關鍵字或篩選條件。</p>`;
+    return;
+  }
+
+  if (taskViewMode === "list") {
+    els.board.classList.add("task-list-mode");
+    els.board.innerHTML = renderTaskListView(tasks);
+    attachTaskListHandlers();
+    return;
+  }
+
+  els.board.classList.remove("task-list-mode");
+  const columns = taskGroupMode === "phase" ? getTaskPhaseColumns(tasks) : taskColumns.map((column) => ({ ...column, type: "status" }));
+  els.board.innerHTML = columns
+    .map((column) => renderTaskColumn(column, tasks, taskGroupMode))
     .join("");
 
   els.board.querySelectorAll(".task-card").forEach((card) => {
@@ -6673,6 +11668,10 @@ function renderBoard() {
     });
   });
 
+  els.board.querySelectorAll("[data-open-parent-task]").forEach((button) => {
+    button.addEventListener("click", () => openTodoDrawer(button.dataset.openParentTask, "view"));
+  });
+
   els.board.querySelectorAll("[data-task-drop-status]").forEach((list) => {
     list.addEventListener("dragover", (event) => {
       event.preventDefault();
@@ -6685,16 +11684,71 @@ function renderBoard() {
     list.addEventListener("drop", (event) => {
       event.preventDefault();
       list.classList.remove("drag-over");
-      updateTaskStatusFromBoard(event.dataTransfer.getData("text/plain"), list.dataset.taskDropStatus);
+      const taskId = event.dataTransfer.getData("text/plain");
+      const beforeId = getDropBeforeId(list, event.clientY, "[data-task-id]", "taskId");
+      const orderedIds = getReorderedIds(list, "[data-task-id]", "taskId", taskId, beforeId);
+      updateTaskStatusFromBoard(taskId, list.dataset.taskDropStatus, orderedIds);
+    });
+  });
+
+  els.board.querySelectorAll("[data-task-drop-stage]").forEach((list) => {
+    list.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      list.classList.add("drag-over");
+      event.dataTransfer.dropEffect = "move";
+    });
+    list.addEventListener("dragleave", () => {
+      list.classList.remove("drag-over");
+    });
+    list.addEventListener("drop", (event) => {
+      event.preventDefault();
+      list.classList.remove("drag-over");
+      const taskId = event.dataTransfer.getData("text/plain");
+      const beforeId = getDropBeforeId(list, event.clientY, "[data-task-id]", "taskId");
+      const orderedIds = getReorderedIds(list, "[data-task-id]", "taskId", taskId, beforeId);
+      updateTaskStageFromBoard(taskId, list.dataset.taskDropStage, orderedIds);
     });
   });
 }
 
-function renderTaskColumn(column, tasks) {
-  const columnTasks = tasks.filter((task) => task.status === column.id);
+function syncTaskViewControls() {
+  els.taskViewToggle?.querySelectorAll("[data-task-view]").forEach((button) => {
+    const active = button.dataset.taskView === taskViewMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  els.taskGroupToggle?.querySelectorAll("[data-task-group]").forEach((button) => {
+    const active = button.dataset.taskGroup === taskGroupMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  els.taskGroupToggle?.classList.toggle("hidden", taskViewMode !== "board");
+}
+
+function handleTaskViewToggle(event) {
+  const button = event.target.closest("[data-task-view]");
+  if (!button) return;
+  taskViewMode = button.dataset.taskView === "list" ? "list" : "board";
+  persistViewPreferences();
+  render();
+}
+
+function handleTaskGroupToggle(event) {
+  const button = event.target.closest("[data-task-group]");
+  if (!button) return;
+  taskGroupMode = button.dataset.taskGroup === "phase" ? "phase" : "status";
+  persistViewPreferences();
+  render();
+}
+
+function renderTaskColumn(column, tasks, groupMode = "status") {
+  const columnTasks = groupMode === "phase"
+    ? tasks.filter((task) => (column.stageIds?.length ? column.stageIds.includes(task.stageId) : !task.stageId)).sort(compareTaskForDisplay)
+    : tasks.filter((task) => task.status === column.id).sort(compareTaskForDisplay);
   const cards = columnTasks.length
     ? columnTasks.map(renderTaskCard).join("")
     : `<p class="empty-state">目前沒有任務</p>`;
+  const dropAttr = groupMode === "phase" ? `data-task-drop-stage="${escapeHtml(column.stageId || "")}"` : `data-task-drop-status="${column.id}"`;
 
   return `
     <section class="column" data-column-status="${column.id}">
@@ -6702,90 +11756,285 @@ function renderTaskColumn(column, tasks) {
         <h2>${column.title}</h2>
         <span class="count">${columnTasks.length}</span>
       </div>
-      <div class="task-list" data-task-drop-status="${column.id}">${cards}</div>
+      <div class="task-list" ${dropAttr}>${cards}</div>
     </section>
   `;
 }
 
 function renderTaskCard(task) {
+  return renderTaskCompactCard(task);
+}
+
+function renderTaskCompactCard(task) {
+  const priorityText = getPriorityLabel(task.priority);
+  const recurrence = isRecurringTemplateTask(task) ? `<span class="recurrence-badge">${escapeHtml(getRecurrenceLabel(task))}</span>` : "";
+  const parentTask = task.parentTaskId ? getProjectTask(task.parentTaskId) : null;
   const system = getSystem(task.systemId);
   const project = getProject(task.projectId);
-  const priorityText = getPriorityLabel(task.priority);
-  const tags = renderTagButtons(task.tags || []);
-  const relatedSummary = getRelatedSummary(task);
-  const stage = task.stageId ? state.projectStages.find((item) => item.id === task.stageId) : null;
-  const childCount = state.tasks.filter((item) => item.parentTaskId === task.id).length;
-  const stakeholders = task.collaborationTags?.length ? `<div class="task-stakeholders">協作：${escapeHtml(task.collaborationTags.join(", "))}</div>` : "";
-  const completedDate = task.status === "done" ? `<div class="task-completed-date">已完成日期：${formatDate(task.completedDate)}</div>` : "";
+  const stageLabel = getTaskStageLabel(task);
+  const collaborators = renderCollaboratorSummary(task.collaborationTags || task.stakeholders || []);
+  const delay = taskIsDelayed(task);
+  const overdue = taskDeadlineOverdue(task);
+  const parentLink = parentTask
+    ? `<button class="task-parent-link" type="button" data-open-parent-task="${parentTask.id}" title="開啟母任務：${escapeHtml(parentTask.title)}">母任務：${escapeHtml(parentTask.title)}</button>`
+    : "";
 
   return `
-    <article class="task-card priority-${task.priority} ${task.parentTaskId ? "child-task" : ""}" data-task-id="${task.id}" draggable="true" tabindex="0">
-      <div class="task-path">${escapeHtml(getTaskContextLabel(task))}</div>
-      <h3>${escapeHtml(task.title)}</h3>
-      <p>${escapeHtml(task.description || "沒有描述")}</p>
-      ${stage ? `<div class="task-path">階段：${escapeHtml(stage.name)}</div>` : ""}
-      <div class="task-date-line">${getTaskDateLine(task)}</div>
-      ${completedDate}
-      ${relatedSummary ? `<div class="related-summary">${relatedSummary}</div>` : ""}
-      ${stakeholders}
-      <div class="task-meta">
-        <span>${escapeHtml(task.owner)}</span>
-        <span>優先級：${priorityText}</span>
-        ${childCount ? `<span>子任務：${childCount}</span>` : ""}
+    <article class="task-card task-card-compact priority-${task.priority} ${task.parentTaskId ? "child-task" : ""}" data-task-id="${task.id}" draggable="true" tabindex="0">
+      <div class="task-card-topline">
+        <div class="task-path task-context-line">
+          <span>${escapeHtml(system?.name || "一般工作")} / ${escapeHtml(project?.name || getTaskScopeLabel(getTaskScope(task)))}</span>
+          ${parentLink}
+        </div>
+        <span class="priority-pill priority-${task.priority}">優先 ${priorityText}</span>
       </div>
-      <div class="tags">${tags}</div>
+      <div class="task-card-badges">
+        <span class="phase-badge">${escapeHtml(stageLabel)}</span>
+        ${delay ? `<span class="task-alert-badge delay">延遲</span>` : ""}
+        ${overdue ? `<span class="task-alert-badge overdue">逾期</span>` : ""}
+      </div>
+      <h3>${escapeHtml(task.title)}</h3>
+      ${recurrence}
+      <div class="task-date-line">期限 ${getTaskDeadlineSummary(task)}</div>
+      <div class="task-meta">
+        <span>負責人 ${escapeHtml(task.owner || task.ownerName || "未指定")}</span>
+        <span>協作 ${collaborators}</span>
+        <span>${escapeHtml(getStatusLabel(task.status))}</span>
+      </div>
     </article>
   `;
 }
 
-function updateTaskStatusFromBoard(taskId, status) {
+function getTaskPhaseColumns(tasks = []) {
+  const projectIds = [...new Set(tasks.map((task) => task.projectId).filter(Boolean))];
+  const stages = state.projectStages
+    .filter((stage) => projectIds.includes(stage.projectId))
+    .sort((a, b) => {
+      const firstProject = getProject(a.projectId)?.name || "";
+      const secondProject = getProject(b.projectId)?.name || "";
+      if (firstProject !== secondProject) return firstProject.localeCompare(secondProject, "zh-Hant");
+      return compareManualThenName(a, b);
+    });
+  const byPhase = new Map();
+  stages.forEach((stage) => {
+    const key = stage.phaseId || stage.name || stage.id;
+    if (!byPhase.has(key)) {
+      byPhase.set(key, {
+        id: key,
+        stageId: stage.id,
+        stageIds: [],
+        title: stage.name,
+        type: "phase",
+      });
+    }
+    byPhase.get(key).stageIds.push(stage.id);
+  });
+  const columns = [...byPhase.values()];
+  return [...columns, { id: "unset", stageId: "", title: "未設定階段", type: "phase" }];
+}
+
+function renderTaskListView(tasks = []) {
+  const childrenByParent = getProjectDetailChildrenByParent(tasks);
+  const rows = getTopLevelTasksForHierarchy(tasks)
+    .sort(compareTasksForList)
+    .map((task) => renderTaskListRow(task, {
+      children: childrenByParent.get(task.id) || [],
+    }))
+    .join("");
+  return `
+    <div class="task-table">
+      ${renderTaskListHeader()}
+      ${rows}
+    </div>
+  `;
+}
+
+function renderTaskListRow(task, options = {}) {
+  const project = getProject(task.projectId);
+  const system = getSystem(task.systemId);
+  const overdue = taskDeadlineOverdue(task);
+  const delay = taskIsDelayed(task);
+  const children = options.children || [];
+  const isParent = getTaskType(task) === "parent" || children.length > 0;
+  const isChild = Boolean(options.isChild) || getTaskType(task) === "child";
+  const expanded = isTaskTreeExpanded("taskList", task.id);
+  const childRows = isParent && expanded ? children
+    .sort(compareTasksForList)
+    .map((child) => renderTaskListRow(child, { isChild: true, children: [] }))
+    .join("") : "";
+  return `
+    <article class="task-table-row ${isParent ? "parent-task-row" : ""} ${isChild ? "child-task-row" : ""}" data-task-row="${task.id}">
+      <div class="task-title-cell">
+        <div class="task-tree-title-line">
+          ${renderTaskTreeToggle("taskList", task.id, children.length)}
+          ${isChild ? `<span class="hierarchy-branch" aria-hidden="true">↳</span>` : `<span class="hierarchy-branch-placeholder" aria-hidden="true"></span>`}
+          <strong>${escapeHtml(task.title)}</strong>
+        </div>
+        <small>${escapeHtml(getTaskTypeLabel(getTaskType(task)))}・${escapeHtml(system?.name || getTaskScopeLabel(getTaskScope(task)))}</small>
+        <span class="task-inline-alerts">
+          ${delay ? `<em class="task-alert-badge delay">延遲</em>` : ""}
+          ${overdue ? `<em class="task-alert-badge overdue">逾期</em>` : ""}
+        </span>
+      </div>
+      <span>${escapeHtml(project?.name || getTaskScopeLabel(getTaskScope(task)))}</span>
+      <span>${escapeHtml(getTaskStageLabel(task))}</span>
+      <span>${renderStatusBadge(task.status, "task")}</span>
+      <span>${renderPriorityBadge(task.priority)}</span>
+      <span>${escapeHtml(getTaskDeadlineSummary(task))}</span>
+      <span>${escapeHtml(task.owner || task.ownerName || "未指定")}</span>
+      <span>${renderCollaboratorSummary(task.collaborationTags || task.stakeholders || [])}</span>
+      <span class="task-row-actions">
+        <button class="chip-button" type="button" data-task-view="${task.id}">檢視</button>
+        ${renderTaskMoreMenu(task)}
+      </span>
+    </article>
+    ${childRows}
+  `;
+}
+
+function renderTaskMoreMenu(task) {
+  const projectButton = task.projectId ? `<button type="button" data-task-project="${task.projectId}">查看所屬專案</button>` : "";
+  return `
+    <details class="row-more-menu">
+      <summary aria-label="更多操作">...</summary>
+      <div class="row-more-menu-panel">
+        <button type="button" data-task-edit="${task.id}">編輯任務</button>
+        <button type="button" data-task-history="${task.id}">新增歷程</button>
+        <button type="button" data-task-status="${task.id}">調整狀態</button>
+        ${projectButton}
+      </div>
+    </details>
+  `;
+}
+
+function attachTaskListHandlers() {
+  attachTaskTreeToggleHandlers(els.board, renderBoard);
+  attachTaskListSortHandlers();
+
+  els.board.querySelectorAll("[data-task-row]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button, a, details, summary")) return;
+      openTodoDrawer(row.dataset.taskRow, "view");
+    });
+  });
+  els.board.querySelectorAll("[data-task-view]").forEach((button) => {
+    button.addEventListener("click", () => openTodoDrawer(button.dataset.taskView, "view"));
+  });
+  els.board.querySelectorAll("[data-task-edit], [data-task-status]").forEach((button) => {
+    button.addEventListener("click", () => openTodoDrawer(button.dataset.taskEdit || button.dataset.taskStatus, "edit"));
+  });
+  els.board.querySelectorAll("[data-task-history]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeTaskDrawerTab = "history";
+      openTodoDrawer(button.dataset.taskHistory, "view");
+    });
+  });
+  els.board.querySelectorAll("[data-task-project]").forEach((button) => {
+    button.addEventListener("click", () => openProjectDetailPage(button.dataset.taskProject));
+  });
+}
+
+function updateTaskStatusFromBoard(taskId, status, orderedIds = []) {
   const task = getProjectTask(taskId);
   if (!task) return;
   const nextStatus = normalizeTaskStatus(status);
-  if (task.status === nextStatus) return;
-  if (nextStatus === "done" && !canCompleteTask(task)) {
+  const statusChanged = task.status !== nextStatus;
+  if (!statusChanged && !orderedIds.length) return;
+  if (nextStatus === "done" && !isRecurringTemplateTask(task) && !canCompleteTask(task)) {
     alert("請先完成所有細項步驟，才能將任務狀態改為已完成。");
     return;
   }
 
+  const orderMap = new Map(orderedIds.map((id, index) => [id, index + 1]));
   state.tasks = state.tasks.map((item) => {
-    if (item.id !== taskId) return item;
-    if (item.isRecurring && nextStatus === "done") {
-      return {
-        ...item,
-        completedOccurrences: uniqueUids([...(item.completedOccurrences || []), todayString()]),
-      };
-    }
-    return applyTaskStatusSideEffects({ ...item, status: nextStatus }, item, nextStatus === "done" ? todayString() : "");
+    const nextSortOrder = orderMap.has(item.id) ? orderMap.get(item.id) : item.sortOrder;
+    if (item.id !== taskId) return orderMap.has(item.id) ? { ...item, sortOrder: nextSortOrder } : item;
+    return applyTaskStatusSideEffects({ ...item, status: nextStatus, sortOrder: nextSortOrder }, item, nextStatus === "done" ? todayString() : "");
   });
 
-  saveState();
-  if (nextStatus === "done") {
+  saveTaskState(uniqueUids([taskId, ...orderedIds]));
+  if (statusChanged && nextStatus === "done") {
     playCompletionSound();
     showToast(`已完成：${task.title}`);
   }
   render();
 }
 
-function getScopedProjects(applyPhaseFilter = false) {
-  const phase = els.phaseFilter.value;
+function updateTaskStageFromBoard(taskId, stageId, orderedIds = []) {
+  const task = getProjectTask(taskId);
+  if (!task || getTaskScope(task) !== "project") return;
+  const nextStageId = stageId || "";
+  const statusChanged = task.stageId !== nextStageId;
+  if (!statusChanged && !orderedIds.length) return;
+  const stage = nextStageId ? state.projectStages.find((item) => item.id === nextStageId) : null;
+  if (nextStageId && (!stage || stage.projectId !== task.projectId)) return;
+
+  const orderMap = new Map(orderedIds.map((id, index) => [id, index + 1]));
+  state.tasks = state.tasks.map((item) => {
+    const nextSortOrder = orderMap.has(item.id) ? orderMap.get(item.id) : item.sortOrder;
+    if (item.id !== taskId) return orderMap.has(item.id) ? { ...item, sortOrder: nextSortOrder } : item;
+    return { ...item, stageId: nextStageId, sortOrder: nextSortOrder };
+  });
+
+  saveTaskState(uniqueUids([taskId, ...orderedIds]));
+  render();
+}
+
+function getScopedProjects(applyPhaseFilter = false, options = {}) {
+  const phaseFilters = projectFilters.phase;
   const query = els.searchInput.value.trim().toLowerCase();
   return state.projects.filter((project) => {
     const system = getSystem(project.systemId);
     const matchSystem = selectedScopeIsGeneral() ? false : selectedSystemId ? project.systemId === selectedSystemId : true;
-    const matchPhase = !applyPhaseFilter || project.category === "general" || phase === "all" || project.phase === phase;
+    const matchPhase = !applyPhaseFilter || projectMatchesPhaseFilters(project, phaseFilters);
     const matchQuery = projectMatchesSearch(project, system, query);
-    const matchOwner = entityMatchesOwnerFilter(project, projectOwnerFilterIds)
-      || state.tasks.some((task) => task.projectId === project.id && entityMatchesOwnerFilter(task, projectOwnerFilterIds));
-    const matchCollaboration = entityMatchesCollaborationFilter(project, projectCollaborationFilters)
-      || entityMatchesCollaborationFilter(system, projectCollaborationFilters)
-      || state.tasks.some((task) => task.projectId === project.id && entityMatchesCollaborationFilter(task, projectCollaborationFilters));
-    return matchSystem && matchPhase && matchQuery && matchOwner && matchCollaboration;
+    const matchOwner = projectMatchesOwnerContext(project, system);
+  const matchCollaboration = entityMatchesCollaborationFilter(project, projectCollaborationFilters)
+    || entityMatchesCollaborationFilter(system, projectCollaborationFilters)
+    || state.tasks.some((task) => isManagementCountTask(task) && task.projectId === project.id && entityMatchesCollaborationFilter(task, projectCollaborationFilters));
+    const matchProjectFilters = options.ignoreProjectFilters || projectMatchesAdvancedFilters(project);
+    return matchSystem && matchPhase && matchQuery && matchOwner && matchCollaboration && matchProjectFilters;
   });
+}
+
+function projectMatchesPhaseFilters(project, phases = projectFilters.phase) {
+  const selectedPhases = normalizeFilterValues(phases);
+  if (project?.category === "general" || !selectedPhases.length) return true;
+  const currentStage = getProjectCurrentStageInfo(project);
+  return selectedPhases.some((phase) => (
+    phase === "unset"
+      ? !currentStage.stage
+      : currentStage.phaseId === phase || project.phase === phase
+  ));
+}
+
+function systemMatchesOwnerContext(system, ownerIds = projectOwnerFilterIds) {
+  if (!ownerIds.length) return true;
+  if (entityMatchesOwnerFilter(system, ownerIds)) return true;
+  return state.projects.some((project) => project.systemId === system.id && projectMatchesOwnerContext(project, system, ownerIds))
+    || state.tasks.some((task) => isManagementCountTask(task) && task.systemId === system.id && taskMatchesOwnerContext(task, ownerIds));
+}
+
+function projectMatchesOwnerContext(project, system = getSystem(project?.systemId), ownerIds = projectOwnerFilterIds) {
+  if (!ownerIds.length) return true;
+  return entityMatchesOwnerFilter(project, ownerIds)
+    || entityMatchesOwnerFilter(system, ownerIds)
+    || state.tasks.some((task) => isManagementCountTask(task) && task.projectId === project.id && entityMatchesOwnerFilter(task, ownerIds));
+}
+
+function taskMatchesOwnerContext(task, ownerIds = projectOwnerFilterIds) {
+  if (!ownerIds.length) return true;
+  const project = getProject(task.projectId);
+  const system = getSystem(task.systemId);
+  return entityMatchesOwnerFilter(task, ownerIds)
+    || entityMatchesOwnerFilter(project, ownerIds)
+    || entityMatchesOwnerFilter(system, ownerIds);
 }
 
 function projectMatchesSearch(project, system, query) {
   if (!query) return true;
+  const projectTasks = getProjectTasks(project.id);
+  const stages = getProjectStages(project.id);
 
   const haystack = [
     project.name,
@@ -6804,11 +12053,54 @@ function projectMatchesSearch(project, system, query) {
     (system?.tags || []).join(" "),
     (system?.collaborationTags || []).join(" "),
     getPhaseLabel(project.phase),
+    stages.map((stage) => `${stage.name} ${stage.description} ${formatDateRangeYmd(stage.startDate, stage.endDate)}`).join(" "),
+    projectTasks.map((task) => [
+      task.title,
+      task.description,
+      task.owner,
+      task.ownerName,
+      getTaskStageLabel(task),
+      (task.collaborationTags || task.stakeholders || []).join(" "),
+      (task.history || []).map((item) => `${item.description} ${item.note} ${(item.links || []).map((link) => `${link.name} ${link.url}`).join(" ")}`).join(" "),
+      task.notes,
+      (task.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
+      (task.relatedEmails || []).join(" "),
+    ].join(" ")).join(" "),
   ]
-    .join(" ")
-    .toLowerCase();
+    .join(" ");
 
-  return haystack.includes(query);
+  return matchesFuzzyText(haystack, query);
+}
+
+function projectMatchesAdvancedFilters(project) {
+  const status = getProjectStatus(project);
+  const priority = normalizePriority(project.priority);
+  const stats = getProjectTaskStats(project.id);
+  const dates = [
+    project.plannedStart,
+    project.plannedEnd,
+    ...getProjectStages(project.id).flatMap((stage) => [stage.startDate, stage.endDate]),
+  ];
+
+  if (!filterIncludesValue(projectFilters.status, status)) return false;
+  if (!filterIncludesValue(projectFilters.priority, priority)) return false;
+  if (!filterMatchesAny(projectFilters.schedule, (filter) => scheduleStatusMatchesProject(project, filter))) return false;
+  if (!dateFilterMatchesDates(dates, projectFilters.date, projectFilters.dateStart, projectFilters.dateEnd)) return false;
+  if (!projectMoreFiltersMatch(project, stats)) return false;
+  return true;
+}
+
+function projectMoreFiltersMatch(project, stats = getProjectTaskStats(project.id)) {
+  if (!projectFilters.more.length) return true;
+  return projectFilters.more.every((filter) => {
+    if (filter === "has_tasks") return stats.total > 0;
+    if (filter === "no_tasks") return stats.total === 0;
+    if (filter === "has_delay") return stats.delay > 0 || isProjectDelayed(project);
+    if (filter === "has_overdue") return stats.overdue > 0 || getProjectScheduleStatus(project) === "overdue";
+    if (filter === "my_owner") return currentProfile?.uid && entityMatchesOwnerFilter(project, [currentProfile.uid]);
+    if (filter === "my_collab") return currentUserMatchesCollaboration(project) || getProjectTasks(project.id).some(currentUserMatchesCollaboration);
+    return true;
+  });
 }
 
 function entityMatchesOwnerFilter(entity, ownerIds = []) {
@@ -6822,31 +12114,57 @@ function entityMatchesCollaborationFilter(entity, filters = []) {
   return tags.some((tag) => filters.includes(tag));
 }
 
+function currentUserMatchesCollaboration(entity = {}) {
+  const tags = normalizeTextList(entity?.collaborationTags || entity?.stakeholders || []);
+  if (!tags.length || !currentProfile) return false;
+  const candidates = normalizeTextList([
+    currentProfile.name,
+    currentProfile.email,
+    currentFirebaseUser?.email,
+    currentSafeUser?.email,
+  ]).map((item) => item.toLowerCase());
+  return tags.some((tag) => candidates.includes(String(tag).toLowerCase()));
+}
+
 function getVisibleTasks(options = {}) {
-  const query = els.searchInput.value.trim().toLowerCase();
-  const phase = els.phaseFilter.value;
-  const projectId = options.projectId ?? selectedProjectId;
+  const useTaskFilters = Boolean(options.useTaskFilters);
+  const query = useTaskFilters ? taskFilters.query.trim().toLowerCase() : els.searchInput.value.trim().toLowerCase();
+  const phase = options.phase ?? (useTaskFilters ? taskFilters.phase : projectFilters.phase);
+  const taskProjectFilters = normalizeFilterValues(taskFilters.projectIds);
+  const projectId = options.projectId ?? (useTaskFilters ? (taskProjectFilters.length ? taskProjectFilters : selectedProjectId) : selectedProjectId);
+  const systemId = options.systemId ?? selectedSystemId;
+  const systemIds = normalizeFilterValues(options.systemIds);
   const tagFilter = options.tag ?? selectedTagFilter;
   const normalizedTagFilter = tagFilter.trim().toLowerCase();
+  const includeOccurrences = Boolean(options.includeOccurrences);
   const phaseProjectIds = state.projects
-    .filter((project) => project.category === "general" || phase === "all" || project.phase === phase)
+    .filter((project) => projectMatchesPhaseFilters(project, phase))
     .map((project) => project.id);
+  const strictEntityFilters = Boolean(options.strictEntityFilters);
 
-  return state.tasks.filter((task) => {
+  return getUniqueTasksForDisplay(state.tasks).filter((task) => {
+    if (isTaskDeleted(task)) return false;
+    if (!includeOccurrences && isRecurringOccurrenceTask(task)) return false;
     const system = getSystem(task.systemId);
     const project = getProject(task.projectId);
-    const matchSystem = taskMatchesSystemScope(task);
+    const matchSystem = systemIds.length
+      ? taskMatchesGanttSystemFilters(task, systemIds)
+      : taskMatchesSystemScope(task, systemId);
     const matchProject = taskMatchesProjectScope(task, projectId);
     const matchPhase = taskMatchesPhaseScope(task, phaseProjectIds, phase);
     const matchTag = !normalizedTagFilter || (task.tags || []).some((tag) => tag.toLowerCase() === normalizedTagFilter);
-    const ownerFilters = options.ownerIds || projectOwnerFilterIds;
-    const collaborationFilters = options.collaborationTags || projectCollaborationFilters;
-    const matchOwner = entityMatchesOwnerFilter(task, ownerFilters)
-      || entityMatchesOwnerFilter(project, ownerFilters)
-      || entityMatchesOwnerFilter(system, ownerFilters);
-    const matchCollaboration = entityMatchesCollaborationFilter(task, collaborationFilters)
-      || entityMatchesCollaborationFilter(project, collaborationFilters)
-      || entityMatchesCollaborationFilter(system, collaborationFilters);
+    const ownerFilters = options.ownerIds ?? (useTaskFilters ? taskFilters.ownerIds : projectOwnerFilterIds);
+    const collaborationFilters = options.collaborationTags ?? (useTaskFilters ? taskFilters.collaborationTags : projectCollaborationFilters);
+    const matchOwner = strictEntityFilters
+      ? entityMatchesOwnerFilter(task, ownerFilters)
+      : entityMatchesOwnerFilter(task, ownerFilters)
+        || entityMatchesOwnerFilter(project, ownerFilters)
+        || entityMatchesOwnerFilter(system, ownerFilters);
+    const matchCollaboration = strictEntityFilters
+      ? entityMatchesCollaborationFilter(task, collaborationFilters)
+      : entityMatchesCollaborationFilter(task, collaborationFilters)
+        || entityMatchesCollaborationFilter(project, collaborationFilters)
+        || entityMatchesCollaborationFilter(system, collaborationFilters);
     const haystack = [
       task.title,
       task.description,
@@ -6881,11 +12199,36 @@ function getVisibleTasks(options = {}) {
       (project?.relatedEmails || []).join(" "),
       (project?.relatedLinks || []).map((link) => `${link.title} ${link.url}`).join(" "),
       getPhaseLabel(project?.phase),
+      getTaskStageLabel(task),
     ]
-      .join(" ")
-      .toLowerCase();
+      .join(" ");
 
-    return matchSystem && matchProject && matchPhase && matchTag && matchOwner && matchCollaboration && haystack.includes(query);
+    const matchText = matchesFuzzyText(haystack, query);
+    const matchTaskFilters = !useTaskFilters || taskMatchesAdvancedFilters(task);
+    return matchSystem && matchProject && matchPhase && matchTag && matchOwner && matchCollaboration && matchText && matchTaskFilters;
+  });
+}
+
+function taskMatchesAdvancedFilters(task) {
+  const taskDates = [task.rangeStart, task.rangeEnd, task.startDate, task.endDate, task.executionDate, task.deadline];
+  if (!filterIncludesValue(taskFilters.status, task.status)) return false;
+  if (!filterIncludesValue(taskFilters.priority, normalizePriority(task.priority))) return false;
+  if (!filterMatchesAny(taskFilters.due, (filter) => dueStatusMatchesTask(task, filter))) return false;
+  if (!dateFilterMatchesDates(taskDates, taskFilters.date, taskFilters.dateStart, taskFilters.dateEnd)) return false;
+  if (!taskMoreFiltersMatch(task)) return false;
+  return true;
+}
+
+function taskMoreFiltersMatch(task) {
+  if (!taskFilters.more.length) return true;
+  return taskFilters.more.every((filter) => {
+    if (filter === "has_project") return getTaskScope(task) === "project" && Boolean(task.projectId);
+    if (filter === "no_stage") return !getTaskStage(task);
+    if (filter === "has_delay") return taskIsDelayed(task);
+    if (filter === "has_overdue") return taskDeadlineOverdue(task);
+    if (filter === "my_owner") return currentProfile?.uid && entityMatchesOwnerFilter(task, [currentProfile.uid]);
+    if (filter === "my_collab") return currentUserMatchesCollaboration(task);
+    return true;
   });
 }
 
@@ -6897,12 +12240,15 @@ function openSystemDialog(system = null) {
   systemFields.description.value = system?.description || "";
   systemFields.tags.value = system?.tags?.join(", ") || "";
   systemFields.collaborationTags.value = system?.collaborationTags?.join(", ") || "";
-  systemFields.owner.innerHTML = renderOwnerOptions(
+  renderOwnerDropdown(
+    systemFields.owner,
     getSystemOwnerChoices(system),
     system?.internalOwnerIds || system?.ownerUid || currentProfile?.uid || "",
     system || {},
+    {
+      disabled: Boolean(system?.id && !canAssignSystemOwner(system)),
+    },
   );
-  systemFields.owner.disabled = Boolean(system?.id && !canAssignSystemOwner(system));
   els.deleteSystemButton.hidden = !system?.id || !canEditSystem(system);
   els.systemDialog.showModal();
 }
@@ -6911,7 +12257,7 @@ function handleSystemSubmit(event) {
   event.preventDefault();
   const previousSystem = getSystem(systemFields.id.value);
   const ownerIds = ownerSelectValue(systemFields.owner, previousSystem);
-  const owner = getOwnerPayload(ownerIds[0], previousSystem || {});
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, previousSystem || {}), previousSystem || {});
 
   const system = {
     id: systemFields.id.value || createId(),
@@ -6969,6 +12315,8 @@ function openProjectDialog(project = null, defaults = {}) {
   projectFields.systemId.disabled = Boolean(project?.id && !isAdminProfile());
   syncProjectOwnerOptions(project, defaultSystemId);
   projectFields.category.value = normalizeProjectCategory(project?.category);
+  projectFields.status && (projectFields.status.value = getProjectStatus(project || {}));
+  projectFields.priority && (projectFields.priority.value = normalizePriority(project?.priority));
   projectFields.name.value = project?.name || "";
   projectFields.description.value = project?.description || "";
   projectFields.tags.value = project?.tags?.join(", ") || "";
@@ -7011,10 +12359,40 @@ function handleProjectSubmit(event) {
     ? getProjectScheduleRange(projectFields.plannedStart.value, projectFields.plannedEnd.value, phaseSchedules)
     : { start: "", end: "" };
   const previousProject = getProject(projectFields.id.value);
-  const phase = isDevelopmentProject ? projectFields.phase.value : "deal";
-  const isClosed = isDevelopmentProject && phase === "closed";
+  const requestedStatus = normalizeProjectStatus(projectFields.status?.value || previousProject?.status || inferProjectStatusFromDates(previousProject || {}));
+  const isClosed = isDevelopmentProject && (projectFields.phase.value === "closed" || requestedStatus === "closed");
+  const phase = isDevelopmentProject ? (isClosed ? "closed" : projectFields.phase.value) : "deal";
   const ownerIds = ownerSelectValue(projectFields.owner, previousProject);
-  const owner = getOwnerPayload(ownerIds[0], previousProject || {});
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, previousProject || {}), previousProject || {});
+  const systemId = projectFields.systemId.value;
+  const system = getSystem(systemId);
+  let projectVisibleUids = uniqueUids([
+    ...normalizeVisibleToUids(previousProject?.visibleToUids),
+    ...(system ? getVisibleOrOwnerUids(system) : []),
+    ...ownerIds,
+  ]);
+
+  if (!previousProject) {
+    const draftProject = {
+      systemId,
+      internalOwnerIds: ownerIds,
+      ...owner,
+      visibleToUids: projectVisibleUids,
+    };
+    const projectCreateRuleCheck = getProjectCreateRuleCheck(draftProject);
+    if (!projectCreateRuleCheck.allowed) {
+      if (projectCreateRuleCheck.reason === "system-parent-not-synced") {
+        logDeferredCloudWrites([createCloudWriteLogEntry("projects", "create", "", draftProject, {
+          reason: projectCreateRuleCheck.reason,
+        })]);
+      } else {
+        logBlockedCloudProjectCreate(draftProject, projectCreateRuleCheck.reason);
+      }
+      alert("只有系統負責人可以在這個系統下新增專案。請確認此系統的負責人設定。");
+      return;
+    }
+    projectVisibleUids = projectCreateRuleCheck.expectedVisibleToUids;
+  }
 
   if (!previousProject && !canAssignProjectOwner(null, projectFields.systemId.value)) {
     alert("只有系統負責人或管理員可以在這個系統下新增專案。");
@@ -7023,11 +12401,14 @@ function handleProjectSubmit(event) {
 
   const project = {
     id: projectFields.id.value || createId(),
-    systemId: projectFields.systemId.value,
+    systemId,
     internalOwnerIds: ownerIds,
     ...owner,
     ownerName: getOwnerNames(ownerIds, previousProject || {}),
+    visibleToUids: projectVisibleUids,
     category,
+    status: isDevelopmentProject ? (isClosed ? "closed" : requestedStatus) : "doing",
+    priority: normalizePriority(projectFields.priority?.value || previousProject?.priority),
     name: projectFields.name.value.trim(),
     description: projectFields.description.value.trim(),
     tags: splitCommaList(projectFields.tags.value),
@@ -7042,7 +12423,15 @@ function handleProjectSubmit(event) {
     relatedLinks: collectLinkRows(projectFields.relatedLinks),
     closed: isClosed,
     closedAt: isClosed ? previousProject?.closedAt || todayString() : "",
+    sortOrder: previousProject?.sortOrder || getNextSortOrder(state.projects.filter((item) => item.systemId === systemId)),
   };
+
+  const previousStageIds = previousProject
+    ? state.projectStages.filter((stage) => stage.projectId === project.id).map((stage) => stage.id)
+    : [];
+  const projectTaskIds = previousProject
+    ? state.tasks.filter((task) => task.projectId === project.id).map((task) => task.id)
+    : [];
 
   if (previousProject) {
     state.projects = state.projects.map((item) => (item.id === project.id ? project : item));
@@ -7054,10 +12443,19 @@ function handleProjectSubmit(event) {
   }
 
   syncProjectStagesForProject(project, previousProject);
+  const stageIds = uniqueUids([
+    ...previousStageIds,
+    ...state.projectStages.filter((stage) => stage.projectId === project.id).map((stage) => stage.id),
+  ]);
 
   selectedSystemId = project.systemId;
   selectedProjectId = project.id;
-  saveState();
+  if (previousProject) {
+    saveProjectState([project.id], stageIds, projectTaskIds);
+  } else {
+    deferProjectStageCloudWrites(project.id, stageIds);
+    saveProjectOnlyState([project.id]);
+  }
   els.projectDialog.close();
   render();
 }
@@ -7072,10 +12470,12 @@ function handleProjectDelete() {
     return;
   }
   if (!confirm(`確定要刪除專案「${project.name}」嗎？此操作無法復原。`)) return;
+  const stageIds = state.projectStages.filter((stage) => stage.projectId === id).map((stage) => stage.id);
   state.projects = state.projects.filter((item) => item.id !== id);
   state.projectStages = state.projectStages.filter((stage) => stage.projectId !== id);
+  deferredProjectStageIdsByProject.delete(id);
   selectedProjectId = "all";
-  saveState();
+  saveProjectState([id], stageIds);
   els.projectDialog.close();
   render();
 }
@@ -7098,9 +12498,15 @@ function syncProjectStagesForProject(project, previousProject = null) {
 
   const existingStages = state.projectStages.filter((stage) => stage.projectId === project.id);
   const byPhase = new Map(existingStages.map((stage) => [stage.phaseId || getPhaseIdByLabel(stage.name), stage]));
+  const currentPhaseIndex = Math.max(0, phases.findIndex((phase) => phase.id === project.phase));
   const nextStages = phases.map((phase, index) => {
     const existing = byPhase.get(phase.id);
     const schedule = project.phaseSchedules?.[phase.id] || {};
+    const nextStatus = project.phase === phase.id
+      ? "doing"
+      : existing?.status === "doing"
+        ? (index < currentPhaseIndex ? "done" : "not_started")
+        : existing?.status || (index < currentPhaseIndex ? "done" : "not_started");
     return normalizeProjectStage({
       ...(existing || {}),
       id: existing?.id || `stage-${project.id}-${phase.id}`,
@@ -7109,7 +12515,7 @@ function syncProjectStagesForProject(project, previousProject = null) {
       name: existing?.name || phase.label,
       startDate: existing?.startDate || schedule.start || "",
       endDate: existing?.endDate || schedule.end || "",
-      status: project.phase === phase.id ? "doing" : existing?.status || "not_started",
+      status: nextStatus,
       sortOrder: existing?.sortOrder || index + 1,
       visibleToUids: project.visibleToUids,
     });
@@ -7123,12 +12529,15 @@ function syncProjectStagesForProject(project, previousProject = null) {
 
 function syncProjectOwnerOptions(project = getProject(projectFields.id.value), systemId = projectFields.systemId.value) {
   const selectedOwnerUid = project?.internalOwnerIds || project?.ownerUid || currentProfile?.uid || "";
-  projectFields.owner.innerHTML = renderOwnerOptions(
+  renderOwnerDropdown(
+    projectFields.owner,
     getProjectOwnerChoices(project, systemId),
     selectedOwnerUid,
     project || {},
+    {
+      disabled: Boolean(project?.id && !canAssignProjectOwner(project, systemId)),
+    },
   );
-  projectFields.owner.disabled = Boolean(project?.id && !canAssignProjectOwner(project, systemId));
 }
 
 function attachProjectScheduleHandlers() {
@@ -7194,6 +12603,7 @@ function openTaskDialog(task = null, defaults = {}) {
   const defaultProjectId = defaultScope === "project" ? preferredProjectId : "";
   taskFields.id.value = task?.id || "";
   taskFields.scope.value = defaultScope;
+  if (taskFields.taskType) taskFields.taskType.value = getTaskType(task || defaults || {});
   taskFields.systemId.innerHTML = renderSystemOptions(defaultSystemId);
   populateTaskProjectSelect(defaultSystemId, defaultProjectId);
   syncTaskStageAndParentOptions(taskFields, task || defaults);
@@ -7208,9 +12618,7 @@ function openTaskDialog(task = null, defaults = {}) {
   taskFields.completedDate.value = task?.completedDate || "";
   taskFields.tags.value = (task?.tags || defaults.tags || []).join(", ");
   taskFields.stakeholders.value = (task?.collaborationTags || task?.stakeholders || defaults.collaborationTags || []).join(", ");
-  taskFields.isRecurring.checked = Boolean(task?.isRecurring);
-  taskFields.recurrenceType.value = task?.recurrenceType || "";
-  taskFields.recurrenceInterval.value = task?.recurrenceRule?.intervalDays || "";
+  setTaskRecurrenceFields(taskFields, task || {});
   renderEmailRows(taskFields.relatedEmails, task?.relatedEmails || []);
   renderLinkRows(taskFields.relatedLinks, task?.relatedLinks || []);
 
@@ -7230,7 +12638,6 @@ function openTaskDialog(task = null, defaults = {}) {
   taskFields.projectId.disabled = lockTaskScope;
   syncTaskCompletedField(taskFields);
   updateTaskDateConstraints(taskFields);
-  syncTaskRecurrenceFields(taskFields);
   els.taskDialog.showModal();
 }
 
@@ -7241,27 +12648,37 @@ function handleTaskSubmit(event) {
   if (!validateTaskScopeValues(scopeValues)) return;
   const { scope, systemId, projectId } = scopeValues;
   updateTaskDateConstraints(taskFields);
-  const rangeStart = taskFields.rangeStart.value;
-  const rangeEnd = taskFields.rangeEnd.value;
-  const executionDate = taskFields.executionDate.value;
-  const deadline = taskFields.deadline.value;
+  const recurrenceRule = collectTaskRecurrenceRule(taskFields);
+  const isRecurring = Boolean(taskFields.isRecurring?.checked && recurrenceRule.type);
+  const dueRule = collectTaskDueRule(taskFields);
+  const rangeStart = isRecurring ? recurrenceRule.startDate || "" : taskFields.rangeStart.value;
+  const rangeEnd = isRecurring
+    ? recurrenceRule.endMode === "date"
+      ? recurrenceRule.endDate || recurrenceRule.startDate || ""
+      : recurrenceRule.startDate || ""
+    : taskFields.rangeEnd.value;
+  const executionDate = isRecurring ? "" : taskFields.executionDate.value;
+  const deadline = isRecurring ? "" : taskFields.deadline.value;
 
 
-  if (!validateTaskDates(rangeStart, rangeEnd, executionDate, deadline)) {
+  if (!isRecurring && !validateTaskDates(rangeStart, rangeEnd, executionDate, deadline)) {
     return;
   }
 
   const existingTask = taskFields.id.value ? getProjectTask(taskFields.id.value) : null;
+  const taskType = normalizeTaskTypeValue(taskFields.taskType?.value || "normal");
+  const parentTaskId = scope === "project" && taskType === "child" ? taskFields.parentTaskId?.value || "" : "";
+  if (!validateTaskTypeSelection({ taskType, parentTaskId, scope, projectId, existingTask })) return;
   const status = normalizeTaskStatus(taskFields.status.value);
-  if (status === "done" && !canCompleteTask(existingTask)) {
+  if (status === "done" && !isRecurringTemplateTask(existingTask) && !canCompleteTask(existingTask)) {
     alert("請先完成所有細項步驟，才能將任務狀態改為已完成。");
     return;
   }
 
   const requestedCompletedDate = status === "done" ? taskFields.completedDate.value || todayString() : "";
   const ownerIds = ownerSelectValue(taskFields.owner, existingTask);
-  const owner = getOwnerPayload(ownerIds[0], existingTask || {});
-  const isRecurring = Boolean(taskFields.isRecurring?.checked && normalizeRecurrenceType(taskFields.recurrenceType?.value));
+  const owner = getOwnerPayload(getPrimaryOwnerUid(ownerIds, existingTask || {}), existingTask || {});
+  if (isRecurring && !validateRecurrenceRule(recurrenceRule)) return;
 
   const task = applyTaskStatusSideEffects({
     id: taskFields.id.value || createId(),
@@ -7269,7 +12686,8 @@ function handleTaskSubmit(event) {
     systemId,
     projectId,
     stageId: scope === "project" ? taskFields.stageId?.value || "" : "",
-    parentTaskId: taskFields.parentTaskId?.value || "",
+    parentTaskId,
+    taskType: parentTaskId ? "child" : taskType,
     internalOwnerIds: ownerIds,
     ...owner,
     ownerName: getOwnerNames(ownerIds, existingTask || {}),
@@ -7284,16 +12702,21 @@ function handleTaskSubmit(event) {
     rangeEnd,
     executionDate,
     deadline,
+    dueDate: deadline,
     tags: splitCommaList(taskFields.tags.value),
     collaborationTags: splitCommaList(taskFields.stakeholders.value),
     stakeholders: splitCommaList(taskFields.stakeholders.value),
     isRecurring,
-    recurrenceType: isRecurring ? normalizeRecurrenceType(taskFields.recurrenceType.value) : "",
-    recurrenceRule: isRecurring ? normalizeRecurrenceRule({
-      type: taskFields.recurrenceType.value,
-      intervalDays: Number(taskFields.recurrenceInterval.value || 0),
-    }) : {},
-    sortOrder: existingTask?.sortOrder || getNextSortOrder(state.tasks.filter((item) => item.projectId === projectId)),
+    recurrenceEnabled: isRecurring,
+    isRecurringTemplate: isRecurring,
+    isRecurringOccurrence: isRecurring ? false : existingTask?.isRecurringOccurrence || false,
+    templateTaskId: isRecurring ? "" : existingTask?.templateTaskId || "",
+    occurrenceDate: isRecurring ? "" : existingTask?.occurrenceDate || "",
+    recurrenceType: isRecurring ? recurrenceRule.type : "",
+    recurrenceRule: isRecurring ? recurrenceRule : {},
+    dueRule: isRecurring ? dueRule : normalizeDueRule(existingTask?.dueRule),
+    completedOccurrences: existingTask?.completedOccurrences || [],
+    sortOrder: existingTask?.sortOrder || getNextSortOrder(getTaskSortScopeItems({ scope, systemId, projectId })),
     relatedEmails: collectEmailRows(taskFields.relatedEmails),
     relatedLinks: collectLinkRows(taskFields.relatedLinks),
     important: existingTask?.important || false,
@@ -7309,26 +12732,96 @@ function handleTaskSubmit(event) {
 
   selectedSystemId = scope === "general" ? generalWorkScopeId : systemId;
   selectedProjectId = projectId || "all";
-  saveState();
+  saveTaskState([task.id]);
   els.taskDialog.close();
   render();
 }
 
 function handleTaskDelete() {
   const id = taskFields.id.value;
-  if (!id) return;
-  const childCount = state.tasks.filter((task) => task.parentTaskId === id).length;
-  if (childCount) {
-    alert(`此任務底下還有 ${childCount} 筆子任務，請先刪除或移出子任務。`);
-    return;
-  }
-
-  if (!confirm("確定要刪除這筆任務嗎？此操作無法復原。")) return;
-
-  state.tasks = state.tasks.filter((task) => task.id !== id);
-  saveState();
+  if (!deleteTaskById(id)) return;
   els.taskDialog.close();
   render();
+}
+
+function handleDrawerTaskDelete() {
+  if (!deleteTaskById(selectedTodoTaskId)) return;
+  closeTodoDrawer();
+  render();
+}
+
+function deleteTaskById(id) {
+  if (!id) return false;
+  const task = getProjectTask(id);
+  if (!task) return false;
+  const childCount = state.tasks.filter((task) => task.parentTaskId === id && !isTaskDeleted(task)).length;
+  if (childCount) {
+    alert(`此任務底下還有 ${childCount} 筆子任務，請先刪除或移出子任務。`);
+    return false;
+  }
+
+  if (isRecurringTemplateTask(task)) {
+    return deleteRecurringTemplateTask(task);
+  }
+
+  if (!confirm("確定要刪除這筆任務嗎？此操作無法復原。")) return false;
+
+  state.tasks = state.tasks.filter((task) => task.id !== id);
+  if (selectedTodoTaskId === id) selectedTodoTaskId = null;
+  saveTaskState([id]);
+  return true;
+}
+
+function getCurrentUserId() {
+  return currentProfile?.uid || currentFirebaseUser?.uid || currentSafeUser?.uid || "";
+}
+
+function deleteRecurringTemplateTask(template = {}) {
+  if (!confirm("刪除此週期性任務後，系統將不再產生新的待辦。已產生但尚未完成的任務將一併移除；已完成的任務紀錄將保留，供週動態與歷程查詢使用。是否確認刪除？")) {
+    return false;
+  }
+
+  const deletedAt = new Date().toISOString();
+  const deletedBy = getCurrentUserId();
+  const changedTaskIds = new Set([template.id]);
+  const hiddenTaskIds = new Set([template.id]);
+
+  state.tasks = state.tasks.map((task) => {
+    if (task.id === template.id) {
+      return {
+        ...task,
+        isDeleted: true,
+        deletedAt,
+        deletedBy,
+        recurrenceEnabled: false,
+      };
+    }
+
+    if (!isRecurringOccurrenceTask(task) || task.templateTaskId !== template.id) return task;
+
+    changedTaskIds.add(task.id);
+    if (normalizeTaskStatus(task.status) === "done") {
+      return {
+        ...task,
+        isDeleted: false,
+        templateDeleted: true,
+        templateDeletedAt: deletedAt,
+      };
+    }
+
+    hiddenTaskIds.add(task.id);
+    return {
+      ...task,
+      isDeleted: true,
+      deletedAt,
+      deletedBy,
+      deletedReason: "recurring_template_deleted",
+    };
+  });
+
+  if (hiddenTaskIds.has(selectedTodoTaskId)) selectedTodoTaskId = null;
+  saveTaskState([...changedTaskIds]);
+  return true;
 }
 
 function toggleProjectClosed(projectId) {
@@ -7339,6 +12832,7 @@ function toggleProjectClosed(projectId) {
   const isClosed = project.closed || project.phase === "closed";
   project.closed = !isClosed;
   project.phase = isClosed ? "development" : "closed";
+  project.status = project.closed ? "closed" : "doing";
   project.phaseChangedAt = todayString();
   project.closedAt = project.closed ? todayString() : "";
   project.phaseSchedules = createPhaseSchedules(project.phaseSchedules);
@@ -7413,17 +12907,285 @@ function validateTaskDates(rangeStart, rangeEnd, executionDate, deadline) {
   return true;
 }
 
-function syncTaskRecurrenceFields(fields) {
+function syncTaskRecurrenceFields(fields, options = {}) {
   if (!fields.isRecurring) return;
   const enabled = Boolean(fields.isRecurring.checked);
+  const type = normalizeRecurrenceType(fields.recurrenceType?.value);
+  const dailyMode = fields.recurrenceDailyMode?.value || "interval";
+  const monthlyMode = fields.recurrenceMonthlyMode?.value || "dayOfMonth";
+  const yearlyMode = fields.recurrenceYearlyMode?.value || "date";
+  const endMode = fields.recurrenceEndMode?.value || "none";
+  const dueRuleType = fields.dueRuleType?.value || "sameDay";
+  const usesInterval = enabled && type && !(type === "daily" && dailyMode === "weekday");
+  const usesMonthlyDay = enabled && type === "monthly" && monthlyMode === "dayOfMonth";
+  const usesYearlyDay = enabled && type === "yearly" && yearlyMode === "date";
+  const usesNthWeekday = enabled && (
+    (type === "monthly" && monthlyMode === "nthWeekday")
+    || (type === "yearly" && yearlyMode === "nthWeekday")
+  );
+  fields.recurrenceRulePanel?.classList.toggle("hidden", !enabled);
+  [
+    fields.rangeStartField,
+    fields.rangeEndField,
+    fields.executionDateField,
+    fields.deadlineField,
+  ].filter(Boolean).forEach((field) => field.classList.toggle("hidden", enabled));
+  [fields.rangeStart, fields.rangeEnd, fields.executionDate, fields.deadline].filter(Boolean).forEach((field) => {
+    field.disabled = enabled;
+    field.required = false;
+  });
   fields.recurrenceType.disabled = !enabled;
-  fields.recurrenceInterval.disabled = !enabled || fields.recurrenceType.value !== "custom";
+  fields.recurrenceDailyMode && (fields.recurrenceDailyMode.disabled = !enabled || type !== "daily");
+  fields.recurrenceInterval && (fields.recurrenceInterval.disabled = !usesInterval);
+  fields.recurrenceIntervalField?.classList.toggle("hidden", !usesInterval);
+  if (fields.recurrenceIntervalLabel) fields.recurrenceIntervalLabel.textContent = "每隔";
+  if (fields.recurrenceIntervalUnit) {
+    fields.recurrenceIntervalUnit.textContent = {
+      daily: "天",
+      weekly: "週",
+      monthly: "個月",
+      yearly: "年",
+    }[type] || "";
+  }
+  fields.recurrenceStartDate && (fields.recurrenceStartDate.disabled = !enabled);
+  fields.recurrenceEndMode && (fields.recurrenceEndMode.disabled = !enabled);
+  fields.recurrenceEndDate && (fields.recurrenceEndDate.disabled = !enabled || endMode !== "date");
+  fields.recurrenceCount && (fields.recurrenceCount.disabled = !enabled || endMode !== "count");
+  fields.recurrenceMonthlyMode && (fields.recurrenceMonthlyMode.disabled = !enabled || type !== "monthly");
+  fields.recurrenceMonthDay && (fields.recurrenceMonthDay.disabled = !usesMonthlyDay);
+  fields.recurrenceYearlyMode && (fields.recurrenceYearlyMode.disabled = !enabled || type !== "yearly");
+  fields.recurrenceYearlyMonth && (fields.recurrenceYearlyMonth.disabled = !enabled || type !== "yearly");
+  fields.recurrenceYearlyDay && (fields.recurrenceYearlyDay.disabled = !usesYearlyDay);
+  fields.recurrenceWeekOrder && (fields.recurrenceWeekOrder.disabled = !usesNthWeekday);
+  fields.recurrenceWeekday && (fields.recurrenceWeekday.disabled = !usesNthWeekday);
+  fields.recurrenceStartTime && (fields.recurrenceStartTime.disabled = !enabled);
+  fields.recurrenceEndTime && (fields.recurrenceEndTime.disabled = !enabled);
+  if (fields.recurrenceDuration) {
+    fields.recurrenceDuration.disabled = !enabled;
+    fields.recurrenceDuration.readOnly = true;
+  }
+  fields.dueRuleType && (fields.dueRuleType.disabled = !enabled);
+  fields.dueRuleDays && (fields.dueRuleDays.disabled = !enabled || dueRuleType !== "afterDays");
+  fields.recurrenceWeekdays?.forEach((checkbox) => {
+    checkbox.disabled = !enabled || type !== "weekly";
+  });
   fields.recurrenceType.required = enabled;
-  fields.recurrenceInterval.required = enabled && fields.recurrenceType.value === "custom";
+  fields.recurrenceInterval && (fields.recurrenceInterval.required = usesInterval);
+  fields.recurrenceStartDate && (fields.recurrenceStartDate.required = enabled);
+  fields.recurrenceEndDate && (fields.recurrenceEndDate.required = enabled && endMode === "date");
+  fields.recurrenceCount && (fields.recurrenceCount.required = enabled && endMode === "count");
+  fields.recurrenceMonthDay && (fields.recurrenceMonthDay.required = usesMonthlyDay);
+  fields.recurrenceYearlyMonth && (fields.recurrenceYearlyMonth.required = enabled && type === "yearly");
+  fields.recurrenceYearlyDay && (fields.recurrenceYearlyDay.required = usesYearlyDay);
+  fields.recurrenceWeekOrder && (fields.recurrenceWeekOrder.required = usesNthWeekday);
+  fields.recurrenceWeekday && (fields.recurrenceWeekday.required = usesNthWeekday);
+  fields.dueRuleDays && (fields.dueRuleDays.required = enabled && dueRuleType === "afterDays");
+  fields.recurrenceDailyField?.classList.toggle("hidden", !enabled || type !== "daily");
+  fields.recurrenceWeekdayField?.classList.toggle("hidden", !enabled || type !== "weekly");
+  fields.recurrenceMonthlyField?.classList.toggle("hidden", !enabled || type !== "monthly");
+  fields.recurrenceMonthDayField?.classList.toggle("hidden", !usesMonthlyDay);
+  fields.recurrenceYearlyField?.classList.toggle("hidden", !enabled || type !== "yearly");
+  fields.recurrenceYearlyDayField?.classList.toggle("hidden", !usesYearlyDay);
+  fields.recurrenceNthWeekdayField?.classList.toggle("hidden", !usesNthWeekday);
+  fields.recurrenceEndDateField?.classList.toggle("hidden", !enabled || endMode !== "date");
+  fields.recurrenceCountField?.classList.toggle("hidden", !enabled || endMode !== "count");
+  fields.dueRuleDaysField?.classList.toggle("hidden", !enabled || dueRuleType !== "afterDays");
+
+  if (enabled && type === "weekly") {
+    const checkedWeekdays = [...(fields.recurrenceWeekdays || [])].filter((checkbox) => checkbox.checked);
+    if (!checkedWeekdays.length) {
+      const startDate = fields.recurrenceStartDate?.value || fields.executionDate?.value || fields.rangeStart?.value || todayString();
+      const weekday = parseDateString(startDate).getDay();
+      fields.recurrenceWeekdays?.forEach((checkbox) => {
+        checkbox.checked = Number(checkbox.value) === weekday;
+      });
+    }
+  }
+
+  if (!options.skipTimeSync) {
+    syncRecurrenceTimeFields(fields);
+  }
+
   if (!enabled) {
     fields.recurrenceType.value = "";
+    fields.recurrenceDailyMode && (fields.recurrenceDailyMode.value = "interval");
     fields.recurrenceInterval.value = "";
+    fields.recurrenceStartDate && (fields.recurrenceStartDate.value = "");
+    fields.recurrenceEndMode && (fields.recurrenceEndMode.value = "none");
+    fields.recurrenceEndDate && (fields.recurrenceEndDate.value = "");
+    fields.recurrenceCount && (fields.recurrenceCount.value = "");
+    fields.recurrenceMonthlyMode && (fields.recurrenceMonthlyMode.value = "dayOfMonth");
+    fields.recurrenceMonthDay && (fields.recurrenceMonthDay.value = "");
+    fields.recurrenceYearlyMode && (fields.recurrenceYearlyMode.value = "date");
+    fields.recurrenceYearlyMonth && (fields.recurrenceYearlyMonth.value = "");
+    fields.recurrenceYearlyDay && (fields.recurrenceYearlyDay.value = "");
+    fields.recurrenceWeekOrder && (fields.recurrenceWeekOrder.value = "1");
+    fields.recurrenceWeekday && (fields.recurrenceWeekday.value = "1");
+    fields.recurrenceStartTime && (fields.recurrenceStartTime.value = "");
+    fields.recurrenceEndTime && (fields.recurrenceEndTime.value = "");
+    fields.recurrenceDuration && (fields.recurrenceDuration.value = "");
+    fields.dueRuleType && (fields.dueRuleType.value = "sameDay");
+    fields.dueRuleDays && (fields.dueRuleDays.value = "");
+    fields.recurrenceWeekdays?.forEach((checkbox) => {
+      checkbox.checked = false;
+    });
   }
+  renderRecurrencePreview(fields);
+}
+
+function setTaskRecurrenceFields(fields, task = {}) {
+  const rule = normalizeRecurrenceRule(task.recurrenceRule || {}, task);
+  const enabled = Boolean(isRecurringTemplateTask(task) && rule.type);
+  const dueRule = normalizeDueRule(task.dueRule);
+  fields.isRecurring.checked = enabled;
+  fields.recurrenceType.value = enabled ? rule.type : "";
+  if (fields.recurrenceDailyMode) fields.recurrenceDailyMode.value = enabled ? rule.dailyMode || "interval" : "interval";
+  fields.recurrenceInterval.value = enabled ? rule.interval || 1 : "";
+  if (fields.recurrenceStartDate) fields.recurrenceStartDate.value = enabled ? rule.startDate || "" : "";
+  if (fields.recurrenceEndMode) fields.recurrenceEndMode.value = enabled ? rule.endMode || "none" : "none";
+  if (fields.recurrenceEndDate) fields.recurrenceEndDate.value = enabled ? rule.endDate || "" : "";
+  if (fields.recurrenceCount) fields.recurrenceCount.value = enabled && rule.occurrenceCount ? rule.occurrenceCount : "";
+  if (fields.recurrenceMonthlyMode) fields.recurrenceMonthlyMode.value = enabled ? rule.monthlyMode || "dayOfMonth" : "dayOfMonth";
+  if (fields.recurrenceMonthDay) fields.recurrenceMonthDay.value = enabled && rule.monthDay ? rule.monthDay : "";
+  if (fields.recurrenceYearlyMode) fields.recurrenceYearlyMode.value = enabled ? rule.yearlyMode || "date" : "date";
+  if (fields.recurrenceYearlyMonth) fields.recurrenceYearlyMonth.value = enabled && rule.yearlyMonth ? rule.yearlyMonth : "";
+  if (fields.recurrenceYearlyDay) fields.recurrenceYearlyDay.value = enabled && rule.yearlyDay ? rule.yearlyDay : "";
+  if (fields.recurrenceWeekOrder) fields.recurrenceWeekOrder.value = enabled ? String(rule.weekOrder || 1) : "1";
+  if (fields.recurrenceWeekday) fields.recurrenceWeekday.value = enabled ? String(rule.weekday ?? 1) : "1";
+  if (fields.recurrenceStartTime) fields.recurrenceStartTime.value = enabled ? rule.startTime || "" : "";
+  if (fields.recurrenceEndTime) fields.recurrenceEndTime.value = enabled ? rule.endTime || "" : "";
+  if (fields.recurrenceDuration) fields.recurrenceDuration.value = enabled && rule.durationMinutes ? rule.durationMinutes : "";
+  if (fields.dueRuleType) fields.dueRuleType.value = enabled ? dueRule.type : "sameDay";
+  if (fields.dueRuleDays) fields.dueRuleDays.value = enabled && dueRule.type === "afterDays" ? dueRule.daysAfterOccurrence : "";
+  fields.recurrenceWeekdays?.forEach((checkbox) => {
+    checkbox.checked = enabled && (rule.weekDays || []).includes(Number(checkbox.value));
+  });
+  syncTaskRecurrenceFields(fields);
+}
+
+function getUpcomingRecurringPreviewDates(rule = {}, count = 5) {
+  if (!rule.type || !rule.startDate) return [];
+  const previewTask = {
+    isRecurring: true,
+    isRecurringTemplate: true,
+    recurrenceRule: rule,
+  };
+  const dates = [];
+  const start = rule.startDate > todayString() ? rule.startDate : todayString();
+  let cursor = parseDateString(start);
+  const maxCursor = addDaysToDate(cursor, 3660);
+
+  while (dates.length < count && cursor <= maxCursor) {
+    const date = toDateInputValue(cursor);
+    if (taskRecursOnDate(previewTask, date)) dates.push(date);
+    cursor = addDaysToDate(cursor, 1);
+  }
+
+  return dates;
+}
+
+function renderRecurrencePreview(fields) {
+  const list = fields.recurrencePreviewList;
+  if (!list) return;
+  const rule = collectTaskRecurrenceRule(fields);
+  if (!fields.isRecurring?.checked || !rule.type || !rule.startDate) {
+    list.innerHTML = `<li class="recurrence-preview-empty">啟用週期並設定開始日期後顯示預覽。</li>`;
+    return;
+  }
+  const dates = getUpcomingRecurringPreviewDates(rule, 5);
+  if (!dates.length) {
+    list.innerHTML = `<li class="recurrence-preview-empty">目前設定沒有可產生的未來任務。</li>`;
+    return;
+  }
+  const timeLabel = rule.startTime && rule.endTime
+    ? `${rule.startTime} 到 ${rule.endTime}`
+    : rule.startTime || rule.endTime || "未設定時間";
+  list.innerHTML = dates
+    .map((date) => `<li><span>${escapeHtml(date)} ${escapeHtml(formatGanttWeekday(date))}</span><strong>${escapeHtml(timeLabel)}</strong></li>`)
+    .join("");
+}
+
+function collectTaskDueRule(fields) {
+  if (!fields.isRecurring?.checked) return normalizeDueRule();
+  return normalizeDueRule({
+    type: fields.dueRuleType?.value || "sameDay",
+    daysAfterOccurrence: fields.dueRuleDays?.value || 0,
+  });
+}
+
+function collectTaskRecurrenceRule(fields) {
+  const type = normalizeRecurrenceType(fields.recurrenceType?.value);
+  if (!fields.isRecurring?.checked || !type) return {};
+  const startDate = fields.recurrenceStartDate?.value || fields.executionDate?.value || fields.rangeStart?.value || todayString();
+  const weekDays = fields.recurrenceWeekdays
+    ? normalizeWeekDays([...fields.recurrenceWeekdays].filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value))
+    : [];
+  return normalizeRecurrenceRule({
+    type,
+    startDate,
+    dailyMode: fields.recurrenceDailyMode?.value || "interval",
+    interval: fields.recurrenceInterval?.value || 1,
+    weekDays,
+    monthlyMode: fields.recurrenceMonthlyMode?.value || "dayOfMonth",
+    monthDay: fields.recurrenceMonthDay?.value || (startDate ? parseDateString(startDate).getDate() : todayDate().getDate()),
+    yearlyMode: fields.recurrenceYearlyMode?.value || "date",
+    yearlyMonth: fields.recurrenceYearlyMonth?.value || (startDate ? parseDateString(startDate).getMonth() + 1 : todayDate().getMonth() + 1),
+    yearlyDay: fields.recurrenceYearlyDay?.value || (startDate ? parseDateString(startDate).getDate() : todayDate().getDate()),
+    weekOrder: fields.recurrenceWeekOrder?.value || 1,
+    weekday: fields.recurrenceWeekday?.value ?? (startDate ? parseDateString(startDate).getDay() : todayDate().getDay()),
+    endMode: fields.recurrenceEndMode?.value || "none",
+    endDate: fields.recurrenceEndDate?.value || "",
+    occurrenceCount: fields.recurrenceCount?.value || 0,
+    startTime: fields.recurrenceStartTime?.value || "",
+    endTime: fields.recurrenceEndTime?.value || "",
+    durationMinutes: fields.recurrenceDuration?.value || getTimeDurationMinutes(fields.recurrenceStartTime?.value, fields.recurrenceEndTime?.value),
+  });
+}
+
+function validateRecurrenceRule(rule = {}) {
+  if (!rule.type) return true;
+  if (!rule.startDate) {
+    alert("請設定週期開始日期。");
+    return false;
+  }
+  if (rule.type === "weekly" && !rule.weekDays.length) {
+    alert("請至少選擇一個執行星期。");
+    return false;
+  }
+  if (rule.type === "monthly" && rule.monthlyMode === "dayOfMonth" && !isValidMonthDay(rule.monthDay)) {
+    alert("請設定有效的每月日期。");
+    return false;
+  }
+  if (rule.type === "yearly" && rule.yearlyMode === "date" && !isValidDateParts(2024, rule.yearlyMonth, rule.yearlyDay)) {
+    alert("請設定有效的每年固定日期。");
+    return false;
+  }
+  if (rule.type === "yearly" && !isValidMonth(rule.yearlyMonth)) {
+    alert("請設定有效的月份。");
+    return false;
+  }
+  if (rule.endMode === "date" && (!rule.endDate || rule.endDate < rule.startDate)) {
+    alert("週期結束日期不可早於開始日期。");
+    return false;
+  }
+  if (rule.endMode === "count" && !rule.occurrenceCount) {
+    alert("請設定週期執行次數。");
+    return false;
+  }
+  return true;
+}
+
+function isValidMonthDay(day) {
+  return Number.isInteger(Number(day)) && Number(day) >= 1 && Number(day) <= 31;
+}
+
+function isValidMonth(month) {
+  return Number.isInteger(Number(month)) && Number(month) >= 1 && Number(month) <= 12;
+}
+
+function isValidDateParts(year, month, day) {
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return date.getFullYear() === Number(year) && date.getMonth() + 1 === Number(month) && date.getDate() === Number(day);
 }
 
 function addEmailRow(container, title = "") {
@@ -7565,7 +13327,7 @@ function renderProjectPhaseTimeline(project) {
 
 function getProjectActualRange(projectId) {
   const dates = state.tasks
-    .filter((task) => task.projectId === projectId)
+    .filter((task) => task.projectId === projectId && isProjectListTask(task))
     .flatMap((task) => [getTaskTimelineStart(task), getTaskTimelineEnd(task)])
     .filter(Boolean)
     .sort();
@@ -7578,8 +13340,18 @@ function getTaskDateLine(task) {
   const range = `執行區間：${formatRange(task.startDate || task.rangeStart, task.endDate || task.rangeEnd)}`;
   const execution = `執行日期：${formatDate(task.executionDate)}`;
   const deadline = task.deadline ? `最後期限：${formatDate(task.deadline)}` : "最後期限：未設定";
-  const recurring = task.isRecurring ? `・${getRecurrenceLabel(task)}` : "";
+  const recurring = isRecurringTemplateTask(task)
+    ? `・${getRecurrenceLabel(task)}`
+    : isRecurringOccurrenceTask(task)
+      ? `・週期 ${task.recurringLabel || ""}`
+      : "";
   return `${range}・${execution}・${deadline}${recurring}`;
+}
+
+function getTaskDeadlineSummary(task) {
+  if (task.deadline) return formatDate(task.deadline);
+  if (task.executionDate) return `執行 ${formatDate(task.executionDate)}`;
+  return "未設定";
 }
 
 function getRelatedSummary(task) {
@@ -7635,12 +13407,43 @@ function getPriorityLabel(id) {
 }
 
 function getRecurrenceLabel(task = {}) {
-  if (!task.isRecurring) return "";
-  const type = normalizeRecurrenceType(task.recurrenceType || task.recurrenceRule?.type);
-  if (type === "weekly") return "每週";
-  if (type === "monthly") return "每月";
-  if (type === "custom") return `定期執行：每 ${task.recurrenceRule?.intervalDays || 1} 天`;
+  if (!isRecurringTemplateTask(task)) return "";
+  const rule = normalizeRecurrenceRule(task.recurrenceRule || {}, task);
+  if (rule.type === "daily") {
+    if (rule.dailyMode === "weekday") return "每個工作日";
+    return rule.interval > 1 ? `每 ${rule.interval} 天` : "每日";
+  }
+  if (rule.type === "weekly") {
+    const days = (rule.weekDays || []).map(getWeekdayShortLabel).join("、");
+    return rule.interval > 1 ? `每 ${rule.interval} 週的星期${days}` : `每週${days ? `星期${days}` : ""}`;
+  }
+  if (rule.type === "monthly") {
+    const pattern = rule.monthlyMode === "nthWeekday"
+      ? `${getWeekOrderLabel(rule.weekOrder)}星期${getWeekdayShortLabel(rule.weekday)}`
+      : `${rule.monthDay} 號`;
+    return rule.interval > 1 ? `每 ${rule.interval} 個月的${pattern}` : `每月${pattern}`;
+  }
+  if (rule.type === "yearly") {
+    const pattern = rule.yearlyMode === "nthWeekday"
+      ? `${rule.yearlyMonth} 月${getWeekOrderLabel(rule.weekOrder)}星期${getWeekdayShortLabel(rule.weekday)}`
+      : `${rule.yearlyMonth} 月 ${rule.yearlyDay} 日`;
+    return rule.interval > 1 ? `每 ${rule.interval} 年的${pattern}` : `每年${pattern}`;
+  }
   return "週期性任務";
+}
+
+function getWeekdayShortLabel(day) {
+  return ["日", "一", "二", "三", "四", "五", "六"][Number(day)] || "";
+}
+
+function getWeekOrderLabel(order) {
+  return {
+    1: "第 1 個",
+    2: "第 2 個",
+    3: "第 3 個",
+    4: "第 4 個",
+    "-1": "最後一個",
+  }[String(order)] || "第 1 個";
 }
 
 function createPhaseSchedules(overrides = {}) {
@@ -7765,6 +13568,17 @@ function getNextSortOrder(items = []) {
   return Math.max(0, ...items.map((item) => Number(item.sortOrder) || 0)) + 1;
 }
 
+function getTaskSortScopeItems(scopeValues = {}) {
+  const scope = scopeValues.scope || getTaskScope(scopeValues);
+  return getUniqueTasksForDisplay(state.tasks).filter((task) => {
+    if (isTaskDeleted(task)) return false;
+    if (getTaskScope(task) !== scope) return false;
+    if (scope === "project") return task.projectId === scopeValues.projectId;
+    if (scope === "system") return task.systemId === scopeValues.systemId;
+    return scope === "general";
+  });
+}
+
 function getTaskSortDate(task) {
   return [task.executionDate, task.deadline]
     .filter(Boolean)
@@ -7772,16 +13586,48 @@ function getTaskSortDate(task) {
 }
 
 function getTaskTimelineStart(task = {}) {
+  return getTaskTimelineStartFromTasks(task, state.tasks);
+}
+
+function getTaskTimelineStartFromTasks(task = {}, tasks = state.tasks) {
+  return getTaskDirectTimelineStart(task) || getTaskChildTimelineStart(task, tasks);
+}
+
+function getTaskDirectTimelineStart(task = {}) {
   return [task.executionDate, task.startDate, task.rangeStart, task.deadline]
     .filter(Boolean)
     .sort()[0] || "";
 }
 
 function getTaskTimelineEnd(task = {}) {
+  return getTaskTimelineEndFromTasks(task, state.tasks);
+}
+
+function getTaskTimelineEndFromTasks(task = {}, tasks = state.tasks) {
+  return getTaskDirectTimelineEnd(task) || getTaskChildTimelineEnd(task, tasks);
+}
+
+function getTaskDirectTimelineEnd(task = {}) {
   const dates = [task.endDate, task.rangeEnd, task.deadline, task.executionDate, task.startDate, task.rangeStart]
     .filter(Boolean)
     .sort();
   return dates[dates.length - 1] || "";
+}
+
+function getTaskChildTimelineStart(task = {}, tasks = state.tasks) {
+  if (!task.id || !Array.isArray(tasks)) return "";
+  return getEarliestDate(tasks
+    .filter((child) => child.parentTaskId === task.id)
+    .map(getTaskDirectTimelineStart)
+    .filter(Boolean));
+}
+
+function getTaskChildTimelineEnd(task = {}, tasks = state.tasks) {
+  if (!task.id || !Array.isArray(tasks)) return "";
+  return getLatestDate(tasks
+    .filter((child) => child.parentTaskId === task.id)
+    .map(getTaskDirectTimelineEnd)
+    .filter(Boolean));
 }
 
 function getEarliestDate(dates = []) {
@@ -7794,24 +13640,22 @@ function getLatestDate(dates = []) {
 }
 
 function getRecurrenceAnchor(task = {}) {
-  return task.executionDate || task.startDate || task.rangeStart || "";
+  const rule = normalizeRecurrenceRule(task.recurrenceRule || {}, task);
+  return rule.startDate || task.executionDate || task.startDate || task.rangeStart || "";
 }
 
 function taskRecursOnDate(task = {}, targetDate = "") {
-  const anchor = getRecurrenceAnchor(task);
-  if (!task.isRecurring || !anchor || !targetDate || targetDate < anchor) return false;
-  const type = normalizeRecurrenceType(task.recurrenceType || task.recurrenceRule?.type);
-  if (type === "weekly") return getDateDiffFromStrings(anchor, targetDate) % 7 === 0;
-  if (type === "monthly") return targetDate.slice(8, 10) === anchor.slice(8, 10);
-  if (type === "custom") {
-    const interval = Number(task.recurrenceRule?.intervalDays || 0);
-    return interval > 0 && getDateDiffFromStrings(anchor, targetDate) % interval === 0;
-  }
-  return false;
+  const rule = normalizeRecurrenceRule(task.recurrenceRule || {}, task);
+  if (!isRecurringTemplateTask(task) || !rule.type || !rule.startDate || !targetDate || targetDate < rule.startDate) return false;
+  if (rule.endMode === "date" && rule.endDate && targetDate > rule.endDate) return false;
+  const matchesPattern = recurrencePatternMatchesDate(rule, targetDate);
+  if (!matchesPattern) return false;
+  if (rule.endMode !== "count" || !rule.occurrenceCount) return true;
+  return getOccurrenceIndexOnDate(rule, targetDate) > 0 && getOccurrenceIndexOnDate(rule, targetDate) <= rule.occurrenceCount;
 }
 
 function getRecurringDatesInRange(task = {}, rangeStart = "", rangeEnd = "") {
-  if (!task.isRecurring || !rangeStart || !rangeEnd) return [];
+  if (!isRecurringTemplateTask(task) || !rangeStart || !rangeEnd) return [];
   const dates = [];
   let cursor = parseDateString(rangeStart);
   const end = parseDateString(rangeEnd);
@@ -7823,14 +13667,458 @@ function getRecurringDatesInRange(task = {}, rangeStart = "", rangeEnd = "") {
   return dates;
 }
 
+function isRecurringTemplateTask(task = {}) {
+  return Boolean(task?.isRecurringTemplate || (task?.isRecurring && !task?.isRecurringOccurrence));
+}
+
+function isRecurringOccurrenceTask(task = {}) {
+  return Boolean(task?.isRecurringOccurrence);
+}
+
+function isVirtualRecurringOccurrenceTask(task = {}) {
+  return Boolean(task?.isVirtualRecurringOccurrence);
+}
+
+function isTaskDeleted(task = {}) {
+  return Boolean(task?.isDeleted);
+}
+
+function recurringTemplateCanGenerateOccurrences(task = {}) {
+  const status = normalizeTaskStatus(task.status);
+  return Boolean(
+    isRecurringTemplateTask(task)
+      && task.recurrenceEnabled === true
+      && !isTaskDeleted(task)
+      && status !== "done"
+      && status !== "paused",
+  );
+}
+
+function isTodoDisplayTask(task = {}) {
+  return isActionableTodoTask(task);
+}
+
+function isProjectListTask(task = {}) {
+  return isManagementCountTask(task);
+}
+
+function isManagementCountTask(task = {}) {
+  return !isRecurringOccurrenceTask(task) && !isTaskDeleted(task);
+}
+
+function isActionableTodoTask(task = {}) {
+  return !isRecurringTemplateTask(task) && !isTaskDeleted(task);
+}
+
+function getRecurringOccurrenceId(templateTaskId = "", occurrenceDate = "") {
+  return `recurring_${templateTaskId}_${occurrenceDate}`;
+}
+
+function getRecurringOccurrenceDisplayIdentity(task = {}) {
+  const templateTaskId = String(task.templateTaskId || "").trim();
+  const occurrenceDate = String(task.occurrenceDate || task.executionDate || task.rangeStart || "").trim();
+  return templateTaskId && occurrenceDate ? `recurring:${templateTaskId}:${occurrenceDate}` : "";
+}
+
+function getTaskDisplayIdentity(task = {}) {
+  const recurringIdentity = isRecurringOccurrenceTask(task) ? getRecurringOccurrenceDisplayIdentity(task) : "";
+  return recurringIdentity || (task.id ? `task:${task.id}` : "");
+}
+
+function getUniqueTasksForDisplay(tasks = []) {
+  const rows = [];
+  const indexesByIdentity = new Map();
+
+  tasks.forEach((task) => {
+    const identity = getTaskDisplayIdentity(task);
+    if (!identity) {
+      rows.push(task);
+      return;
+    }
+
+    const existingIndex = indexesByIdentity.get(identity);
+    if (existingIndex === undefined) {
+      indexesByIdentity.set(identity, rows.length);
+      rows.push(task);
+      return;
+    }
+
+    const existing = rows[existingIndex];
+    const preferred = choosePreferredTaskForDisplay(existing, task);
+    if (preferred !== existing) rows[existingIndex] = preferred;
+  });
+
+  return rows;
+}
+
+function choosePreferredTaskForDisplay(existing = {}, candidate = {}) {
+  if (isRecurringOccurrenceTask(existing) && isRecurringOccurrenceTask(candidate)) {
+    return choosePreferredRecurringOccurrence(existing, candidate);
+  }
+  return existing;
+}
+
+function repairDuplicateRecurringOccurrences(tasks = []) {
+  const rows = [];
+  const indexesByIdentity = new Map();
+  const removedIds = [];
+  const updatedIds = [];
+
+  tasks.forEach((task) => {
+    const identity = getRecurringOccurrenceDisplayIdentity(task);
+    if (!isRecurringOccurrenceTask(task) || !identity) {
+      rows.push(task);
+      return;
+    }
+
+    const existingIndex = indexesByIdentity.get(identity);
+    if (existingIndex === undefined) {
+      indexesByIdentity.set(identity, rows.length);
+      rows.push(task);
+      return;
+    }
+
+    const existing = rows[existingIndex];
+    const merged = mergeRecurringOccurrenceDuplicates(existing, task);
+    const keptSource = merged.id === task.id ? task : existing;
+    const removedSource = merged.id === task.id ? existing : task;
+    if (removedSource.id) removedIds.push(removedSource.id);
+    if (merged.id && stableStringify(stripCloudMetadata(merged)) !== stableStringify(stripCloudMetadata(keptSource))) {
+      updatedIds.push(merged.id);
+    }
+    rows[existingIndex] = merged;
+  });
+
+  const removedSet = new Set(removedIds);
+  return {
+    tasks: rows,
+    removedIds: uniqueUids(removedIds),
+    updatedIds: uniqueUids(updatedIds).filter((id) => !removedSet.has(id)),
+  };
+}
+
+function mergeRecurringOccurrenceDuplicates(first = {}, second = {}) {
+  const preferred = choosePreferredRecurringOccurrence(first, second);
+  const fallback = preferred === first ? second : first;
+  const merged = { ...preferred };
+  const doneSource = [preferred, fallback].find((task) => normalizeTaskStatus(task.status) === "done");
+
+  if (doneSource) {
+    merged.status = "done";
+    merged.completedDate = doneSource.completedDate || merged.completedDate || doneSource.occurrenceDate || merged.occurrenceDate || "";
+    merged.completedAt = doneSource.completedAt || merged.completedAt || null;
+    merged.completedBy = doneSource.completedBy || merged.completedBy || "";
+  } else if (!merged.completedDate && fallback.completedDate) {
+    merged.completedDate = fallback.completedDate;
+  }
+
+  if ((!merged.history || !merged.history.length) && fallback.history?.length) merged.history = fallback.history;
+  if ((!merged.notes || !String(merged.notes).trim()) && fallback.notes) merged.notes = fallback.notes;
+  if ((!merged.steps || !merged.steps.length) && fallback.steps?.length) merged.steps = fallback.steps;
+  return merged;
+}
+
+function choosePreferredRecurringOccurrence(first = {}, second = {}) {
+  const firstScore = getRecurringOccurrencePreferenceScore(first);
+  const secondScore = getRecurringOccurrencePreferenceScore(second);
+  return secondScore > firstScore ? second : first;
+}
+
+function getRecurringOccurrencePreferenceScore(task = {}) {
+  let score = 0;
+  if (normalizeTaskStatus(task.status) === "done") score += 1000;
+  if (!isTaskDeleted(task)) score += 500;
+  if (task.completedDate) score += 100;
+  if (task.id && task.id === getRecurringOccurrenceId(task.templateTaskId, task.occurrenceDate)) score += 10;
+  if (Array.isArray(task.history)) score += Math.min(task.history.length, 9);
+  if (String(task.notes || "").trim()) score += 1;
+  return score;
+}
+
+function consumePendingRecurringOccurrenceCleanupTaskIds() {
+  const taskIds = uniqueUids([
+    ...pendingRecurringOccurrenceCleanupTaskIds,
+    ...pendingRecurringOccurrenceUpdateTaskIds,
+  ]);
+  pendingRecurringOccurrenceCleanupTaskIds = [];
+  pendingRecurringOccurrenceUpdateTaskIds = [];
+  return taskIds;
+}
+
+function getSafeOccurrenceRange(rangeStart = "", rangeEnd = "", maxDays = 370) {
+  if (!rangeStart || !rangeEnd) return null;
+  const start = rangeStart <= rangeEnd ? rangeStart : rangeEnd;
+  let end = rangeStart <= rangeEnd ? rangeEnd : rangeStart;
+  if (getDateDiffFromStrings(start, end) > maxDays) {
+    end = addDaysToDateString(start, maxDays);
+  }
+  return { start, end };
+}
+
+function calculateOccurrenceDueDate(occurrenceDate = "", dueRule = {}) {
+  const rule = normalizeDueRule(dueRule);
+  if (!occurrenceDate || rule.type === "manual") return "";
+  if (rule.type === "afterDays") return addDaysToDateString(occurrenceDate, rule.daysAfterOccurrence);
+  return occurrenceDate;
+}
+
+function getPersistedRecurringOccurrence(templateTaskId = "", occurrenceDate = "") {
+  if (!templateTaskId || !occurrenceDate) return null;
+  return state.tasks.find((task) => {
+    return isRecurringOccurrenceTask(task)
+      && task.templateTaskId === templateTaskId
+      && task.occurrenceDate === occurrenceDate
+      && !isTaskDeleted(task);
+  }) || null;
+}
+
+function recurringOccurrenceExists(templateTaskId = "", occurrenceDate = "") {
+  if (!templateTaskId || !occurrenceDate) return false;
+  return state.tasks.some((task) => {
+    return isRecurringOccurrenceTask(task)
+      && task.templateTaskId === templateTaskId
+      && task.occurrenceDate === occurrenceDate;
+  });
+}
+
+function cloneOccurrenceSteps(steps = [], occurrenceId = "") {
+  return normalizeTaskSteps(steps).map((step) => ({
+    ...step,
+    id: occurrenceId ? `${occurrenceId}_step_${step.id}` : createId(),
+    completed: false,
+  }));
+}
+
+function buildRecurringOccurrence(template = {}, occurrenceDate = "") {
+  const rule = normalizeRecurrenceRule(template.recurrenceRule || {}, template);
+  const dueRule = normalizeDueRule(template.dueRule);
+  const dueDate = calculateOccurrenceDueDate(occurrenceDate, dueRule);
+  const occurrenceId = getRecurringOccurrenceId(template.id, occurrenceDate);
+  return {
+    ...template,
+    id: occurrenceId,
+    isRecurring: false,
+    recurrenceEnabled: false,
+    isRecurringTemplate: false,
+    isRecurringOccurrence: true,
+    templateTaskId: template.id,
+    occurrenceDate,
+    recurringLabel: getRecurrenceLabel(template),
+    recurrenceType: "",
+    recurrenceRule: {},
+    completedOccurrences: [],
+    status: "not_started",
+    completedDate: "",
+    completedAt: null,
+    completedBy: null,
+    isDeleted: false,
+    deletedAt: "",
+    deletedBy: "",
+    deletedReason: "",
+    templateDeleted: false,
+    templateDeletedAt: "",
+    startDate: occurrenceDate,
+    endDate: occurrenceDate,
+    rangeStart: occurrenceDate,
+    rangeEnd: occurrenceDate,
+    executionDate: occurrenceDate,
+    executionStartDate: occurrenceDate,
+    executionEndDate: occurrenceDate,
+    dueDate,
+    deadline: dueDate,
+    startTime: rule.startTime || "",
+    endTime: rule.endTime || "",
+    durationMinutes: rule.durationMinutes || getTimeDurationMinutes(rule.startTime, rule.endTime),
+    dueRule,
+    steps: cloneOccurrenceSteps(template.steps || [], occurrenceId),
+    history: [],
+    notes: "",
+    sortOrder: Number(template.sortOrder) || 0,
+  };
+}
+
+function getVirtualRecurringOccurrencesForRange(template = {}, rangeStart = "", rangeEnd = "") {
+  if (!isRecurringTemplateTask(template) || !rangeStart || !rangeEnd) return [];
+  const rule = normalizeRecurrenceRule(template.recurrenceRule || {}, template);
+  if (!rule.type || !recurringTemplateCanGenerateOccurrences(template)) return [];
+  return getRecurringDatesInRange(template, rangeStart, rangeEnd)
+    .filter((date) => !recurringOccurrenceExists(template.id, date))
+    .map((date) => ({
+      ...buildRecurringOccurrence(template, date),
+      isVirtualRecurringOccurrence: true,
+    }));
+}
+
+function materializeRecurringOccurrence(templateTaskId = "", occurrenceDate = "", options = {}) {
+  const existingOccurrence = getPersistedRecurringOccurrence(templateTaskId, occurrenceDate);
+  if (existingOccurrence) return existingOccurrence;
+
+  const template = getProjectTask(templateTaskId);
+  if (!isRecurringTemplateTask(template) || !occurrenceDate) return null;
+  const rule = normalizeRecurrenceRule(template.recurrenceRule || {}, template);
+  if (!rule.type || !recurringTemplateCanGenerateOccurrences(template) || !taskRecursOnDate(template, occurrenceDate)) return null;
+
+  const saveIds = [];
+  let sourceTemplate = template;
+  if (template.status === "not_started" && rule.startDate && rule.startDate <= occurrenceDate) {
+    sourceTemplate = { ...template, status: "doing" };
+    state.tasks = state.tasks.map((task) => (task.id === template.id ? sourceTemplate : task));
+    saveIds.push(sourceTemplate.id);
+  }
+
+  const occurrence = buildRecurringOccurrence(sourceTemplate, occurrenceDate);
+  state.tasks = [occurrence, ...state.tasks];
+  saveIds.push(occurrence.id);
+  if (options.save !== false) saveTaskState(saveIds);
+  return occurrence;
+}
+
+function ensureRecurringOccurrencesForRange(rangeStart = "", rangeEnd = "", options = {}) {
+  const range = getSafeOccurrenceRange(rangeStart, rangeEnd, options.maxDays || 370);
+  if (!range) return [];
+
+  const recurrenceRepair = repairDuplicateRecurringOccurrences(state.tasks);
+  const repairedTaskIds = uniqueUids([...recurrenceRepair.removedIds, ...recurrenceRepair.updatedIds]);
+  if (repairedTaskIds.length) state.tasks = recurrenceRepair.tasks;
+
+  const newOccurrences = [];
+  const updatedTemplateIds = [];
+  const existingIds = new Set(state.tasks.map((task) => task.id));
+  const existingOccurrenceKeys = new Set(
+    state.tasks
+      .filter(isRecurringOccurrenceTask)
+      .map((task) => `${task.templateTaskId || ""}|${task.occurrenceDate || ""}`),
+  );
+
+  state.tasks = state.tasks.map((task) => {
+    if (!isRecurringTemplateTask(task)) return task;
+    const rule = normalizeRecurrenceRule(task.recurrenceRule || {}, task);
+    if (!rule.type || !recurringTemplateCanGenerateOccurrences(task)) return task;
+    if (task.status === "not_started" && rule.startDate && rule.startDate > range.end) return task;
+
+    const nextTemplate = task.status === "not_started" && rule.startDate && rule.startDate <= range.end
+      ? { ...task, status: "doing" }
+      : task;
+    if (nextTemplate !== task) updatedTemplateIds.push(nextTemplate.id);
+
+    getRecurringDatesInRange(nextTemplate, range.start, range.end).forEach((occurrenceDate) => {
+      const occurrenceId = getRecurringOccurrenceId(nextTemplate.id, occurrenceDate);
+      const occurrenceKey = `${nextTemplate.id}|${occurrenceDate}`;
+      if (existingIds.has(occurrenceId) || existingOccurrenceKeys.has(occurrenceKey)) return;
+      const occurrence = buildRecurringOccurrence(nextTemplate, occurrenceDate);
+      newOccurrences.push(occurrence);
+      existingIds.add(occurrenceId);
+      existingOccurrenceKeys.add(occurrenceKey);
+    });
+
+    return nextTemplate;
+  });
+
+  if (newOccurrences.length) {
+    state.tasks = [...newOccurrences, ...state.tasks];
+  }
+
+  const saveIds = uniqueUids([...repairedTaskIds, ...updatedTemplateIds, ...newOccurrences.map((task) => task.id)]);
+  if (saveIds.length && options.save !== false) saveTaskState(saveIds);
+  return newOccurrences;
+}
+
+function migrateLegacyCompletedOccurrences(tasks = []) {
+  const existingIds = new Set(tasks.map((task) => task.id));
+  const existingOccurrenceKeys = new Set(
+    tasks
+      .filter(isRecurringOccurrenceTask)
+      .map((task) => `${task.templateTaskId || ""}|${task.occurrenceDate || ""}`),
+  );
+  const migratedOccurrences = [];
+
+  tasks.filter(isRecurringTemplateTask).forEach((template) => {
+    (template.completedOccurrences || []).forEach((occurrenceDate) => {
+      const occurrenceId = getRecurringOccurrenceId(template.id, occurrenceDate);
+      const occurrenceKey = `${template.id}|${occurrenceDate}`;
+      if (!occurrenceDate || existingIds.has(occurrenceId) || existingOccurrenceKeys.has(occurrenceKey)) return;
+      migratedOccurrences.push({
+        ...buildRecurringOccurrence(template, occurrenceDate),
+        status: "done",
+        completedDate: occurrenceDate,
+        completedAt: template.completedAt || null,
+        completedBy: template.completedBy || template.ownerUid || template.owner || "",
+        templateDeleted: isTaskDeleted(template),
+        templateDeletedAt: isTaskDeleted(template) ? template.deletedAt || "" : "",
+      });
+      existingIds.add(occurrenceId);
+      existingOccurrenceKeys.add(occurrenceKey);
+    });
+  });
+
+  return migratedOccurrences.length ? [...migratedOccurrences, ...tasks] : tasks;
+}
+
 function taskMatchesDate(task, targetDate) {
-  if (task.isRecurring) return taskRecursOnDate(task, targetDate);
+  if (isRecurringTemplateTask(task)) return false;
   return task.executionDate === targetDate;
 }
 
 function taskMatchesRange(task, rangeStart, rangeEnd) {
-  if (task.isRecurring) return getRecurringDatesInRange(task, rangeStart, rangeEnd).length > 0;
+  if (isRecurringTemplateTask(task)) return false;
   return task.executionDate && task.executionDate >= rangeStart && task.executionDate <= rangeEnd;
+}
+
+function recurrencePatternMatchesDate(rule = {}, targetDate = "") {
+  const interval = rule.interval || 1;
+  const anchor = parseDateString(rule.startDate);
+  const target = parseDateString(targetDate);
+  if (rule.type === "daily") {
+    if (rule.dailyMode === "weekday") return isWorkday(target);
+    return getDayDiff(anchor, target) % interval === 0;
+  }
+  if (rule.type === "weekly") {
+    const weekDiff = Math.floor(getDayDiff(getStartOfWeek(anchor), getStartOfWeek(target)) / 7);
+    return weekDiff >= 0 && weekDiff % interval === 0 && (rule.weekDays || []).includes(target.getDay());
+  }
+  if (rule.type === "monthly") {
+    const monthDiff = getMonthDiff(anchor, target);
+    if (monthDiff < 0 || monthDiff % interval !== 0) return false;
+    if (rule.monthlyMode === "nthWeekday") return dateMatchesNthWeekday(target, rule.weekOrder, rule.weekday);
+    return target.getDate() === Number(rule.monthDay);
+  }
+  if (rule.type === "yearly") {
+    const yearDiff = target.getFullYear() - anchor.getFullYear();
+    if (yearDiff < 0 || yearDiff % interval !== 0 || target.getMonth() + 1 !== Number(rule.yearlyMonth)) return false;
+    if (rule.yearlyMode === "nthWeekday") return dateMatchesNthWeekday(target, rule.weekOrder, rule.weekday);
+    return target.getDate() === Number(rule.yearlyDay);
+  }
+  return false;
+}
+
+function isWorkday(date) {
+  const day = date.getDay();
+  return day >= 1 && day <= 5;
+}
+
+function dateMatchesNthWeekday(date, weekOrder, weekday) {
+  if (date.getDay() !== Number(weekday)) return false;
+  if (Number(weekOrder) === -1) {
+    return addDaysToDate(date, 7).getMonth() !== date.getMonth();
+  }
+  return Math.floor((date.getDate() - 1) / 7) + 1 === Number(weekOrder);
+}
+
+function getOccurrenceIndexOnDate(rule = {}, targetDate = "") {
+  let count = 0;
+  let cursor = parseDateString(rule.startDate);
+  const end = parseDateString(targetDate);
+  while (cursor <= end) {
+    const date = toDateInputValue(cursor);
+    if (recurrencePatternMatchesDate(rule, date)) count += 1;
+    if (date === targetDate) return count;
+    cursor = addDaysToDate(cursor, 1);
+  }
+  return 0;
+}
+
+function getMonthDiff(start, end) {
+  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
 }
 
 function taskRangeIncludesDate(task, date) {

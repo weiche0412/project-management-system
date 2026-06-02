@@ -3232,7 +3232,7 @@ dialog::backdrop {
             <select id="taskScope" required>
               <option value="project">專案任務</option>
               <option value="system">系統任務</option>
-              <option value="general">一般任務</option>
+              <option value="general">一般工作</option>
             </select>
           </label>
 
@@ -3423,7 +3423,7 @@ dialog::backdrop {
                 <select id="todoAddScope">
                   <option value="project">專案任務</option>
                   <option value="system">系統任務</option>
-                  <option value="general">一般任務</option>
+                  <option value="general">一般工作</option>
                 </select>
               </label>
 
@@ -3628,7 +3628,7 @@ const generalWorkScopeId = "__general_work__";
 const taskScopeOptions = [
   { id: "project", label: "專案任務" },
   { id: "system", label: "系統任務" },
-  { id: "general", label: "一般任務" },
+  { id: "general", label: "一般工作" },
 ];
 
 const storageKey = "project-desk-v2";
@@ -5156,7 +5156,8 @@ function getDashboardTodoSections() {
 }
 
 function taskIsOverdue(task, today = todayString()) {
-  return Boolean((task.executionDate && task.executionDate < today) || (task.deadline && task.deadline < today));
+  if (task.isRecurring) return false;
+  return Boolean(task.status !== "done" && task.deadline && task.deadline < today);
 }
 
 function dateInRange(date, start, end) {
@@ -5556,7 +5557,7 @@ function renderGanttGroup(group, timeline) {
 function renderGanttGroupChildren(group, timeline) {
   const projectRows = group.projects.map((item) => renderGanttProject(item, timeline)).join("");
   const taskRows = renderGanttTaskBlock(
-    group.kind === "general" ? "一般任務" : "系統層級任務",
+    group.kind === "general" ? "一般工作任務" : "系統層級任務",
     group.tasks,
     timeline,
     "system-task",
@@ -7446,7 +7447,7 @@ function renderProjects() {
   els.projectList.classList.add("project-group-list");
 
   if (selectedScopeIsGeneral()) {
-    els.projectList.innerHTML = `<p class="empty-state">一般工作不需要專案。可直接在上方新增一般任務，或在待辦工作台切到一般工作新增待辦。</p>`;
+    els.projectList.innerHTML = `<p class="empty-state">一般工作不需要專案。可直接在上方新增一般工作任務，或在待辦工作台切到一般工作新增待辦。</p>`;
     return;
   }
 
@@ -7590,7 +7591,7 @@ function renderProjectCard(project) {
       <p class="project-description">${escapeHtml(project.description || "沒有描述")}</p>
 
       ${phaseControl}
-      ${delayed ? `<div class="delay-alert">delay 須調整時程或加強追蹤</div>` : ""}
+      ${delayed ? `<div class="delay-alert">時程延遲，需調整時程或加強追蹤</div>` : ""}
 
       <div class="project-dates">
         ${dateRows}
